@@ -1,1 +1,1 @@
-# Apathy
+GitHub Pages deployment

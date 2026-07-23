@@ -649,113 +649,116 @@ function addBFScale(parent,items,min,max){
   const keys=items.map(x=>x.name||x.responseName);parent.append(resultBox('即時完整性',[`完成：${keys.filter(present).length}／${keys.length}`,`缺失：${keys.filter(k=>!present(k)).join('、')||'沒有'}`]));renderBackfillScaleResult(parent,items)
 }
 
+/* ===== v10.0.3 FINAL field fixes; preserve the site's existing selected-blue CSS ===== */
+const FINAL_FIX_BUILD='10.0.3-final';
 
-/* ===== v10.0.3 field-test UI and navigation fixes ===== */
-const FIELD_FIX_BUILD='10.0.3-smooth-ui';
-
-function installFieldFixStyles(){
-  if(document.getElementById('field-fix-styles'))return;
-  const st=document.createElement('style');st.id='field-fix-styles';st.textContent=`
-    button.choice.selected,button.toggle.selected,.scale-buttons button.selected,
-    .options button.selected,.direct button.selected,.chips button.selected,
-    button[data-field].selected,button[data-updrs-key].selected{
-      background:#073b78 !important;color:#fff !important;border-color:#073b78 !important;
-      box-shadow:0 0 0 3px rgba(7,59,120,.18) !important;font-weight:700 !important;
-    }
-    button.choice.selected *,button.toggle.selected *,.scale-buttons button.selected *,
-    .options button.selected *,.direct button.selected *,button[data-field].selected *{
-      color:#fff !important;
-    }
-    button.choice,button.toggle,.scale-buttons button,.options button,.direct button,.chips button{
-      transition:background-color .12s ease,color .12s ease,border-color .12s ease,box-shadow .12s ease,transform .08s ease;
-    }
-    button:active{transform:translateY(1px)}
-    .field-fix-flash{animation:fieldFixFlash .55s ease}
-    @keyframes fieldFixFlash{0%{box-shadow:0 0 0 0 rgba(7,59,120,.35)}100%{box-shadow:0 0 0 8px rgba(7,59,120,0)}}
-    textarea[data-sequence-remark="1"]{min-height:110px;border:2px solid #6f8fb4}
-  `;document.head.append(st)
+function selectWithExistingBlue(button,group){
+  group?.querySelectorAll('button.selected').forEach(x=>x.classList.remove('selected'));
+  button.classList.add('selected');
 }
-installFieldFixStyles();
-
-/* Make every selectable control show its selected state immediately, even before a rerender. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('button.choice,button.toggle,.scale-buttons button,.options button,button[data-field],button[data-updrs-key]');
   if(!b)return;
   const group=b.closest('.direct,.options,.scale-buttons,.chips,.toggle-grid,.field,.clinical-anchor');
-  if(b.classList.contains('choice')||b.closest('.scale-buttons,.options')){
-    group?.querySelectorAll('button.selected').forEach(x=>{if(x!==b)x.classList.remove('selected')});
-  }
-  requestAnimationFrame(()=>{b.classList.add('selected','field-fix-flash')});
+  if(b.classList.contains('choice')||b.closest('.scale-buttons,.options'))selectWithExistingBlue(b,group);
+  else b.classList.toggle('selected');
 },true);
 
-let pdDurationAdvanceTimer=null;
+let finalAdvanceTimer=null;
 function renderPositiveOne(pg,a){
   const g=el('div','direct');
-  const yes=btn(pg.button,()=>{set(pg.key,1);player()},'choice'+(sameValue(val(pg.key),1)?' selected':''));
-  const no=btn('沒有PD',()=>{set(pg.key,0);if(pg.conditional)set(pg.conditional.key,null);setTimeout(autoNext,260)},'choice'+(sameValue(val(pg.key),0)?' selected':''));
-  g.append(yes,no);a.append(g);
+  g.append(
+    btn(pg.button,()=>{set(pg.key,1);player()},'choice'+(sameValue(val(pg.key),1)?' selected':'')),
+    btn('沒有PD',()=>{set(pg.key,0);if(pg.conditional)set(pg.conditional.key,null);setTimeout(autoNext,220)},'choice'+(sameValue(val(pg.key),0)?' selected':''))
+  );a.append(g);
   if(sameValue(val(pg.key),1)&&pg.conditional){
     const f=el('div','field conditional');f.append(el('label','',pg.conditional.label));
     const i=el('input','text');i.type='number';i.min='0';i.max='80';i.step='0.1';i.inputMode='decimal';i.value=val(pg.conditional.key)??'';
-    const commit=()=>{
-      const raw=i.value.trim(),n=raw===''?null:Number(raw);
-      if(n===null||!Number.isFinite(n)||n<0||n>80){set(pg.conditional.key,null);return false}
-      set(pg.conditional.key,n);return true
-    };
-    i.oninput=()=>{clearTimeout(pdDurationAdvanceTimer);if(commit())pdDurationAdvanceTimer=setTimeout(()=>{if(playerPages()[ST.step]?.kind==='positiveOne')autoNext()},650)};
-    i.onkeydown=e=>{if(e.key==='Enter'&&commit()){e.preventDefault();clearTimeout(pdDurationAdvanceTimer);autoNext()}};
-    i.onblur=()=>{if(commit()&&playerPages()[ST.step]?.kind==='positiveOne'){clearTimeout(pdDurationAdvanceTimer);setTimeout(autoNext,120)}};
+    const save=()=>{const n=i.value===''?null:Number(i.value);if(n===null||!Number.isFinite(n)||n<0||n>80)return false;set(pg.conditional.key,n);return true};
+    i.oninput=()=>{clearTimeout(finalAdvanceTimer);if(save())finalAdvanceTimer=setTimeout(()=>{if(playerPages()[ST.step]?.kind==='positiveOne')autoNext()},650)};
+    i.onkeydown=e=>{if(e.key==='Enter'&&save()){e.preventDefault();clearTimeout(finalAdvanceTimer);autoNext()}};
+    i.onblur=()=>{if(save()&&playerPages()[ST.step]?.kind==='positiveOne'){clearTimeout(finalAdvanceTimer);setTimeout(autoNext,100)}};
     f.append(i,document.createTextNode(' '+pg.conditional.unit));a.append(f)
   }
 }
 
-let mocaAdvanceTimer=null;
+let finalMocaTimer=null;
 function renderMoca(a){
-  const i=el('input','text');i.type='number';i.min=0;i.max=30;i.inputMode='numeric';i.placeholder='0–30';i.value=val('moca_1_raw_total')??'';
-  const result=el('div');
-  const update=()=>{
-    const raw=i.value===''?null:Number(i.value);set('moca_1_raw_total',raw);result.innerHTML='';
-    const age=calcAge(),eduRaw=val('education_years'),edu=eduRaw===null||eduRaw===''?null:Number(eduRaw);
-    if(raw===null||age===null||edu===null||!Number.isFinite(edu)){result.append(el('div','result','輸入總分並完成出生日期與教育資料後，系統會計算結果。'));return}
-    const adj=edu<=12?1:0,adjusted=Math.min(30,raw+adj),cut=mocaCutoff(age,edu);
-    Object.assign(ST.answers,{moca_1_adjustment:adj,moca_1_adjusted_total:adjusted,moca_1_age_years:age,moca_1_education_years:edu,moca_1_16th_cutoff:cut,moca_1_norm_result_code:cut===null?null:(raw>cut?1:0)});saveDraft();
-    result.append(resultBox('MoCA結果',[`原始總分：${raw}/30`,`教育調整：+${adj}`,`調整後總分：${adjusted}/30`,`第16百分位Cutoff：${cut===null?'65歲以下，需覆核':cut}`,`結果：${cut===null?'待覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}`],cut!==null&&raw<=cut?'bad':'good'))
-  };
+  const i=el('input','text');i.type='number';i.min=0;i.max=30;i.inputMode='numeric';i.placeholder='0–30';i.value=val('moca_1_raw_total')??'';const result=el('div');
   const valid=()=>i.value!==''&&Number(i.value)>=0&&Number(i.value)<=30;
-  i.oninput=()=>{clearTimeout(mocaAdvanceTimer);if(!valid()){i.setCustomValidity('MoCA原始總分必須為0至30');return}i.setCustomValidity('');update();mocaAdvanceTimer=setTimeout(()=>{if(playerPages()[ST.step]?.kind==='moca')autoNext()},800)};
-  i.onkeydown=e=>{if(e.key==='Enter'&&valid()){e.preventDefault();clearTimeout(mocaAdvanceTimer);update();autoNext()}};
-  i.onblur=()=>{if(valid()&&playerPages()[ST.step]?.kind==='moca'){clearTimeout(mocaAdvanceTimer);setTimeout(autoNext,120)}};
-  a.append(i,result);update()
+  const update=()=>{const raw=i.value===''?null:Number(i.value);set('moca_1_raw_total',raw);result.innerHTML='';const age=calcAge(),er=val('education_years'),edu=er===null||er===''?null:Number(er);if(raw===null||age===null||edu===null||!Number.isFinite(edu)){result.append(el('div','result','輸入總分並完成出生日期與教育資料後，系統會計算結果。'));return}const adj=edu<=12?1:0,adjusted=Math.min(30,raw+adj),cut=mocaCutoff(age,edu);Object.assign(ST.answers,{moca_1_adjustment:adj,moca_1_adjusted_total:adjusted,moca_1_age_years:age,moca_1_education_years:edu,moca_1_16th_cutoff:cut,moca_1_norm_result_code:cut===null?null:(raw>cut?1:0)});saveDraft();result.append(resultBox('MoCA結果',[`原始總分：${raw}/30`,`教育調整：+${adj}`,`調整後總分：${adjusted}/30`,`第16百分位Cutoff：${cut===null?'需覆核':cut}`],cut!==null&&raw<=cut?'bad':'good'))};
+  i.oninput=()=>{clearTimeout(finalMocaTimer);if(!valid()){i.setCustomValidity('MoCA原始總分必須為0至30');return}i.setCustomValidity('');update();finalMocaTimer=setTimeout(()=>{if(playerPages()[ST.step]?.kind==='moca')autoNext()},800)};
+  i.onkeydown=e=>{if(e.key==='Enter'&&valid()){e.preventDefault();clearTimeout(finalMocaTimer);update();autoNext()}};
+  i.onblur=()=>{if(valid()&&playerPages()[ST.step]?.kind==='moca'){clearTimeout(finalMocaTimer);setTimeout(autoNext,100)}};a.append(i,result);update()
 }
 
-let iorAdvanceTimer=null;
-function selectIorValue(pg,dimension,value){
-  const n=String(pg.scenario).padStart(2,'0'),key=`ior${n}_${dimension}`;set(key,value);clearTimeout(iorAdvanceTimer);player();
-  if(['frequency','conviction','distress'].every(k=>present(`ior${n}_${k}`))){
-    const stepAtSelection=ST.step;
-    iorAdvanceTimer=setTimeout(()=>{if(ST.step===stepAtSelection&&playerPages()[ST.step]?.kind==='iorScenario')autoNext()},750)
-  }
+let finalIorTimer=null;
+function finalIorSet(pg,dim,value){
+  const n=String(pg.scenario).padStart(2,'0');set(`ior${n}_${dim}`,value);clearTimeout(finalIorTimer);player();
+  if(['frequency','conviction','distress'].every(k=>present(`ior${n}_${k}`))){const step=ST.step;finalIorTimer=setTimeout(()=>{if(ST.step===step&&playerPages()[ST.step]?.kind==='iorScenario')autoNext()},700)}
 }
 function renderIORScenario(pg,a){
-  const n=String(pg.scenario).padStart(2,'0');a.append(el('p','context',pg.scenarioText),el('p','hint','鍵盤：1–5選擇目前欄；選擇後才移到下一欄。最後一欄會先顯示深藍選中狀態，再前往下一題。'));
+  const n=String(pg.scenario).padStart(2,'0');a.append(el('p','context',pg.scenarioText));
   const dims=[['frequency','出現頻率',['從不','很少','有時','經常','非常頻繁']],['conviction','相信程度',['完全不相信','有點相信','半信半疑','相當相信','完全相信']],['distress','不安程度',['完全沒有不安','輕微不安','中等不安','相當不安','非常不安']]];
-  const firstMissing=dims.findIndex(z=>!present(`ior${n}_${z[0]}`));
-  a.dataset.iorActive=String(firstMissing<0?2:firstMissing);
-  dims.forEach((z,zi)=>{const block=el('div','ior-block');block.dataset.iorIndex=String(zi);if(Number(a.dataset.iorActive)===zi)block.classList.add('active');block.append(el('h4','',z[1]));const g=el('div','scale-buttons');z[2].forEach((lab,i)=>{const value=i+1,key=`ior${n}_${z[0]}`;g.append(btn(`${value} ${lab}`,()=>selectIorValue(pg,z[0],value),val(key)===value?'selected':''))});block.append(g);block.onclick=()=>{a.dataset.iorActive=String(zi);qa('.ior-block',a).forEach((x,j)=>x.classList.toggle('active',j===zi))};a.append(block)})
+  dims.forEach(z=>{const block=el('div','ior-block');block.append(el('h4','',z[1]));const g=el('div','scale-buttons');z[2].forEach((lab,i)=>{const value=i+1,key=`ior${n}_${z[0]}`;g.append(btn(`${value} ${lab}`,()=>finalIorSet(pg,z[0],value),val(key)===value?'selected':''))});block.append(g);a.append(block)})
 }
 document.addEventListener('keydown',e=>{
   if(ST.flow!=='stage2'||!/^\d$/.test(e.key)||Number(e.key)<1||Number(e.key)>5||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
-  const pg=playerPages()[ST.step];if(pg?.kind!=='iorScenario')return;e.preventDefault();
-  const n=String(pg.scenario).padStart(2,'0'),dims=['frequency','conviction','distress'];let ix=dims.findIndex(k=>!present(`ior${n}_${k}`));if(ix<0)ix=2;selectIorValue(pg,dims[ix],Number(e.key))
+  const pg=playerPages()[ST.step];if(pg?.kind!=='iorScenario')return;e.preventDefault();const n=String(pg.scenario).padStart(2,'0'),dims=['frequency','conviction','distress'];let ix=dims.findIndex(k=>!present(`ior${n}_${k}`));if(ix<0)ix=2;finalIorSet(pg,dims[ix],Number(e.key))
 });
 
-/* MRI Sequence remark is always writable; selecting an incomplete sequence brings it into view. */
-document.addEventListener('click',e=>{
-  if(ST.flow!=='mri_visit')return;const b=e.target.closest('.chips button.toggle.danger');if(!b)return;
-  setTimeout(()=>{const ta=qa('textarea').find(x=>x.placeholder.includes('Sequence'));if(ta){ta.dataset.sequenceRemark='1';ta.scrollIntoView({behavior:'smooth',block:'center'});ta.focus()}},80)
-},true);
+/* Medication/LEDD: machine raw-text parse + manual built-in list; retain both results and difference. */
+const MED_CATALOGUE=[
+  {id:'madopar',label:'Madopar／美多芭（Levodopa + Benserazide）',aliases:['madopar','美多芭'],factor:1,category:'levodopa',dosePart:0},
+  {id:'sinemet',label:'Sinemet（Levodopa + Carbidopa）',aliases:['sinemet','息寧'],factor:1,category:'levodopa',dosePart:1},
+  {id:'sinemet_cr',label:'Sinemet CR／Levodopa CR',aliases:['sinemet cr','息寧控釋','levodopa cr'],factor:.75,category:'levodopa',dosePart:1},
+  {id:'stalevo',label:'Stalevo（Levodopa + Carbidopa + Entacapone）',aliases:['stalevo','達靈復'],factor:1.33,category:'levodopa',dosePart:0},
+  {id:'pramipexole',label:'Pramipexole／Mirapex／森福羅',aliases:['pramipexole','mirapex','sifrol','森福羅'],factor:100,category:'da',dosePart:0},
+  {id:'ropinirole',label:'Ropinirole／Requip',aliases:['ropinirole','requip'],factor:20,category:'da',dosePart:0},
+  {id:'rotigotine',label:'Rotigotine／Neupro',aliases:['rotigotine','neupro','優普洛'],factor:30,category:'da',dosePart:0},
+  {id:'apomorphine',label:'Apomorphine',aliases:['apomorphine'],factor:10,category:'da',dosePart:0},
+  {id:'rasagiline',label:'Rasagiline／Azilect',aliases:['rasagiline','azilect','雷沙吉蘭'],factor:100,category:'other',dosePart:0},
+  {id:'selegiline',label:'Selegiline',aliases:['selegiline','司來吉蘭'],factor:10,category:'other',dosePart:0},
+  {id:'amantadine',label:'Amantadine',aliases:['amantadine','金剛烷胺'],factor:1,category:'other',dosePart:0},
+  {id:'entacapone',label:'Entacapone（需覆核與Levodopa合併算法）',aliases:['entacapone','恩他卡朋'],factor:null,category:'review',dosePart:0},
+  {id:'other',label:'其他／未能識別（只作人工覆核，不計算）',aliases:[],factor:null,category:'review',dosePart:0}
+];
+function medById(id){return MED_CATALOGUE.find(x=>x.id===id)||MED_CATALOGUE[MED_CATALOGUE.length-1]}
+function identifyMedication(text){const s=String(text||'').toLowerCase();return MED_CATALOGUE.find(x=>x.aliases.some(a=>s.includes(a.toLowerCase())))||medById('other')}
+function extractMedicationLine(line){
+  const med=identifyMedication(line),nums=(String(line).match(/\d+(?:\.\d+)?/g)||[]).map(Number);let strength=null;
+  if(nums.length){strength=nums[Math.min(med.dosePart||0,nums.length-1)]}
+  const timesMatch=String(line).match(/(?:每日|daily|x|×)\s*(\d+(?:\.\d+)?)/i),unitsMatch=String(line).match(/(?:每次|each|x|×)\s*(\d+(?:\.\d+)?)\s*(?:粒|片|tab|cap|ml)?/i);
+  const times=timesMatch?Number(timesMatch[1]):null,units=unitsMatch?Number(unitsMatch[1]):null;
+  return{raw:line,medicationId:med.id,name:med.label,strength,times,units,factor:med.factor,category:med.category}
+}
+function parseMachineMedication(){return String(val('medication_machine_raw_text')||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(extractMedicationLine)}
+function medCalc(rows){
+  const totals={levodopa:0,da:0,other:0},details=[],warnings=[];let complete=rows.length>0;
+  rows.forEach((r,i)=>{const med=medById(r.medicationId),strength=Number(r.strength),times=Number(r.times),units=Number(r.units);if(med.factor===null||!Number.isFinite(strength)||!Number.isFinite(times)||!Number.isFinite(units)||times<=0||units<=0){complete=false;warnings.push(`第${i+1}項需要覆核藥名、規格、每日次數或每次數量`);details.push({...r,ledd:null});return}const daily=strength*times*units,ledd=daily*med.factor;totals[med.category]+=ledd;details.push({...r,daily,ledd})});
+  return{details,warnings,complete,totals,total:totals.levodopa+totals.da+totals.other}
+}
+function manualMedicationRows(){return ST.meds.filter(m=>m&&m.medicationId).map(m=>({...m,name:medById(m.medicationId).label}))}
+function renderMedicationRows(s){
+  const machine=el('div','plain-block');machine.append(el('h4','','機器解析路徑'),el('p','hint','直接貼上手寫或醫院藥單原文；系統作模糊解析。所有解析結果必須由工作人員核對。'));const raw=el('textarea');raw.placeholder='每行一種藥物，例如：Madopar 100mg 每日3次 每次1片';raw.value=val('medication_machine_raw_text')||'';raw.oninput=()=>{set('medication_machine_raw_text',raw.value);clearTimeout(finalAdvanceTimer);finalAdvanceTimer=setTimeout(renderByFlow,500)};machine.append(raw);s.append(machine);
+  const parsed=parseMachineMedication();if(parsed.length){const p=el('div','plain-block');p.append(el('strong','','機器解析結果'));parsed.forEach((r,i)=>p.append(el('div','med-row',`${i+1}. ${r.name}｜規格 ${r.strength??'待核實'}｜每日 ${r.times??'待核實'} 次｜每次 ${r.units??'待核實'}`)));s.append(p)}
+  const manual=el('div','plain-block');manual.append(el('h4','','人工核對路徑'),el('p','hint','只從內建藥物清單選擇，不自由輸入藥名。'));ST.meds.forEach((m,n)=>{const r=el('div','med-row'),sel=el('select');MED_CATALOGUE.forEach(x=>{const o=el('option','',x.label);o.value=x.id;if(m.medicationId===x.id)o.selected=true;sel.append(o)});if(!m.medicationId){const o=el('option','','選擇藥物');o.value='';o.selected=true;sel.insertBefore(o,sel.firstChild)}sel.onchange=()=>{m.medicationId=sel.value;saveDraft();renderByFlow()};r.append(sel);[['strength','規格mg'],['times','每日次數'],['units','每次數量']].forEach(x=>{const i=el('input','text');i.type='number';i.inputMode='decimal';i.placeholder=x[1];i.value=m[x[0]]||'';i.oninput=()=>{m[x[0]]=i.value;saveDraft()};r.append(i)});r.append(btn('刪除',()=>{ST.meds.splice(n,1);saveDraft();renderByFlow()},'linkbtn'));manual.append(r)});s.append(manual)
+}
+function renderLeddPanel(s){
+  const machine=medCalc(parseMachineMedication()),manual=medCalc(manualMedicationRows());
+  setDerived('ledd_machine_total',machine.complete?machine.total:null);setDerived('ledd_machine_levodopa',machine.complete?machine.totals.levodopa:null);setDerived('ledd_machine_da',machine.complete?machine.totals.da:null);setDerived('ledd_machine_other',machine.complete?machine.totals.other:null);setDerived('ledd_machine_status',machine.complete?'complete':machine.details.length?'review':'empty');
+  setDerived('ledd_manual_total',manual.complete?manual.total:null);setDerived('ledd_manual_levodopa',manual.complete?manual.totals.levodopa:null);setDerived('ledd_manual_da',manual.complete?manual.totals.da:null);setDerived('ledd_manual_other',manual.complete?manual.totals.other:null);setDerived('ledd_manual_status',manual.complete?'complete':manual.details.length?'review':'empty');
+  const diff=machine.complete&&manual.complete?manual.total-machine.total:null;setDerived('ledd_difference_total',diff);setDerived('ledd_match_flag',diff===null?null:(Math.abs(diff)<.01?1:0));
+  s.append(resultBox('機器LEDD',machine.complete?[`Levodopa ${machine.totals.levodopa.toFixed(1)} mg｜DA ${machine.totals.da.toFixed(1)} mg｜其他 ${machine.totals.other.toFixed(1)} mg`,`Total ${machine.total.toFixed(1)} mg`]:[`正式結果暫不可計算`,`待覆核：${machine.warnings.join('；')||'尚未貼上藥單原文'}`],machine.complete?'good':'warn'));
+  s.append(resultBox('人工核對LEDD',manual.complete?[`Levodopa ${manual.totals.levodopa.toFixed(1)} mg｜DA ${manual.totals.da.toFixed(1)} mg｜其他 ${manual.totals.other.toFixed(1)} mg`,`Total ${manual.total.toFixed(1)} mg`]:[`正式結果暫不可計算`,`待覆核：${manual.warnings.join('；')||'尚未從內建清單加入藥物'}`],manual.complete?'good':'warn'));
+  s.append(resultBox('兩套結果差異',[`機器Total：${machine.complete?machine.total.toFixed(1):'—'} mg`,`人工Total：${manual.complete?manual.total.toFixed(1):'—'} mg`,`差異（人工－機器）：${diff===null?'—':diff.toFixed(1)+' mg'}`,`核對：${diff===null?'待兩套資料完整':Math.abs(diff)<.01?'一致':'需要覆核'}`],diff!==null&&Math.abs(diff)>=.01?'warn':diff===null?'':'good'))
+}
+function renderMedicationBF(s){s.append(btn('＋新增人工核對藥物',()=>{ST.meds.push({medicationId:'',strength:'',times:'',units:''});saveDraft();backfill()},'primary'));renderMedicationRows(s);renderLeddPanel(s)}
 
-window.APATHY_APP_BUILD=FIELD_FIX_BUILD;
+/* MRI Sequence remark remains visible and editable at all times. */
+document.addEventListener('click',e=>{if(ST.flow!=='mri_visit'||!e.target.closest('.chips button.toggle.danger'))return;setTimeout(()=>{const t=qa('textarea').find(x=>x.placeholder.includes('Sequence'));if(t){t.scrollIntoView({behavior:'smooth',block:'center'});t.focus()}},80)},true);
+window.APATHY_APP_BUILD=FINAL_FIX_BUILD;
+
 
 home();
 })();

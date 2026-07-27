@@ -196,7 +196,7 @@ function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{typ
 async function submitPayload(form,event,status){if(ST.submitting)return;const p=payload(form,event,status);ST.submitting=true;const modal=el('div','modal'),box=el('div','modal-box submit-wait'),title=el('h2','','正在提交資料……'),msg=el('p','','請不要重新整理、關閉頁面或返回上一頁。一般約需15秒，請等待伺服器確認。'),timer=el('div','status','已等待0秒');box.append(title,msg,timer);modal.append(box);document.body.append(modal);let sec=0;const tick=setInterval(()=>{sec++;timer.textContent=`已等待${sec}秒${sec>15?'；仍在等待伺服器回應，請不要重新整理。':''}`},1000);try{const res=await fetch(C.receiverUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)});const text=await res.text();let out;try{out=JSON.parse(text)}catch(e){out={ok:res.ok,message:text}}if(!res.ok||out.ok===false)throw new Error(out.message||'後端未確認收到資料');clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交成功'),el('p','',`Submission ID：${ST.submission}`),btn('返回',()=>{modal.remove();ST.submission=uuid();saveDraft();if(form==='screening'&&event==='screening_core'&&['HC','Apathy','Pure_PD'].includes(val('final_screening_decision')))player()},'primary'))}catch(e){clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交未完成'),el('p','',`資料仍保存在此裝置。${e.message}`));const a=el('div','submitbar');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('返回修改',()=>modal.remove(),'primary'));box.append(a)}finally{ST.submitting=false}}
 
 /* ===== Consolidated post-v9 implementation layer ===== */
-const APP_BUILD='10.0.6-rebuilt-complete';
+const APP_BUILD='10.0.6-rebuilt-complete-v3';
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
   historical_paper_reentry:'screening',field_correction:'screening',
@@ -291,7 +291,7 @@ function player(){
   m.append(toolbar(ST.flow==='stage2'?'第二階段問卷':'首次篩查'));
   const h=el('div','flow-head');h.append(el('h2','',pg.section));
   const sectionPages=pages.filter(x=>x.section===pg.section),localIndex=sectionPages.indexOf(pg)+1;
-  h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${pages.slice(0,ST.step).filter(pageComplete).length}／${pages.length}`));
+  const answerPages=pages.filter(x=>!['stage2Summary','scaleResult'].includes(x.kind));h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${answerPages.filter(pageComplete).length}／${answerPages.length}`));
   const sm=el('div','section-menu');[...new Set(pages.map(x=>x.section))].forEach(s=>{
     const first=pages.findIndex(x=>x.section===s),ps=pages.filter(x=>x.section===s),done=ps.every(pageComplete),partial=!done&&ps.some(pageComplete);
     sm.append(btn(`${done?'✓ ':''}${s}`,()=>jumpSection(first,pages),(s===pg.section?'current ':'')+(done?'done':partial?'partial':'')))
@@ -368,7 +368,7 @@ function manualNext(pg,pages){
 }
 
 /* Stage 2: neutral completion only, no scores. */
-function renderStage2Summary(a){a.append(resultBox('問卷已完成',['所有答案已保存。多謝您的參與。'],'good'))}
+function renderStage2Summary(a){a.append(resultBox('問卷已完成',['所有題目已完成。請按「檢查並提交」送出問卷。'],'good'))}
 
 /* C-DARS examples: at least two non-social pastimes; every rating screen shows entered examples. */
 function splitExamples(v){return String(v||'').split(/[，,、；;\n]+/).map(x=>x.trim()).filter(Boolean)}
@@ -694,7 +694,7 @@ function pdiPageItems106(pg){return B.pdi21.items.slice(pg.from,pg.to)}
 function pdiPageReady106(pg){return pdiPageItems106(pg).filter(x=>val(x.yesField)===1).every(x=>['distress','preoccupation','conviction'].every(k=>present(x.dimensions[k].name)))}
 function confirmPdiPage106(pg,mode){const items=pdiPageItems106(pg);if(mode==='none'){items.forEach(x=>{set(x.yesField,0);Object.values(x.dimensions).forEach(d=>set(d.name,0))})}else{if(!pdiPageReady106(pg)){ST.error='請先完成所有已選「有」題目的三個程度。';return player()}items.forEach(x=>{if(val(x.yesField)===null){set(x.yesField,0);Object.values(x.dimensions).forEach(d=>set(d.name,0))}})}set(pdiConfirmKey(pg),mode);player()}
 const renderPDIPageBefore106=renderPDIPage;
-renderPDIPage=function(pg,a){renderPDIPageBefore106(pg,a);const g=el('div','direct pdi-confirm');g.append(btn('以上情況全部沒有',()=>confirmPdiPage106(pg,'none'),'choice'+(val(pdiConfirmKey(pg))==='none'?' selected':'')),btn(pg.page===1?'下一頁，我已經完成本頁題目':'完成PDI，我已經完成本頁題目',()=>confirmPdiPage106(pg,'checked'),'choice'+(val(pdiConfirmKey(pg))==='checked'?' selected':'')));a.append(g)};
+renderPDIPage=function(pg,a){renderPDIPageBefore106(pg,a)};
 const pageCompleteBefore106=pageComplete;
 pageComplete=function(pg){if(pg.kind==='pdiPage')return ['none','checked'].includes(val(pdiConfirmKey(pg)))&&pdiPageItems106(pg).every(x=>[0,1].includes(Number(val(x.yesField))))&&pdiPageReady106(pg);if(pg.kind==='quipGroup')return val(`quip_group_${pg.group}_confirmed`)===1;return pageCompleteBefore106(pg)};
 const renderQuipGroupBefore106=renderQuipGroup;
@@ -734,10 +734,68 @@ pageComplete=function(pg){
   return pg.key?present(pg.key):false;
 };
 manualNext=function(pg,pages){
-  if(pg.kind==='pdiPage'&&!pageComplete(pg)){ST.error='請先選擇「以上情況全部沒有」，或按本頁完成確認。';return player()}
+  if(pg.kind==='stage2Summary')return submitFormal();
+  if(pg.kind==='pdiPage'){
+    if(val(pdiConfirmKey(pg))!=='none'){
+      const items=pdiPageItems106(pg),hasYes=items.some(x=>Number(val(x.yesField))===1);
+      if(!hasYes||!pdiPageReady106(pg)){ST.error='如本頁全部沒有，請按「以上情況全部沒有」；如有任何一項，請完成該項三個程度後再按下一頁。';return player()}
+      items.forEach(x=>{if(val(x.yesField)===null){set(x.yesField,0);Object.values(x.dimensions).forEach(d=>set(d.name,0))}});
+      set(pdiConfirmKey(pg),'checked');
+    }
+  }
   if(pg.kind==='quipGroup'&&!pageComplete(pg)){ST.error='請先明確確認本頁已完成。';return player()}
   if(!pageComplete(pg)){if(pg.kind==='examples'){const domain=(B.cdars.domains||[]).find(d=>d.examplesField===pg.key),minimum=domain?.minimumExamples||1,current=splitExamples(val(pg.key)).length;ST.error=domain?.exampleValidationMessage||`目前已填${current}項，請至少填寫${minimum}項。`}else ST.error='此題尚未完成，請先完成目前內容。';return player()}
   if(ST.step<pages.length-1){ST.step++;ST.error='';saveDraft();player()}else submitFormal()
+};
+
+
+/* v3: explicit-none guard for all pages where unselected means No. */
+function quipKeysV3(pg){
+  if(pg.group===0)return B.quip.matrixCells.map(x=>x.name);
+  return (B.quip.groups[pg.group]?.items||[]).map(x=>x.name);
+}
+function anySelectedV3(keys){return keys.some(k=>Number(val(k))===1)}
+function setAllNoV3(keys){keys.forEach(k=>set(k,0))}
+
+renderQuipGroup=function(pg,a){
+  const group=B.quip.groups[pg.group],confirmKey=`quip_group_${pg.group}_confirmed`;
+  const changed=()=>{set(confirmKey,null);player()};
+  a.append(el('p','instruction',B.quip.instructions));
+  if(pg.group===0){
+    const defs=el('div','quip-definitions');B.quip.domains.forEach(d=>{const x=el('div','definition');x.append(el('strong','',d.fullLabel));if(d.description)x.append(document.createTextNode('：'+d.description));defs.append(x)});a.append(defs);
+    const table=el('div','quip-matrix');table.append(el('div','head','完整題目'));B.quip.domains.forEach(d=>table.append(el('div','head',d.fullLabel)));
+    B.quip.sharedStems.forEach(st=>{table.append(el('div','quip-stem',`${st.index}. ${st.fullText}`));B.quip.domains.forEach(d=>table.append(toggleButton(d.fullLabel,`quip_${d.key}${st.index}_yes`,changed)))});a.append(table)
+  }else{
+    if(group.description)a.append(el('p','instruction',group.description));const list=el('div','quip-full-list');group.items.forEach(item=>{const w=el('div','quip-full-item');w.append(toggleButton(item.fullLabel,item.name,changed));if(item.detailField&&val(item.name)===1){const t=el('textarea','conditional');t.placeholder=item.detailPrompt||'請具體描述';t.value=val(item.detailField)||'';t.oninput=()=>set(item.detailField,t.value);w.append(t)}list.append(w)});a.append(list)
+  }
+  const noneSelected=val(confirmKey)==='none';
+  a.append(btn('以上項目全部沒有',()=>{setAllNoV3(quipKeysV3(pg));set(confirmKey,'none');player()},'choice'+(noneSelected?' selected':'')));
+  a.append(el('p','hint','如上方有任何符合項目，請直接選取後按「下一組」；如全部沒有，必須選擇「以上項目全部沒有」才可翻頁。'));
+};
+
+const renderMRISafetyV3Base=renderMRISafety;
+renderMRISafety=function(a){renderMRISafetyV3Base(a);const key='mri_safety_none_confirmed',keys=C.mriSafety.map(x=>x[0]);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))};
+const renderRBQ10V3Base=renderRBQ10;
+renderRBQ10=function(a){renderRBQ10V3Base(a);const key='rbq10_none_confirmed',keys=B.rbdsq.diseaseItems.map(x=>x.name);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))};
+
+const pageCompleteV3Base=pageComplete;
+pageComplete=function(pg){
+  if(pg.kind==='quipGroup'){const keys=quipKeysV3(pg);return anySelectedV3(keys)||val(`quip_group_${pg.group}_confirmed`)==='none'}
+  if(pg.kind==='mriSafety'){const keys=C.mriSafety.map(x=>x[0]);return anySelectedV3(keys)||val('mri_safety_none_confirmed')===1}
+  if(pg.kind==='rbQ10'){const keys=B.rbdsq.diseaseItems.map(x=>x.name);return anySelectedV3(keys)||val('rbq10_none_confirmed')===1}
+  return pageCompleteV3Base(pg)
+};
+
+const manualNextV3Base=manualNext;
+manualNext=function(pg,pages){
+  if(pg.kind==='quipGroup'){
+    const keys=quipKeysV3(pg),confirmKey=`quip_group_${pg.group}_confirmed`;
+    if(!anySelectedV3(keys)&&val(confirmKey)!=='none'){ST.error='請選擇上方至少一個符合項目；如全部沒有，請選擇「以上項目全部沒有」。';return player()}
+    completeQuipGroup(pg);if(val(confirmKey)!=='none')set(confirmKey,'selected');
+  }
+  if(pg.kind==='mriSafety'&&!pageComplete(pg)){ST.error='請選擇上方至少一個項目；如全部沒有，請選擇「以上項目全部沒有」。';return player()}
+  if(pg.kind==='rbQ10'&&!pageComplete(pg)){ST.error='請選擇上方至少一個項目；如全部沒有，請選擇「以上項目全部沒有」。';return player()}
+  return manualNextV3Base(pg,pages)
 };
 
 home();

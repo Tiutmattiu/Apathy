@@ -1,8 +1,8 @@
 // @ts-nocheck
 'use strict';
 window.FORM_CONFIG = Object.freeze({
-  version: '10.0-file-by-file',
-  receiverVersionExpected: '3.1',
+  version: '10.0.4-staff-final',
+  receiverVersionExpected: '5.2',
   receiverUrl: 'https://script.google.com/macros/s/AKfycbzK5d_w3IgytNY9XpImHsTr2o0Wyxl52wlymmcAPaFcdL8eE8Bln_pMCT9lUj79EaMG/exec',
   staffPassword: '080',
 
@@ -10,10 +10,13 @@ window.FORM_CONFIG = Object.freeze({
   // Clinical and historical paper re-entry are distinguished by event_type.
   rawTables: Object.freeze({
     screening: 'screening_raw',
-    mri: 'mri_raw'
+    stage2: 'stage2_raw',
+    mri: 'mri_raw',
+    clinical: 'clinical_raw',
+    backfill: 'backfill_raw'
   }),
   receiverContract: Object.freeze({
-    formTypes: Object.freeze(['screening', 'mri']),
+    formTypes: Object.freeze(['screening', 'stage2', 'mri', 'clinical', 'backfill']),
     eventTypes: Object.freeze([
       'screening_core',
       'stage_2_questionnaires',

@@ -928,5 +928,264 @@ async function renderResearchAdmin(){
   if(adminTokenV1_()){token.input.value=adminTokenV1_();connectNow()}
 }
 
+
+
+/* ===== Phase 3B: Clinical partial-save and medication preservation ===== */
+function clinicalNormalizedPhonePhase3_(){
+  return String(val('contact_phone')||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
+}
+function clinicalIdentityAvailablePhase3_(){
+  return Boolean(
+    String(val('p_id')||'').trim()||
+    String(val('s_id')||'').trim()||
+    clinicalNormalizedPhonePhase3_().length>=8
+  );
+}
+
+function clinicalPersistMedicationRowsPhase3_(){
+  ST.meds.forEach((m,n)=>{
+    const k=String(n+1).padStart(2,'0');
+    const drug=medById(m.drugId)||medFind(m.name||'');
+    set(`medication_${k}_name`,String(m.name||drug?.label||'').trim()||null);
+    set(`medication_${k}_strength`,String(m.strength||'').trim()||null);
+    set(`medication_${k}_times_per_day`,m.times===''||m.times===null||m.times===undefined?null:Number(m.times));
+    set(`medication_${k}_units_per_time`,m.units===''||m.units===null||m.units===undefined?null:Number(m.units));
+    set(`medication_${k}_canonical_id`,drug?.id||m.drugId||null);
+    set(`medication_${k}_aliases`,drug?drug.aliases.join('|'):null);
+    set(`medication_${k}_mapping_source`,drug?drug.source:null);
+  });
+}
+
+function clinicalSyncUpdrsPhase3_(){
+  const route=String(val('updrs3_route')||'');
+  const total=updrsTotal();
+  if(['hospital_items','research_assessed'].includes(route)&&total.count===33){
+    setDerived('updrs3_calculated_total',total.total);
+    setDerived('updrs3_total',total.total);
+    setDerived('updrs3_total_type','calculated');
+    setDerived('updrs3_complete',1);
+    return;
+  }
+  if(route==='hospital_total_only'&&present('updrs3_reported_total')){
+    setDerived('updrs3_calculated_total',null);
+    setDerived('updrs3_total',Number(val('updrs3_reported_total')));
+    setDerived('updrs3_total_type','reported');
+    setDerived('updrs3_complete',1);
+    return;
+  }
+  setDerived('updrs3_calculated_total',null);
+  setDerived('updrs3_total',null);
+  setDerived('updrs3_total_type',null);
+  setDerived('updrs3_complete',0);
+}
+
+validateClinical=function(s){
+  if(!clinicalIdentityAvailablePhase3_()){
+    showInlineError(s,'P_ID、S_ID及聯絡電話至少需要其中一項，才可保存Clinical資料。');
+    return;
+  }
+
+  clinicalSyncUpdrsPhase3_();
+  clinicalPersistMedicationRowsPhase3_();
+
+  const parsed=parseMedicationRawV11(val('medication_raw_text')||'');
+  const accepted=parsed.complete&&val('medication_machine_review_status')==='accepted';
+  const machine=Object.assign({},parsed,{
+    complete:accepted,
+    status:accepted?'complete':parsed.complete?'review_required':parsed.status,
+    levodopa:accepted?parsed.levodopa:null,
+    da:accepted?parsed.da:null,
+    other:accepted?parsed.other:null,
+    total:accepted?parsed.total:null
+  });
+  const manual=calculateManualLeddV11();
+  syncLeddDerivedV11(machine,manual);
+
+  setDerived('clinical_partial_save',(
+    val('updrs3_complete')!==1||
+    !['matched','manual_available','machine_available'].includes(String(val('ledd_final_status')||''))
+  )?1:0);
+  setDerived('clinical_save_note',val('clinical_partial_save')===1?
+    'Clinical已部分保存；未完成UPDRS或Medication/LEDD可稍後補充。':
+    'Clinical主要資料已完成。');
+
+  saveDraft();
+  return submitPayload('clinical','clinical_supplement','submitted');
+};
+
+const payloadPhase3Base_=payload;
+payload=function(form,event,status){
+  const out=payloadPhase3Base_(form,event,status);
+  if(event==='clinical_supplement'){
+    const phone=clinicalNormalizedPhonePhase3_();
+    out.participant_id=out.p_id||out.s_id||('TEMP-'+out.submission_id);
+    out.contact_phone_normalized=phone||null;
+    out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_known':'temporary_phone_pending';
+    out.data_source='staff_assisted_clinical';
+    const clean=Object.assign({},out);
+    delete clean.payload_json;
+    out.payload_json=JSON.stringify(clean);
+  }
+  return out;
+};
+
+const renderClinicalPhase3Base_=renderClinical;
+renderClinical=function(){
+  renderClinicalPhase3Base_();
+  const section=q('section.summary');
+  if(!section)return;
+  const title=q('h2.section-title',section);
+  if(title){
+    const note=el('div','result good','Clinical支援部分保存：P_ID、S_ID或聯絡電話有其中一項即可提交。若只有電話，系統會以本次Submission建立臨時身份，等待日後由Admin配對；電話不會自動合併Participant。UPDRS、Medication及LEDD可分開完成，未完成LEDD不會寫成0。');
+    title.insertAdjacentElement('afterend',note);
+  }
+  qa('button',section).forEach(button=>{
+    if(button.textContent==='正式提交Clinical資料')button.textContent='保存Clinical資料（可部分完成）';
+  });
+};
+
+
+
+/* ===== Phase 2 MRI integration against Receiver v5.5-phase2b ===== */
+function adminTokenPhase2_(){return sessionStorage.getItem('apathy_admin_token')||''}
+async function receiverGetPhase2_(action,params){
+  const u=new URL(C.receiverUrl);u.searchParams.set('action',action);u.searchParams.set('token',adminTokenPhase2_());
+  Object.entries(params||{}).forEach(([k,v])=>{if(v!==null&&v!==undefined&&String(v).trim()!=='')u.searchParams.set(k,String(v))});
+  const r=await fetch(u.toString()),o=await r.json();if(!r.ok||o.ok===false)throw new Error(o.message||o.error_code||'後端查詢失敗');return o
+}
+function mriIdentityQueryPhase2_(){return String(val('mri_identity_query')||'').trim()}
+function applyParticipantMatchPhase2_(x){
+  set('p_id',x.p_id||null);set('s_id',x.s_id||null);set('participant_name',x.participant_name||null);
+  set('gender',x.gender||null);set('pd_hc_status',x.pd_hc_status||null);
+  if(x.contact_phone_last4)setDerived('contact_phone_last4',x.contact_phone_last4);
+  setDerived('mri_identity_status',x.p_id?'matched_with_pid':x.s_id?'sid_only_pending_pid':'unresolved');safeSave()
+}
+async function loadLatestMocaPhase2_(status){
+  const params={p_id:val('p_id'),s_id:val('s_id')};
+  if(!params.p_id&&!params.s_id)return;
+  status.textContent='正在載入最近MoCA……';
+  try{
+    const o=await receiverGetPhase2_('latest_moca',params),m=o.latest_valid_moca||null;
+    if(m){
+      setDerived('latest_valid_moca_raw_total',m.raw_total??null);setDerived('latest_valid_moca_adjusted_total',m.adjusted_total??null);
+      setDerived('latest_valid_moca_date',m.assessment_date||null);setDerived('latest_valid_moca_source',m.source_event||null);
+      setDerived('moca_1_raw_total',m.raw_total??null);setDerived('moca_1_adjusted_total',m.adjusted_total??null);setDerived('moca_1_assessment_date',m.assessment_date||null)
+    }else{
+      ['latest_valid_moca_raw_total','latest_valid_moca_adjusted_total','latest_valid_moca_date','latest_valid_moca_source'].forEach(k=>setDerived(k,null))
+    }
+    safeSave();status.textContent=m?'已載入Participant及最近MoCA。':'已載入Participant；未找到可用MoCA。';renderMRIVisit()
+  }catch(e){status.className='result warn';status.textContent='Participant已載入，但MoCA查詢失敗：'+e.message;renderMRIVisit()}
+}
+function mriIdentityGatePhase2_(){
+  const m=appShell();m.append(toolbar('MRI到訪記錄'));const s=el('section','identity'),query=el('input','text'),token=el('input','text'),status=el('div','result','可用P_ID、S_ID、姓名或電話搜尋。S_ID未配P_ID時仍可繼續。'),results=el('div');
+  token.type='password';token.placeholder='Admin Token';token.value=adminTokenPhase2_();token.oninput=()=>sessionStorage.setItem('apathy_admin_token',token.value);
+  query.placeholder='P_ID／S_ID／姓名／電話';query.value=mriIdentityQueryPhase2_();query.oninput=()=>set('mri_identity_query',query.value);
+  const proceedSid=()=>{const raw=query.value.trim(),sid=/^S?\d{3,6}$/i.test(raw)?canonicalScanId(numericIdValue(raw)):'';if(!sid){status.className='result warn';status.textContent='未找到Participant時，只可用有效S_ID繼續MRI。';return}set('p_id',null);set('s_id',sid);setDerived('mri_identity_status','sid_only_pending_pid');setDerived('pd_hc_status',null);safeSave();renderMRIVisit()};
+  const search=async()=>{results.innerHTML='';status.className='result';status.textContent='正在搜尋……';try{const o=await receiverGetPhase2_('participant_lookup',{q:query.value.trim()}),matches=o.matches||[];if(!matches.length){status.className='result warn';status.textContent='沒有找到既有Participant。若已知正式S_ID，可用S_ID繼續MRI。';results.append(btn('以此S_ID繼續',proceedSid,'primary'));return}status.textContent=`找到${matches.length}個候選，請選擇正確Participant。`;matches.forEach(x=>{const b=btn(`${x.p_id||'未有P_ID'}｜${x.s_id||'未有S_ID'}｜${x.participant_name||'姓名未錄'}｜${x.pd_hc_status||'PD/HC未定'}｜電話末4位 ${x.contact_phone_last4||'—'}`,()=>{applyParticipantMatchPhase2_(x);loadLatestMocaPhase2_(status)},'choice');results.append(b)})}catch(e){status.className='result warn';status.textContent='搜尋失敗：'+e.message}};
+  query.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();search()}};
+  s.append(el('h2','','MRI身份搜尋'),el('p','hint','不需要編造P_ID。先搜尋既有身份；若只知道正式S_ID，可用S_ID保存MRI，日後由Admin分配或配對P_ID。電話只用作候選搜尋，不會自動合併Participant。'),token,query,btn('搜尋Participant',search,'primary'),status,results);m.append(s)
+}
+
+const identityGatePhase2MRIBase_=identityGate;
+identityGate=function(title){if(ST.flow==='mri_visit')return mriIdentityGatePhase2_();return identityGatePhase2MRIBase_(title)};
+
+mocaCutoff=function(age,edu){if(!Number.isFinite(Number(age))||Number(age)<=0)return null;age=Number(age);edu=Number(edu);if(age<65)return 24;if(!Number.isFinite(edu))return null;if(age<=69)return edu<=3?17:edu<=6?19:edu<=9?21:edu<=12?22:25;if(age<=79)return edu<=3?15:edu<=6?18:edu<=9?20:22;return edu<=6?13:17};
+
+function mriSetApplicabilityPhase2_(){
+  const id=String(val('pd_hc_status')||'').toUpperCase();
+  if(id==='HC'){
+    setDerived('medication_applicability','not_applicable');setDerived('on_off_status','not_applicable');setDerived('ledd_status','not_applicable');
+    setDerived('med_on_off',null);setDerived('last_pd_med_minutes',null)
+  }else if(id==='PD'){
+    setDerived('medication_applicability','applicable');setDerived('on_off_status','applicable');
+  }else{
+    setDerived('medication_applicability','pending_identity');setDerived('on_off_status','pending_identity');setDerived('ledd_status','pending_identity');
+    setDerived('med_on_off',null);setDerived('last_pd_med_minutes',null)
+  }
+}
+function mriTodayPhase2_(){const d=new Date(),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return String(val('mri_date')||`${y}-${m}-${day}`)}
+function mriMocaStatePhase2_(){
+  const raw=val('latest_valid_moca_raw_total'),date=String(val('latest_valid_moca_date')||'');
+  if(raw===null||raw==='')return{status:'missing',needs:true,lines:['沒有找到既有MoCA結果。','結果：需要重做或補錄MoCA。']};
+  if(!date)return{status:'date_unavailable',needs:true,lines:[`最近MoCA Raw：${raw}／30`,`Adjusted：${val('latest_valid_moca_adjusted_total')??'—'}`,'評估日期缺失，不能宣稱仍在有效期內。','結果：需要Staff核實或重做。']};
+  const expiry=addCalendarMonths(date,2),today=new Date(mriTodayPhase2_()+'T00:00:00'),needs=!expiry||today>expiry;
+  return{status:needs?'expired':'valid',needs,lines:[`最近MoCA Raw：${raw}／30`,`Adjusted：${val('latest_valid_moca_adjusted_total')??'—'}`,`日期：${date}｜來源：${val('latest_valid_moca_source')||'—'}`,`有效至：${expiry?expiry.toISOString().slice(0,10):'—'}`,`本次MRI：${mriTodayPhase2_()}`,needs?'結果：需要重做MoCA':'結果：現有MoCA仍有效']}
+}
+renderMRIVisit=function(){
+  mriSetApplicabilityPhase2_();const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());const s=el('section','summary'),id=String(val('pd_hc_status')||'').toUpperCase();
+  s.append(el('h2','section-title','MRI到訪資料'),resultBox('身份狀態',[`P_ID：${val('p_id')||'尚未取得'}`,`S_ID：${val('s_id')||'尚未取得'}`,`姓名：${val('participant_name')||'未載入'}`,`Participant類型：${id||'待確認'}`,val('mri_identity_status')==='sid_only_pending_pid'?'已用S_ID建立MRI記錄，日後由Admin補P_ID。':'身份資料已載入。'],id?'good':'warn'));
+  if(!id){addStaffChoices(s,'Participant類型','pd_hc_status',[['PD','PD'],['HC','HC'],['Pending','暫未確定']])}
+  addStaffChoices(s,'MRI到訪次數','visit_number',[[1,'第一次MRI'],[2,'第二次MRI']]);
+  if(!present('mri_date'))setDerived('mri_date',mriTodayPhase2_());s.append(resultBox('MRI日期',[mriTodayPhase2_(),'由裝置本地日期自動記錄，Staff不需要輸入。'],'good'));
+  const ms=mriMocaStatePhase2_();s.append(resultBox('最近MoCA及兩個calendar months判定',ms.lines,ms.needs?'warn':'good'));
+  if(ms.needs){addStaffNumber(s,'MRI前／當日重做MoCA Raw','moca_2_raw_total','／30');if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mriTodayPhase2_());renderSecondMocaResult(s)}}
+  addStaffChoices(s,'與首次MRI安全相比','mri_safety_changed_since_initial',[[0,'沒有變化'],[1,'有變化']]);if(val('mri_safety_changed_since_initial')===1){const g=el('div','toggle-grid');C.mriSafety.forEach(x=>g.append(toggleButton(x[1],'change_'+x[0],()=>renderMRIVisit())));s.append(g);const t=el('textarea');t.placeholder='請說明MRI安全變化內容';t.value=val('mri_safety_change_detail')||'';t.oninput=()=>set('mri_safety_change_detail',t.value);s.append(t)}
+  if(id==='PD'){addStaffChoices(s,'MRI當日PD藥物狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addStaffNumber(s,'距上次服用PD藥物','last_pd_med_minutes','分鐘')}
+  else if(id==='HC')s.append(resultBox('PD專用資料',['Participant為HC。Medication、LEDD、ON／OFF及最後服藥時間均為不適用。'],'good'));
+  else s.append(resultBox('PD專用資料',['Participant類型尚未確定。PD專用欄位暫不顯示，MRI行政及掃描資料仍可保存。'],'warn'));
+  s.append(el('h3','','MID'));addStaffNumber(s,'MID反應時間','mid_response_time_ms','毫秒');s.append(el('h3','','CGT'));addStaffCheckbox(s,'CGT已完成','cgt_done');s.append(el('h3','','Digit Span'));addStaffNumber(s,'Forward','digit_span_forward','');addStaffNumber(s,'Backward','digit_span_backward','');s.append(resultBox('Digit Span',[`Total：${present('digit_span_forward')&&present('digit_span_backward')?Number(val('digit_span_forward'))+Number(val('digit_span_backward')):'待完成'}`]));
+  s.append(el('h3','','MRI Sequence'),el('p','hint','預設完成，只點選沒有完成的Sequence。'));const sg=el('div','chips');B.sequences.items.forEach(x=>sg.append(btn(x.label,()=>{set(x.field,val(x.field)===0?1:0);renderMRIVisit()},'toggle danger'+(val(x.field)===0?' selected':''))));s.append(sg);const incomplete=B.sequences.items.filter(x=>val(x.field)===0);const rf=el('div','field'),rt=el('textarea');rf.append(el('label','','MRI Sequence備註'));rt.value=val('mri_sequence_general_remark')||'';rt.placeholder=incomplete.length?'請說明未完成Sequence及原因':'一般備註（可留空）';rt.oninput=()=>set('mri_sequence_general_remark',rt.value);rf.append(rt);s.append(rf,resultBox('MRI Sequence',[`完成：${B.sequences.items.length-incomplete.length}／${B.sequences.items.length}`,incomplete.length?`未完成：${incomplete.map(x=>x.label).join('、')}`:'全部完成'],incomplete.length?'warn':'good'));
+  s.append(el('h3','','付款及Receipt'));addStaffCheckbox(s,'已付款','payment_status');addStaffCheckbox(s,'Receipt已處理','receipt_status');const sb=el('div','submitbar');sb.append(btn('正式提交MRI到訪',()=>validateMRIVisit(s),'primary'));s.append(sb);m.append(s)
+};
+
+validateMRIVisit=function(s){
+  const missing=[];if(!val('p_id')&&!val('s_id'))missing.push('P_ID或S_ID');if(val('visit_number')===null)missing.push('MRI到訪次數');if(!mriTodayPhase2_())missing.push('MRI日期');if(val('mri_safety_changed_since_initial')===null)missing.push('MRI安全變化');if(val('mri_safety_changed_since_initial')===1&&!String(val('mri_safety_change_detail')||'').trim())missing.push('MRI安全變化內容');if(String(val('pd_hc_status')||'').toUpperCase()==='PD'&&val('med_on_off')===null)missing.push('ON／OFF');if(incompleteSequences()&&!String(val('mri_sequence_general_remark')||'').trim())missing.push('Sequence未完成原因');if(missing.length){showInlineError(s,'尚未完成：'+missing.join('、'));return}
+  mriSetApplicabilityPhase2_();if(present('digit_span_forward')&&present('digit_span_backward'))setDerived('digit_span_total',Number(val('digit_span_forward'))+Number(val('digit_span_backward')));else setDerived('digit_span_total',null);
+  setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
+};
+
+const payloadPhase2MRIBase_=payload;
+payload=function(form,event,status){const out=payloadPhase2MRIBase_(form,event,status);if(event==='mri_scan'||event==='first_school_assessment'){out.participant_id=out.p_id||out.s_id||null;out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_only_pending_pid':'unresolved';const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean)}return out};
+
+
+/* ===== Batch B1: Backfill PD / HC / pending applicability ===== */
+function setBackfillApplicabilityBatch1_(){
+  const id=String(val('pd_hc_status')||'').toUpperCase();
+  const keys=['pd_duration_applicability','updrs_applicability','hy_applicability','medication_applicability','ledd_status','on_off_status'];
+  if(id==='HC')keys.forEach(k=>setDerived(k,'not_applicable'));
+  else if(id==='PD')keys.forEach(k=>setDerived(k,'applicable'));
+  else keys.forEach(k=>setDerived(k,'pending_identity'));
+  if(id!=='PD'){
+    ['med_on_off','last_pd_med_minutes','last_pd_med_time','mri_med_on_off','mri_last_pd_med_minutes'].forEach(k=>setDerived(k,null));
+  }
+}
+const backfillIdentityApplicabilityBase_=backfill;
+backfill=function(){
+  setBackfillApplicabilityBatch1_();
+  backfillIdentityApplicabilityBase_();
+  const id=String(val('pd_hc_status')||'').toUpperCase(),clinical=q('#bf-clinical'),meds=q('#bf-meds');
+  if(id!=='PD')[[clinical,'UPDRS／HY'],[meds,'Medication／LEDD']].forEach(([section,title])=>{
+    if(!section)return;
+    section.innerHTML='';
+    section.append(el('h2','',title),resultBox('PD專用補錄',id==='HC'?
+      ['Participant為HC，此區不適用，不填0。']:
+      ['Participant類型尚未確定，此區暫不顯示；其他補錄資料仍可保存。'],id==='HC'?'good':'warn'));
+  });
+  safeSave();
+};
+
+/* ===== Batch B1: Clinical participant search and temporary identity ===== */
+function clinicalApplyParticipantMatchBatch1_(x){
+  set('p_id',x.p_id||null);set('s_id',x.s_id||null);set('participant_name',x.participant_name||null);
+  set('gender',x.gender||null);set('pd_hc_status',x.pd_hc_status||null);
+  if(x.contact_phone_last4)setDerived('contact_phone_last4',x.contact_phone_last4);
+  setDerived('clinical_identity_status',x.p_id?'matched_with_pid':x.s_id?'sid_only_pending_pid':'matched_without_ids');safeSave();renderClinical();
+}
+function clinicalIdentityGateBatch1_(){
+  const m=appShell();m.append(toolbar('PD臨床資料'));const s=el('section','identity'),token=el('input','text'),query=el('input','text'),results=el('div'),status=el('div','result','可先搜尋既有Participant；找不到時仍可用P_ID、S_ID或聯絡電話建立Clinical記錄。');
+  token.type='password';token.placeholder='Admin Token';token.value=adminTokenPhase2_();token.oninput=()=>sessionStorage.setItem('apathy_admin_token',token.value);
+  query.placeholder='搜尋P_ID／S_ID／姓名／電話';
+  const search=async()=>{results.innerHTML='';status.className='result';status.textContent='正在搜尋……';try{const o=await receiverGetPhase2_('participant_lookup',{q:query.value.trim()}),matches=o.matches||[];if(!matches.length){status.className='result warn';status.textContent='沒有找到既有Participant，可在下方使用已知身份資料建立Clinical記錄。';return}status.textContent=`找到${matches.length}個候選，請選擇正確Participant。`;matches.forEach(x=>results.append(btn(`${x.p_id||'未有P_ID'}｜${x.s_id||'未有S_ID'}｜${x.participant_name||'姓名未錄'}｜${x.pd_hc_status||'PD/HC未定'}｜電話末4位 ${x.contact_phone_last4||'—'}`,()=>clinicalApplyParticipantMatchBatch1_(x),'choice')))}catch(e){status.className='result warn';status.textContent='搜尋失敗：'+e.message}};
+  query.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();search()}};
+  const error=el('div','error'),open=()=>{const pd=numericIdValue(val('p_id')),sd=numericIdValue(val('s_id')),phone=clinicalNormalizedPhonePhase3_();if(pd)set('p_id',canonicalParticipantId(pd));else set('p_id',null);if(sd)set('s_id',canonicalScanId(sd));else set('s_id',null);if(!val('p_id')&&!val('s_id')&&phone.length<8){error.textContent='請至少輸入P_ID、S_ID或有效聯絡電話其中一項。';return}if(phone)setDerived('contact_phone_normalized',phone);setDerived('clinical_identity_status',val('p_id')?'pid_known':val('s_id')?'sid_known':'temporary_phone_pending');safeSave();renderClinical()};
+  s.append(el('h2','','Clinical身份搜尋'),el('p','hint','電話只用作候選搜尋，不會自動合併Participant。找不到既有Participant時，只有電話亦可先保存為臨時身份，日後由Admin配對。'),token,query,btn('搜尋Participant',search,'primary'),status,results,el('h3','','或直接使用已知身份資料'),fieldIdDigits('P_ID（可稍後補）','p_id',val('participant_series')==='Y'?'Y':'P','例：140'),fieldIdDigits('S_ID（可稍後補）','s_id','S','例：082'),fieldText('聯絡電話（可作臨時身份）','contact_phone','例：9123 4567'),error,btn('建立／載入Clinical記錄',open,'primary'));m.append(s);setTimeout(()=>query.focus(),30)
+}
+const identityGateBatch1Base_=identityGate;
+identityGate=function(title){
+  if(ST.flow==='mri_visit')return mriIdentityGatePhase2_();
+  if(ST.flow==='clinical')return clinicalIdentityGateBatch1_();
+  return identityGateBatch1Base_(title);
+};
+
 home();
 })();

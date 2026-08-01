@@ -816,7 +816,7 @@ submitFormal=function(){
 /* ========================================================================== *
  * Admin Operations UI v2.0-phase2
  * ========================================================================== */
-const ADMIN_UI_BUILD='2.1-phase2b';
+const ADMIN_UI_BUILD='2.2-phase2c';
 function adminTokenV1_(){return sessionStorage.getItem('apathy_admin_token')||''}
 function adminApiUrlV1_(action,params){const u=new URL(C.receiverUrl);u.searchParams.set('action',action);u.searchParams.set('token',adminTokenV1_());Object.keys(params||{}).forEach(k=>{const v=params[k];if(v!==undefined&&v!==null&&String(v)!=='')u.searchParams.set(k,String(v))});return u.toString()}
 async function adminApiV1_(action,params){const r=await fetch(adminApiUrlV1_(action,params||{}),{method:'GET',cache:'no-store'}),text=await r.text();let out;try{out=JSON.parse(text)}catch(e){throw new Error('伺服器回傳不是有效JSON：'+text.slice(0,160))}if(!r.ok||out.ok===false)throw new Error(out.message||out.error_code||'Admin API失敗');return out}
@@ -845,8 +845,36 @@ async function adminOpenParticipantV1_(match,host,status){status.textContent='�
 const identity=el('div','plain-block'),previewHost=el('div');identity.append(el('h3','','身份管理'),el('p','hint','先預覽碰撞及影響，再允許保存。既有Raw不會覆蓋。'));const pid=adminFieldV1_('正式P_ID',p.p_id||match.p_id||''),sid=adminFieldV1_('S_ID',p.s_id||match.s_id||''),name=adminFieldV1_('姓名',p.participant_name||match.participant_name||''),gender=adminFieldV1_('性別 M／F',p.gender||match.gender||''),kind=adminFieldV1_('PD／HC',p.pd_hc_status||match.pd_hc_status||''),reason=adminFieldV1_('修改原因','','text');identity.append(pid.wrap,sid.wrap,name.wrap,gender.wrap,kind.wrap,reason.wrap,previewHost);const actions=el('div','submitbar'),previewBtn=btn('預覽身份修改',async()=>{const data={old_p_id:match.p_id||p.p_id||'',new_p_id:normalizeId(pid.input.value),s_id:normalizeId(sid.input.value),participant_name:name.input.value,gender:gender.input.value,pd_hc_status:kind.input.value,reason:reason.input.value};try{const q=await adminPreviewIdentityV2_(data,previewHost,status);saveBtn.disabled=!q.can_apply;saveBtn.dataset.preview=JSON.stringify(data)}catch(e){status.textContent='預覽失敗：'+e.message}},'secondary'),saveBtn=btn('保存身份修改',()=>{let data;try{data=JSON.parse(saveBtn.dataset.preview||'null')}catch(e){}if(!data){status.textContent='請先預覽身份修改。';return}adminConfirmV2_('保存身份修改',[`${data.old_p_id||'未分配'} → ${data.new_p_id} / ${data.s_id||'無S_ID'}`,'將更新Registry、追加Correction Event並完整重建。'],'確定保存',async st=>{const x=await adminApiV1_('update_identity',Object.assign({},data,{rebuild:1}));st.textContent=`身份已更新，建立${x.corrections_created}筆Correction。`})},'primary');saveBtn.disabled=true;actions.append(previewBtn,saveBtn);identity.append(actions);host.append(identity);const events=el('div','plain-block'),eventsHost=el('div');events.append(el('h3','','事件管理'),el('p','hint','只修改Record Control，不修改Raw。請先以明確測試事件驗收。'),eventsHost);host.append(events);adminRenderEventsV1_(eventsHost,detail.events||[]);status.className='result good';status.textContent=`已載入${match.p_id||match.s_id}。`}catch(e){status.className='result warn';status.textContent='載入失敗：'+e.message}}
 function adminEventSearchPanelV2_(host,status){
   const box=el('div','plain-block'),field=adminFieldV1_('搜尋全部Raw／Record Control','','text'),out=el('div');
+  let requestSerial=0,busy=false;
   field.input.placeholder='P_ID／S_ID／Submission ID／姓名';
-  const go=btn('搜尋事件',async()=>{const term=field.input.value.trim();if(!term)return;status.textContent='正在搜尋全部事件……';out.innerHTML='';try{const r=await adminApiV1_('event_lookup',{q:term});status.textContent=`找到${r.records.length}筆事件。`;if(!r.records.length){out.append(el('div','result','沒有符合事件。'));return}const table=el('table','progress-table'),head=el('tr');['環境','納入','狀態','P_ID','S_ID','事件','Submission ID','來源','操作'].forEach(x=>head.append(el('th','',x)));table.append(head);r.records.forEach(ev=>{const tr=el('tr'),env=String(ev.record_environment||'');tr.append(el('td',env==='production'?'good':env==='test'||env==='exclude'?'warn':'',env),el('td','',String(ev.include_in_rebuild)),el('td','',ev.control_status||''),el('td','',ev.p_id||''),el('td','',ev.s_id||''),el('td','',ev.event_type||''),el('td','',ev.submission_id||''),el('td','',`${ev.source_sheet} #${ev.source_row}`));const action=el('td'),g=el('div','direct');[['test','標記測試'],['exclude','排除'],['restore','恢復']].forEach(x=>g.append(btn(x[1],()=>adminConfirmV2_(`${x[1]}事件`,[`目前：${ev.record_environment} / include=${ev.include_in_rebuild}`,`Submission ID：${ev.submission_id}`,'Raw不會修改。'],'確定執行',async st=>{await adminApiV1_('set_event_status',{submission_id:ev.submission_id,status:x[0],rebuild:1});st.textContent='事件狀態已更新並完成重建。'}),'linkbtn')));action.append(g);tr.append(action);table.append(tr)});out.append(table)}catch(e){status.className='result warn';status.textContent='事件搜尋失敗：'+e.message}},'secondary');field.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};box.append(el('h2','section-title','全部Raw／Record Control事件'),el('p','hint','用於查找已排除測試事件。正式Participant事件操作前必須核對環境及Submission ID。'),field.wrap,go,out);host.append(box)
+  const go=btn('搜尋事件',async()=>{
+    const term=field.input.value.trim();if(!term||busy)return;
+    busy=true;go.disabled=true;const serial=++requestSerial;
+    status.className='result';status.textContent='正在搜尋全部事件……';out.innerHTML='';
+    try{
+      const r=await adminApiV1_('event_lookup',{q:term});if(serial!==requestSerial)return;
+      status.textContent=`找到${r.records.length}筆事件。`;
+      if(!r.records.length){out.append(el('div','result','沒有符合事件。'));return}
+      const table=el('table','progress-table'),head=el('tr');
+      ['環境','納入','狀態','P_ID','S_ID','事件','Submission ID','來源','操作'].forEach(x=>head.append(el('th','',x)));table.append(head);
+      r.records.forEach(ev=>{
+        const tr=el('tr'),env=String(ev.record_environment||''),isProduction=env==='production'&&String(ev.include_in_rebuild)==='1';
+        tr.append(el('td',env==='production'?'good':env==='test'||env==='exclude'?'warn':'',env),el('td','',String(ev.include_in_rebuild)),el('td','',ev.control_status||''),el('td','',ev.p_id||''),el('td','',ev.s_id||''),el('td','',ev.event_type||''),el('td','',ev.submission_id||''),el('td','',`${ev.source_sheet} #${ev.source_row}`));
+        const action=el('td');
+        if(isProduction){action.append(el('span','hint','正式納入事件：請從Participant詳情處理'))}
+        else{
+          const g=el('div','direct');
+          [['test','標記測試'],['exclude','排除'],['restore','恢復']].forEach(x=>g.append(btn(x[1],()=>adminConfirmV2_(`${x[1]}事件`,[`目前：${ev.record_environment} / include=${ev.include_in_rebuild}`,`Submission ID：${ev.submission_id}`,'Raw不會修改。'],'確定執行',async st=>{await adminApiV1_('set_event_status',{submission_id:ev.submission_id,status:x[0],rebuild:1});st.textContent='事件狀態已更新並完成重建。'}),'linkbtn')));
+          action.append(g)
+        }
+        tr.append(action);table.append(tr)
+      });
+      out.replaceChildren(table)
+    }catch(e){if(serial===requestSerial){status.className='result warn';status.textContent='事件搜尋失敗：'+e.message}}
+    finally{if(serial===requestSerial){busy=false;go.disabled=false}}
+  },'secondary');
+  field.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};
+  box.append(el('h2','section-title','全部Raw／Record Control事件'),el('p','hint','用於查找已排除測試事件。正式納入事件只能從Participant詳情處理，避免在全域搜尋中誤操作。'),field.wrap,go,out);host.append(box)
 }
 
 function adminLegacyPanelV1_(host,status){const box=el('div','plain-block'),out=el('div');box.append(el('h3','','舊格式資料檢視'),el('p','hint','只讀。空白污染行在Record Control Phase 2後不再產生Participant Review。'),btn('載入Stage 2舊行',async()=>{try{const r=await adminApiV1_('legacy_records',{route:'stage2'});out.innerHTML='';out.append(resultBox('舊格式資料',[`共${r.records.length}行`,...r.records.map(x=>`${x.source_sheet} #${x.source_row} ｜ event=${x.event_type||'blank'} ｜ answered=${x.answered_field_count}`)]));status.textContent='舊行已載入。'}catch(e){status.textContent='載入失敗：'+e.message}},'secondary'),out);host.append(box)}

@@ -1040,7 +1040,7 @@ function mriMocaCompact_(parent){
   }
   parent.append(box)
 }
-renderMRIVisit=function(){
+function renderMRIVisit(){
   ensureMriCompactStyle_();if(!present('mri_date'))setDerived('mri_date',localIsoDateMRI_());mriSetApplicabilityPhase2_();
   const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());const s=el('section','summary mri-compact'),id=String(val('pd_hc_status')||'').toUpperCase();
   s.append(el('h2','section-title','MRI到訪資料'));
@@ -1115,9 +1115,9 @@ function renderMedicationUnified_(s){
   }
   setDerived('medication_source_mode',source);s.append(wrap);safeSave()
 }
-renderMedicationRows=function(){};
-renderLeddPanel=function(s){renderMedicationUnified_(s)};
-renderMedicationBF=function(s){renderMedicationUnified_(s)};
+function renderMedicationRows(){}
+function renderLeddPanel(s){renderMedicationUnified_(s)}
+function renderMedicationBF(s){renderMedicationUnified_(s)}
 
 function medicationMigrateDraft_(){
   if(!Array.isArray(ST.meds))ST.meds=[];

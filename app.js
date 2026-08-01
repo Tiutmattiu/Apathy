@@ -816,13 +816,30 @@ submitFormal=function(){
 /* ========================================================================== *
  * Admin Operations UI v2.0-phase2
  * ========================================================================== */
-const ADMIN_UI_BUILD='2.2-phase2c';
+const ADMIN_UI_BUILD='2.3-phase2-closeout';
 function adminTokenV1_(){return sessionStorage.getItem('apathy_admin_token')||''}
 function adminApiUrlV1_(action,params){const u=new URL(C.receiverUrl);u.searchParams.set('action',action);u.searchParams.set('token',adminTokenV1_());Object.keys(params||{}).forEach(k=>{const v=params[k];if(v!==undefined&&v!==null&&String(v)!=='')u.searchParams.set(k,String(v))});return u.toString()}
 async function adminApiV1_(action,params){const r=await fetch(adminApiUrlV1_(action,params||{}),{method:'GET',cache:'no-store'}),text=await r.text();let out;try{out=JSON.parse(text)}catch(e){throw new Error('伺服器回傳不是有效JSON：'+text.slice(0,160))}if(!r.ok||out.ok===false)throw new Error(out.message||out.error_code||'Admin API失敗');return out}
 function adminFieldV1_(label,value,type='text'){const f=el('div','field');f.append(el('label','',label));const i=el('input','text');i.type=type;i.value=value==null?'':String(value);f.append(i);return{wrap:f,input:i}}
 function adminSummaryCardV1_(p){const card=el('div','plain-block');card.append(el('h3','',`${p.p_id||'未分配P_ID'}${p.s_id?' ｜ '+p.s_id:''}`),resultBox('Participant摘要',[`姓名：${p.participant_name||'—'}`,`身份：${p.pd_hc_status||'—'} ｜ 性別：${p.gender||'—'}`,`配對：${p.pairing_status||'—'} ｜ MRI：${p.mri_status||p.registry_mri_status||'—'}`,`最近MoCA：${p.latest_moca_raw===''||p.latest_moca_raw==null?'沒有可用記錄':p.latest_moca_raw}${p.latest_moca_date?' ｜ '+p.latest_moca_date:''}`,`電話末四位：${p.contact_phone_last4||'—'}`]));return card}
-function adminConfirmV2_(title,lines,actionLabel,run){const modal=el('div','modal'),box=el('div','modal-box');box.append(el('h2','',title));(Array.isArray(lines)?lines:[lines]).forEach(x=>box.append(el('p','',x)));const st=el('div','status'),bar=el('div','submitbar'),cancel=btn('取消',()=>modal.remove(),'linkbtn'),go=btn(actionLabel,async()=>{go.disabled=true;cancel.disabled=true;st.textContent='正在執行，請不要關閉頁面……';try{await run(st);st.className='result good';if(!st.textContent||st.textContent.includes('正在'))st.textContent='操作完成。';setTimeout(()=>{modal.remove();renderResearchAdmin()},900)}catch(e){st.className='result warn';st.textContent='操作未完成：'+e.message;go.disabled=false;cancel.disabled=false}},'primary');bar.append(cancel,go);box.append(st,bar);modal.append(box);document.body.append(modal)}
+function adminConfirmV2_(title,lines,actionLabel,run){
+  const modal=el('div','modal'),box=el('div','modal-box');box.append(el('h2','',title));
+  (Array.isArray(lines)?lines:[lines]).forEach(x=>box.append(el('p','',x)));
+  const st=el('div','status'),bar=el('div','submitbar'),cancel=btn('取消',()=>modal.remove(),'linkbtn');
+  const go=btn(actionLabel,async()=>{
+    go.disabled=true;cancel.disabled=true;st.className='status';st.textContent='正在執行，請不要關閉頁面……';
+    try{
+      await run(st);
+      st.className='result good';
+      if(!st.textContent||st.textContent.includes('正在'))st.textContent='操作完成。';
+      bar.innerHTML='';bar.append(btn('關閉',()=>modal.remove(),'primary'));
+    }catch(e){
+      st.className='result warn';st.textContent='操作未完成：'+e.message;
+      go.disabled=false;cancel.disabled=false
+    }
+  },'primary');
+  bar.append(cancel,go);box.append(st,bar);modal.append(box);document.body.append(modal)
+}
 async function adminRunRebuildV2_(status){const start=Date.now(),labels=['正在啟動重建','正在建立Assessment Master','正在建立Domain結果','正在更新Boss table','正在更新Admin Workflow及Audit'];let seconds=0;const timer=setInterval(()=>{seconds=Math.floor((Date.now()-start)/1000);status.textContent=`已等待${seconds}秒 ｜ ${labels[Math.min(labels.length-1,Math.floor(seconds/5))]}`},1000);try{const out=await adminApiV1_('rebuild_system',{}),r=out.result||{},elapsed=((Date.now()-start)/1000).toFixed(1),audit=r.audit||{},ax=r.ax_results||{};status.textContent=`重建完成，用時${elapsed}秒 ｜ Boss輸出${ax.participants_output??'—'}人 ｜ 正式納入${audit.included_rows??'—'}列 ｜ Review請到Review_Log查看`;}finally{clearInterval(timer)}}
 function adminRenderEventsV1_(host,events){host.innerHTML='';if(!events||!events.length){host.append(el('div','result','沒有可顯示事件。'));return}const table=el('table','progress-table'),head=el('tr');['事件','Submission ID','來源','時間','Latest','操作'].forEach(x=>head.append(el('th','',x)));table.append(head);events.forEach(ev=>{const tr=el('tr');tr.append(el('td','',ev.event_type||''),el('td','',ev.submission_id||''),el('td','',`${ev.sheet||''}${ev.row?' #'+ev.row:''}`),el('td','',ev.submitted_at||''),el('td','',String(ev.is_latest??'')));const op=el('td'),g=el('div','direct');[['duplicate','標記重複'],['exclude','排除'],['test','測試'],['restore','恢復']].forEach(x=>g.append(btn(x[1],()=>adminConfirmV2_(`${x[1]}事件`,[`Submission ID：${ev.submission_id}`,'Raw不會被刪除，只會更新Record Control並完整重建。'],'確定執行',async st=>{await adminApiV1_('set_event_status',{submission_id:ev.submission_id,status:x[0],rebuild:1});st.textContent='事件狀態已更新並完成重建。'}),'linkbtn')));op.append(g);tr.append(op);table.append(tr)});host.append(table)}
 async function adminPreviewIdentityV2_(data,previewHost,status){
@@ -845,40 +862,71 @@ async function adminOpenParticipantV1_(match,host,status){status.textContent='�
 const identity=el('div','plain-block'),previewHost=el('div');identity.append(el('h3','','身份管理'),el('p','hint','先預覽碰撞及影響，再允許保存。既有Raw不會覆蓋。'));const pid=adminFieldV1_('正式P_ID',p.p_id||match.p_id||''),sid=adminFieldV1_('S_ID',p.s_id||match.s_id||''),name=adminFieldV1_('姓名',p.participant_name||match.participant_name||''),gender=adminFieldV1_('性別 M／F',p.gender||match.gender||''),kind=adminFieldV1_('PD／HC',p.pd_hc_status||match.pd_hc_status||''),reason=adminFieldV1_('修改原因','','text');identity.append(pid.wrap,sid.wrap,name.wrap,gender.wrap,kind.wrap,reason.wrap,previewHost);const actions=el('div','submitbar'),previewBtn=btn('預覽身份修改',async()=>{const data={old_p_id:match.p_id||p.p_id||'',new_p_id:normalizeId(pid.input.value),s_id:normalizeId(sid.input.value),participant_name:name.input.value,gender:gender.input.value,pd_hc_status:kind.input.value,reason:reason.input.value};try{const q=await adminPreviewIdentityV2_(data,previewHost,status);saveBtn.disabled=!q.can_apply;saveBtn.dataset.preview=JSON.stringify(data)}catch(e){status.textContent='預覽失敗：'+e.message}},'secondary'),saveBtn=btn('保存身份修改',()=>{let data;try{data=JSON.parse(saveBtn.dataset.preview||'null')}catch(e){}if(!data){status.textContent='請先預覽身份修改。';return}adminConfirmV2_('保存身份修改',[`${data.old_p_id||'未分配'} → ${data.new_p_id} / ${data.s_id||'無S_ID'}`,'將更新Registry、追加Correction Event並完整重建。'],'確定保存',async st=>{const x=await adminApiV1_('update_identity',Object.assign({},data,{rebuild:1}));st.textContent=`身份已更新，建立${x.corrections_created}筆Correction。`})},'primary');saveBtn.disabled=true;actions.append(previewBtn,saveBtn);identity.append(actions);host.append(identity);const events=el('div','plain-block'),eventsHost=el('div');events.append(el('h3','','事件管理'),el('p','hint','只修改Record Control，不修改Raw。請先以明確測試事件驗收。'),eventsHost);host.append(events);adminRenderEventsV1_(eventsHost,detail.events||[]);status.className='result good';status.textContent=`已載入${match.p_id||match.s_id}。`}catch(e){status.className='result warn';status.textContent='載入失敗：'+e.message}}
 function adminEventSearchPanelV2_(host,status){
   const box=el('div','plain-block'),field=adminFieldV1_('搜尋全部Raw／Record Control','','text'),out=el('div');
-  let requestSerial=0,busy=false;
-  field.input.placeholder='P_ID／S_ID／Submission ID／姓名';
-  const go=btn('搜尋事件',async()=>{
+  let requestSerial=0,busy=false;field.input.placeholder='P_ID／S_ID／Submission ID／姓名';
+  const draw=async()=>{
     const term=field.input.value.trim();if(!term||busy)return;
-    busy=true;go.disabled=true;const serial=++requestSerial;
-    status.className='result';status.textContent='正在搜尋全部事件……';out.innerHTML='';
+    busy=true;go.disabled=true;const serial=++requestSerial;status.className='result';status.textContent='正在搜尋全部事件……';out.innerHTML='';
     try{
       const r=await adminApiV1_('event_lookup',{q:term});if(serial!==requestSerial)return;
       status.textContent=`找到${r.records.length}筆事件。`;
       if(!r.records.length){out.append(el('div','result','沒有符合事件。'));return}
-      const table=el('table','progress-table'),head=el('tr');
-      ['環境','納入','狀態','P_ID','S_ID','事件','Submission ID','來源','操作'].forEach(x=>head.append(el('th','',x)));table.append(head);
+      const table=el('table','progress-table'),head=el('tr');['環境','納入','狀態','P_ID','S_ID','事件','Submission ID','來源','操作'].forEach(x=>head.append(el('th','',x)));table.append(head);
       r.records.forEach(ev=>{
-        const tr=el('tr'),env=String(ev.record_environment||''),isProduction=env==='production'&&String(ev.include_in_rebuild)==='1';
+        const tr=el('tr'),env=String(ev.record_environment||''),included=env==='production'&&String(ev.include_in_rebuild)==='1';
         tr.append(el('td',env==='production'?'good':env==='test'||env==='exclude'?'warn':'',env),el('td','',String(ev.include_in_rebuild)),el('td','',ev.control_status||''),el('td','',ev.p_id||''),el('td','',ev.s_id||''),el('td','',ev.event_type||''),el('td','',ev.submission_id||''),el('td','',`${ev.source_sheet} #${ev.source_row}`));
         const action=el('td');
-        if(isProduction){action.append(el('span','hint','正式納入事件：請從Participant詳情處理'))}
+        if(included)action.append(el('span','hint','正式納入事件：請從Participant詳情處理'));
         else{
-          const g=el('div','direct');
-          [['test','標記測試'],['exclude','排除'],['restore','恢復']].forEach(x=>g.append(btn(x[1],()=>adminConfirmV2_(`${x[1]}事件`,[`目前：${ev.record_environment} / include=${ev.include_in_rebuild}`,`Submission ID：${ev.submission_id}`,'Raw不會修改。'],'確定執行',async st=>{await adminApiV1_('set_event_status',{submission_id:ev.submission_id,status:x[0],rebuild:1});st.textContent='事件狀態已更新並完成重建。'}),'linkbtn')));
+          const g=el('div','direct'),choices=[];
+          if(env!=='test')choices.push(['test','標記測試']);
+          if(env!=='exclude')choices.push(['exclude','排除']);
+          if(!(env==='production'&&String(ev.include_in_rebuild)==='1'))choices.push(['restore','恢復']);
+          choices.forEach(x=>g.append(btn(x[1],()=>adminConfirmV2_(`${x[1]}事件`,[
+            `目前：${ev.record_environment} / include=${ev.include_in_rebuild}`,
+            `Submission ID：${ev.submission_id}`,
+            '此操作會更新Record Control並自動完整重建；Raw不會修改。',
+            '完成後不需要再次按「更新所有結果」。'
+          ],'確定執行',async st=>{
+            const started=Date.now();
+            const result=await adminApiV1_('set_event_status',{submission_id:ev.submission_id,status:x[0],rebuild:1});
+            const seconds=((Date.now()-started)/1000).toFixed(1);
+            busy=false;go.disabled=false;await draw();
+            st.textContent=`✓ 事件狀態已更新並完成重建｜Submission ID：${ev.submission_id}｜用時${seconds}秒。搜尋及頁面狀態已保留。`;
+            return result
+          }),'linkbtn')));
           action.append(g)
         }
         tr.append(action);table.append(tr)
-      });
-      out.replaceChildren(table)
+      });out.replaceChildren(table)
     }catch(e){if(serial===requestSerial){status.className='result warn';status.textContent='事件搜尋失敗：'+e.message}}
     finally{if(serial===requestSerial){busy=false;go.disabled=false}}
-  },'secondary');
-  field.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};
-  box.append(el('h2','section-title','全部Raw／Record Control事件'),el('p','hint','用於查找已排除測試事件。正式納入事件只能從Participant詳情處理，避免在全域搜尋中誤操作。'),field.wrap,go,out);host.append(box)
+  };
+  const go=btn('搜尋事件',draw,'secondary');field.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();draw()}};
+  box.append(el('h2','section-title','全部Raw／Record Control事件'),el('p','hint','用於查找已排除測試事件。事件操作會自動完整重建，完成後不需要再次按全域「更新所有結果」。'),field.wrap,go,out);host.append(box)
 }
 
 function adminLegacyPanelV1_(host,status){const box=el('div','plain-block'),out=el('div');box.append(el('h3','','舊格式資料檢視'),el('p','hint','只讀。空白污染行在Record Control Phase 2後不再產生Participant Review。'),btn('載入Stage 2舊行',async()=>{try{const r=await adminApiV1_('legacy_records',{route:'stage2'});out.innerHTML='';out.append(resultBox('舊格式資料',[`共${r.records.length}行`,...r.records.map(x=>`${x.source_sheet} #${x.source_row} ｜ event=${x.event_type||'blank'} ｜ answered=${x.answered_field_count}`)]));status.textContent='舊行已載入。'}catch(e){status.textContent='載入失敗：'+e.message}},'secondary'),out);host.append(box)}
-async function renderResearchAdmin(){const m=appShell();m.append(toolbar('研究進度管理'));const s=el('section','summary'),status=el('div','result','請輸入Admin Token。'),body=el('div'),auth=el('div','plain-block'),token=adminFieldV1_('Admin Token',adminTokenV1_(),'password');token.input.placeholder='Admin Token';const connect=btn('連接後端',async()=>{sessionStorage.setItem('apathy_admin_token',token.input.value);status.textContent='正在連接……';try{await adminApiV1_('participant_lookup',{q:'__healthcheck__'});status.className='result good';status.textContent=`已連接Admin API ｜ UI ${ADMIN_UI_BUILD}`;workspace()}catch(e){status.className='result warn';status.textContent='連接失敗：'+e.message}},'primary');auth.append(token.wrap,connect);s.append(auth,status,body);m.append(s);function workspace(){body.innerHTML='';const tools=el('div','plain-block'),search=adminFieldV1_('搜尋Participant','','text'),results=el('div'),detail=el('div');search.input.placeholder='P_ID／S_ID／姓名／電話';const go=btn('搜尋',async()=>{const term=search.input.value.trim();if(!term)return;status.textContent='正在搜尋……';results.innerHTML='';detail.innerHTML='';try{const r=await adminApiV1_('participant_lookup',{q:term});status.textContent=`找到${r.matches.length}筆。`;r.matches.forEach(x=>{const card=adminSummaryCardV1_(x);card.append(btn('開啟Participant',()=>adminOpenParticipantV1_(x,detail,status),'primary'));results.append(card)});if(!r.matches.length)results.append(el('div','result','沒有符合結果。'))}catch(e){status.textContent='搜尋失敗：'+e.message}},'primary');search.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};const bar=el('div','submitbar');bar.append(btn('預覽下一個P_ID',async()=>{try{const r=await adminApiV1_('assign_next_pid',{commit:0});status.textContent='下一個可用P_ID：'+r.next_p_id}catch(e){status.textContent=e.message}},'secondary'),btn('更新所有結果',()=>adminConfirmV2_('更新所有結果',['將重建Assessment Master、Domain、Boss table、Admin Workflow及Audit。','通常約需20秒。'],'開始重建',adminRunRebuildV2_),'primary'));tools.append(el('h2','section-title','Participant搜尋及日常管理'),search.wrap,go,bar,results,detail);body.append(tools);adminEventSearchPanelV2_(body,status);adminLegacyPanelV1_(body,status)}if(adminTokenV1_())status.textContent='已讀取本分頁Admin Token，請按「連接後端」。'}
+async function renderResearchAdmin(){
+  const m=appShell();m.append(toolbar('研究進度管理'));
+  const s=el('section','summary'),status=el('div','result','請輸入Admin Token。'),body=el('div'),auth=el('div','plain-block'),token=adminFieldV1_('Admin Token',adminTokenV1_(),'password');
+  token.input.placeholder='Admin Token';
+  const connect=btn('連接後端',connectNow,'primary');auth.append(token.wrap,connect);s.append(auth,status,body);m.append(s);
+  async function connectNow(){
+    if(token.input.value)sessionStorage.setItem('apathy_admin_token',token.input.value);
+    status.className='result';status.textContent='正在連接……';connect.disabled=true;
+    try{await adminApiV1_('participant_lookup',{q:'__healthcheck__'});status.className='result good';status.textContent=`已連接Admin API ｜ UI ${ADMIN_UI_BUILD}`;workspace()}
+    catch(e){status.className='result warn';status.textContent='連接失敗：'+e.message;body.innerHTML=''}
+    finally{connect.disabled=false}
+  }
+  function workspace(){
+    body.innerHTML='';const tools=el('div','plain-block'),search=adminFieldV1_('搜尋Participant','','text'),results=el('div'),detail=el('div');search.input.placeholder='P_ID／S_ID／姓名／電話';
+    const go=btn('搜尋',async()=>{const term=search.input.value.trim();if(!term)return;status.textContent='正在搜尋……';results.innerHTML='';detail.innerHTML='';try{const r=await adminApiV1_('participant_lookup',{q:term});status.textContent=`找到${r.matches.length}筆。`;r.matches.forEach(x=>{const card=adminSummaryCardV1_(x);card.append(btn('開啟Participant',()=>adminOpenParticipantV1_(x,detail,status),'primary'));results.append(card)});if(!r.matches.length)results.append(el('div','result','沒有符合結果。'))}catch(e){status.textContent='搜尋失敗：'+e.message}},'primary');
+    search.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};
+    const bar=el('div','submitbar');bar.append(btn('預覽下一個P_ID',async()=>{try{const r=await adminApiV1_('assign_next_pid',{commit:0});status.textContent='下一個可用P_ID：'+r.next_p_id}catch(e){status.textContent=e.message}},'secondary'),btn('更新所有結果',()=>adminConfirmV2_('更新所有結果',['將重建Assessment Master、Domain、Boss table、Admin Workflow及Audit。','通常約需45秒。'],'開始重建',adminRunRebuildV2_),'primary'));
+    tools.append(el('h2','section-title','Participant搜尋及日常管理'),search.wrap,go,bar,results,detail);body.append(tools);adminEventSearchPanelV2_(body,status);adminLegacyPanelV1_(body,status)
+  }
+  if(adminTokenV1_()){token.input.value=adminTokenV1_();connectNow()}
+}
 
 home();
 })();

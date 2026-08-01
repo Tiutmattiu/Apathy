@@ -685,8 +685,6 @@ function renderIORBF(s){s.append(el('p','hint','三個維度均為1–5；只在
 
 
 /* Admin 10.0.5: request token in Staff UI; never hard-code it in public config. */
-async 
-
 
 /* 10.0.6 interaction completion layer */
 function pdiPageItems106(pg){return B.pdi21.items.slice(pg.from,pg.to)}

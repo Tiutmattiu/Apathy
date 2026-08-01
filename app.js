@@ -217,7 +217,7 @@ function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{typ
 async function submitPayload(form,event,status){if(ST.submitting)return;const p=payload(form,event,status);ST.submitting=true;const modal=el('div','modal'),box=el('div','modal-box submit-wait'),title=el('h2','','正在提交資料……'),msg=el('p','','請不要重新整理、關閉頁面或返回上一頁。一般約需15秒，請等待伺服器確認。'),timer=el('div','status','已等待0秒');box.append(title,msg,timer);modal.append(box);document.body.append(modal);let sec=0;const tick=setInterval(()=>{sec++;timer.textContent=`已等待${sec}秒${sec>15?'；仍在等待伺服器回應，請不要重新整理。':''}`},1000);try{const res=await fetch(C.receiverUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)});const text=await res.text();let out;try{out=JSON.parse(text)}catch(e){out={ok:res.ok,message:text}}if(!res.ok||out.ok===false)throw new Error(out.message||'後端未確認收到資料');clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交成功'),el('p','',`Submission ID：${ST.submission}`),btn('返回',()=>{modal.remove();ST.submission=uuid();saveDraft();if(form==='screening'&&event==='screening_core'&&['HC','Apathy','Pure_PD'].includes(val('final_screening_decision')))player()},'primary'))}catch(e){clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交未完成'),el('p','',`資料仍保存在此裝置。${e.message}`));const a=el('div','submitbar');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('返回修改',()=>modal.remove(),'primary'));box.append(a)}finally{ST.submitting=false}}
 
 /* ===== Consolidated post-v9 implementation layer ===== */
-const APP_BUILD='10.0.8-medication-mri-rescue-test';
+const APP_BUILD='10.0.6-rebuilt-complete-v4';
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
   historical_paper_reentry:'screening',field_correction:'screening',
@@ -963,7 +963,6 @@ function addCurrentMocaOptionalPhase2_(parent,state){
   parent.append(box)
 }
 
-const renderMRIVisitMocaOptionalBase_=renderMRIVisit;
 ;
 
 const validateMRIVisitMocaOptionalBase_=validateMRIVisit;

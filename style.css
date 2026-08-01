@@ -4,3 +4,11 @@
 
 /* 10.0.4 staff close-out additions: local only; existing global UI unchanged. */
 .id-input-row{display:flex;align-items:center;gap:8px}.id-prefix{font-weight:900;color:var(--blue-dark);min-width:28px}.med-parse-row{padding:8px 0;border-bottom:1px solid var(--line)}.clinical-anchor.active{border-left:4px solid var(--blue);padding-left:10px}.bf-row>span{line-height:1.5}.bf-section>.direct{margin:10px 0}.progress-table td{vertical-align:top}
+
+/* Local rescue branch only. Scoped to standard Backfill single-value scales. */
+.bf-section.bf-simple-scale{max-width:980px}
+.bf-section.bf-simple-scale .bf-row{grid-template-columns:minmax(300px,760px) 82px}
+@media(max-width:700px){
+  .bf-section.bf-simple-scale{max-width:none}
+  .bf-section.bf-simple-scale .bf-row{grid-template-columns:minmax(180px,1fr) 68px}
+}

@@ -1251,5 +1251,72 @@ validateMRIVisit=function(s){
   return validateMRIVisitMocaOptionalBase_(s)
 };
 
+/* ===== Phase 2 next unit: MRI DMY, MoCA comparison, vitals remark, Backfill applicability, Staff final LEDD ===== */
+function numericTextInputPhase2_(maxLength,placeholder,value){const i=el('input','text');i.inputMode='numeric';i.maxLength=maxLength;i.placeholder=placeholder;i.value=value||'';i.oninput=()=>{i.value=String(i.value||'').replace(/\D/g,'').slice(0,maxLength)};return i}
+function isoPartsPhase2_(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?{d:m[3],m:m[2],y:m[1]}:{d:'',m:'',y:''}}
+function validDmyPhase2_(d,m,y){const day=Number(d),month=Number(m),year=Number(y),x=new Date(year,month-1,day);return String(y).length===4&&x.getFullYear()===year&&x.getMonth()===month-1&&x.getDate()===day}
+function dmyToIsoPhase2_(d,m,y){return validDmyPhase2_(d,m,y)?`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`:''}
+function addDmyDatePhase2_(parent,label,key,onDone){
+  const p=isoPartsPhase2_(val(key)),f=el('div','field'),row=el('div','form-grid'),day=numericTextInputPhase2_(2,'DD',p.d),month=numericTextInputPhase2_(2,'MM',p.m),year=numericTextInputPhase2_(4,'YYYY',p.y),msg=el('div','hint','格式：日／月／年，只接受數字。');
+  f.append(el('label','',label));row.append(day,month,year);f.append(row,msg);parent.append(f);
+  const commit=()=>{const iso=dmyToIsoPhase2_(day.value,month.value,year.value);if(iso){set(key,iso);msg.textContent=`已記錄：${day.value.padStart(2,'0')}/${month.value.padStart(2,'0')}/${year.value}`;msg.className='hint good';safeSave();onDone?.(iso)}else if(day.value||month.value||year.value){set(key,null);msg.textContent='日期未完整或無效，請按DD MM YYYY輸入。';msg.className='hint warn'}else{set(key,null);msg.textContent='格式：日／月／年，只接受數字。';msg.className='hint'}};
+  day.oninput=()=>{day.value=day.value.replace(/\D/g,'').slice(0,2);if(day.value.length===2)month.focus();commit()};month.oninput=()=>{month.value=month.value.replace(/\D/g,'').slice(0,2);if(month.value.length===2)year.focus();commit()};year.oninput=()=>{year.value=year.value.replace(/\D/g,'').slice(0,4);commit()};
+  [day,month,year].forEach(i=>i.onblur=commit);return{day,month,year}
+}
+function mocaComparisonPhase2_(parent){
+  const oldRaw=val('latest_valid_moca_raw_total'),newRaw=val('moca_2_raw_total');if(newRaw===null||newRaw==='')return;
+  if(oldRaw===null||oldRaw===''){setDerived('moca_score_change_status','no_prior_score');setDerived('moca_change_remark','MRI當日完成MoCA；沒有可比較的先前分數。');return}
+  const same=Number(oldRaw)===Number(newRaw),box=el('div','plain-block');box.append(el('h3','','與上一次MoCA比較'));
+  const g=el('div','direct');[['unchanged','分數不變'],['changed','分數有變化']].forEach(x=>g.append(btn(x[1],()=>{set('moca_score_change_status',x[0]);if(x[0]==='unchanged')setDerived('moca_change_remark',null);else setDerived('moca_change_remark',`MoCA Raw由${oldRaw}分變為${newRaw}分，變化${Number(newRaw)-Number(oldRaw)>=0?'+':''}${Number(newRaw)-Number(oldRaw)}分；最新有效結果採用MRI當日結果。`);renderMRIVisit()},'choice'+(sameValue(val('moca_score_change_status'),x[0])?' selected':''))));box.append(g);
+  if(!val('moca_score_change_status')){setDerived('moca_score_change_status',same?'unchanged':'changed');setDerived('moca_change_remark',same?null:`MoCA Raw由${oldRaw}分變為${newRaw}分，變化${Number(newRaw)-Number(oldRaw)>=0?'+':''}${Number(newRaw)-Number(oldRaw)}分；最新有效結果採用MRI當日結果。`)}
+  box.append(resultBox('比較結果',[`上次：${oldRaw}／30`,`本次：${newRaw}／30`,val('moca_score_change_status')==='unchanged'?'分數不變，不建立變化Remark。':val('moca_change_remark')||'已記錄變化。'],val('moca_score_change_status')==='unchanged'?'good':'warn'));parent.append(box)
+}
+function addVitalsRemarkPhase2_(parent){
+  const box=el('div','plain-block');box.append(el('h3','','行政生命表徵記錄'),el('p','hint','只作MRI當日行政記錄，不進研究分析、分組或Boss table。'));
+  addStaffNumber(box,'收縮壓','mri_admin_bp_systolic','mmHg');addStaffNumber(box,'舒張壓','mri_admin_bp_diastolic','mmHg');addStaffNumber(box,'心跳','mri_admin_pulse_bpm','bpm');
+  const parts=[];if(present('mri_admin_bp_systolic')||present('mri_admin_bp_diastolic'))parts.push(`BP ${val('mri_admin_bp_systolic')??'—'}/${val('mri_admin_bp_diastolic')??'—'} mmHg`);if(present('mri_admin_pulse_bpm'))parts.push(`Pulse ${val('mri_admin_pulse_bpm')} bpm`);setDerived('mri_admin_vitals_remark',parts.join('；')||null);parent.append(box)
+}
+
+/* Replace the MRI content renderer with one stable ordering. */
+renderMRIVisit=function(){
+  mriSetApplicabilityPhase2_();const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());const s=el('section','summary'),id=String(val('pd_hc_status')||'').toUpperCase();
+  s.append(el('h2','section-title','MRI到訪資料'),resultBox('身份狀態',[`P_ID：${val('p_id')||'尚未取得'}`,`S_ID：${val('s_id')||'尚未取得'}`,`姓名：${val('participant_name')||'未載入'}`,`Participant類型：${id||'待確認'}`,val('mri_identity_status')==='sid_only_pending_pid'?'已用S_ID建立MRI記錄，日後由Admin補P_ID。':'身份資料已載入。'],id?'good':'warn'));
+  if(!id)addStaffChoices(s,'Participant類型','pd_hc_status',[['PD','PD'],['HC','HC'],['Pending','暫未確定']]);
+  addStaffChoices(s,'MRI到訪次數','visit_number',[[1,'第一次MRI'],[2,'第二次MRI']]);addDmyDatePhase2_(s,'MRI日期（DD/MM/YYYY）','mri_date',()=>renderMRIVisit());
+
+  addStaffChoices(s,'與首次MRI安全相比','mri_safety_changed_since_initial',[[0,'沒有變化'],[1,'有變化']]);if(val('mri_safety_changed_since_initial')===1){const g=el('div','toggle-grid');C.mriSafety.forEach(x=>g.append(toggleButton(x[1],'change_'+x[0],()=>renderMRIVisit())));s.append(g);const t=el('textarea');t.placeholder='請說明MRI安全變化內容';t.value=val('mri_safety_change_detail')||'';t.oninput=()=>set('mri_safety_change_detail',t.value);s.append(t)}
+
+  const state=mriMocaStatePhase2_();s.append(resultBox('最近MoCA及兩個calendar months判定',state.lines,state.needs?'warn':'good'));
+  if(state.status==='missing'||state.status==='date_unavailable'){
+    const prior=el('div','plain-block');prior.append(el('h3','','補回上一次MoCA（如只是未錄入）'),el('p','hint','此處是舊紀錄補錄，不是本次MRI必填。'));
+    addStaffNumber(prior,'上一次MoCA Raw','moca_prior_supplement_raw_total','／30');addDmyDatePhase2_(prior,'上一次MoCA日期（DD/MM/YYYY）','moca_prior_supplement_date',iso=>{setDerived('latest_valid_moca_date',iso);if(present('moca_prior_supplement_raw_total'))setDerived('latest_valid_moca_raw_total',Number(val('moca_prior_supplement_raw_total')));renderMRIVisit()});s.append(prior)
+  }
+  if(!state.needs){setDerived('moca_repeat_status','not_required_valid_prior');s.append(resultBox('本次MRI不需要重做MoCA',['上次MoCA仍在兩個calendar months內。','不顯示本次MoCA欄，也不是必填。'],'good'))}
+  else{
+    const b=el('div','plain-block');b.append(el('h3','','本次MRI MoCA處理'));const g=el('div','direct');[['completed_today','今日已重做'],['not_done_today','今日未重做／稍後補'],['prior_record_pending','舊紀錄尚待補錄']].forEach(x=>g.append(btn(x[1],()=>{set('moca_mri_action',x[0]);renderMRIVisit()},'choice'+(sameValue(val('moca_mri_action'),x[0])?' selected':''))));b.append(g);
+    if(val('moca_mri_action')==='completed_today'){addStaffNumber(b,'MRI前／當日重做MoCA Raw','moca_2_raw_total','／30');if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mriTodayPhase2_());setDerived('moca_repeat_status','completed');renderSecondMocaResult(b);mocaComparisonPhase2_(b)}}
+    else if(val('moca_mri_action')==='not_done_today')setDerived('moca_repeat_status','required_not_completed');else if(val('moca_mri_action')==='prior_record_pending')setDerived('moca_repeat_status','prior_record_pending');else setDerived('moca_repeat_status','decision_pending');s.append(b)
+  }
+
+  if(id==='PD'){addStaffChoices(s,'MRI當日PD藥物狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addStaffNumber(s,'距上次服用PD藥物','last_pd_med_minutes','分鐘')}else if(id==='HC')s.append(resultBox('PD專用資料',['Participant為HC。Medication、LEDD、ON／OFF及最後服藥時間均為不適用。'],'good'));else s.append(resultBox('PD專用資料',['Participant類型尚未確定，PD專用欄位暫不顯示。'],'warn'));
+  addVitalsRemarkPhase2_(s);
+  s.append(el('h3','','MID'));addStaffNumber(s,'MID反應時間','mid_response_time_ms','毫秒');s.append(el('h3','','CGT'));addStaffCheckbox(s,'CGT已完成','cgt_done');s.append(el('h3','','Digit Span'));addStaffNumber(s,'Forward','digit_span_forward','');addStaffNumber(s,'Backward','digit_span_backward','');s.append(resultBox('Digit Span',[`Total：${present('digit_span_forward')&&present('digit_span_backward')?Number(val('digit_span_forward'))+Number(val('digit_span_backward')):'待完成'}`]));
+  s.append(el('h3','','MRI Sequence'),el('p','hint','預設完成，只點選沒有完成的Sequence。'));const sg=el('div','chips');B.sequences.items.forEach(x=>sg.append(btn(x.label,()=>{set(x.field,val(x.field)===0?1:0);renderMRIVisit()},'toggle danger'+(val(x.field)===0?' selected':''))));s.append(sg);const incomplete=B.sequences.items.filter(x=>val(x.field)===0),rf=el('div','field'),rt=el('textarea');rf.append(el('label','','MRI Sequence備註'));rt.value=val('mri_sequence_general_remark')||'';rt.placeholder=incomplete.length?'請說明未完成Sequence及原因':'一般備註（可留空）';rt.oninput=()=>set('mri_sequence_general_remark',rt.value);rf.append(rt);s.append(rf,resultBox('MRI Sequence',[`完成：${B.sequences.items.length-incomplete.length}／${B.sequences.items.length}`,incomplete.length?`未完成：${incomplete.map(x=>x.label).join('、')}`:'全部完成'],incomplete.length?'warn':'good'));
+  s.append(el('h3','','付款及Receipt'));addStaffCheckbox(s,'已付款','payment_status');addStaffCheckbox(s,'Receipt已處理','receipt_status');const sb=el('div','submitbar');sb.append(btn('正式提交MRI到訪',()=>validateMRIVisit(s),'primary'));s.append(sb);m.append(s);safeSave()
+};
+
+/* Backfill applicability: PD shows clinical sections; HC and Pending preserve non-PD backfill only. */
+function setBackfillApplicabilityPhase2_(){const id=String(val('pd_hc_status')||'').toUpperCase();if(id==='HC'){['pd_duration_applicability','updrs_applicability','hy_applicability','medication_applicability','ledd_status','on_off_status'].forEach(k=>setDerived(k,'not_applicable'))}else if(id==='PD'){['pd_duration_applicability','updrs_applicability','hy_applicability','medication_applicability','on_off_status'].forEach(k=>setDerived(k,'applicable'))}else{['pd_duration_applicability','updrs_applicability','hy_applicability','medication_applicability','ledd_status','on_off_status'].forEach(k=>setDerived(k,'pending_identity'))}}
+const backfillPhase2ApplicabilityBase_=backfill;
+backfill=function(){setBackfillApplicabilityPhase2_();backfillPhase2ApplicabilityBase_();const id=String(val('pd_hc_status')||'').toUpperCase(),clinical=q('#bf-clinical'),meds=q('#bf-meds');if(id!=='PD')[[clinical,'UPDRS／HY'],[meds,'Medication／LEDD']].forEach(([section,title])=>{if(!section)return;section.innerHTML='';section.append(el('h2','',title),resultBox('PD專用補錄',id==='HC'?['Participant為HC，此區不適用，不填0。']:['Participant類型尚未確定，此區暫不顯示；其他補錄資料仍可保存。'],id==='HC'?'good':'warn'))});safeSave()};
+
+/* Staff final LEDD: four numbers only, without re-entering medications. */
+function staffFinalLeddCompletePhase2_(){return ['ledd_staff_final_levodopa','ledd_staff_final_da','ledd_staff_final_other','ledd_staff_final_total'].every(present)}
+function applyStaffFinalLeddPhase2_(){if(val('ledd_staff_final_status')!=='accepted'||!staffFinalLeddCompletePhase2_())return;setDerived('ledd_final_levodopa',Number(val('ledd_staff_final_levodopa')));setDerived('ledd_final_da',Number(val('ledd_staff_final_da')));setDerived('ledd_final_other',Number(val('ledd_staff_final_other')));setDerived('ledd_final_total',Number(val('ledd_staff_final_total')));setDerived('ledd_final_source','staff_final');setDerived('ledd_final_status','staff_verified');setDerived('total_ledd_mg',Number(val('ledd_staff_final_total')));setDerived('levodopa_ledd_mg',Number(val('ledd_staff_final_levodopa')));setDerived('da_ledd_mg',Number(val('ledd_staff_final_da')))}
+const syncLeddDerivedPhase2Base_=syncLeddDerivedV11;
+syncLeddDerivedV11=function(machine,manual){syncLeddDerivedPhase2Base_(machine,manual);applyStaffFinalLeddPhase2_()};
+const renderLeddPanelPhase2Base_=renderLeddPanel;
+renderLeddPanel=function(s){renderLeddPanelPhase2Base_(s);const b=el('div','plain-block');b.append(el('h3','','Staff最終LEDD Review'),el('p','hint','如需覆核，只輸入最終四個數值，不必重填整份藥物。'));addStaffNumber(b,'Levodopa LEDD','ledd_staff_final_levodopa','mg');addStaffNumber(b,'DA LEDD','ledd_staff_final_da','mg');addStaffNumber(b,'Other LEDD','ledd_staff_final_other','mg');addStaffNumber(b,'Total LEDD','ledd_staff_final_total','mg');const componentTotal=['ledd_staff_final_levodopa','ledd_staff_final_da','ledd_staff_final_other'].every(present)?Number(val('ledd_staff_final_levodopa'))+Number(val('ledd_staff_final_da'))+Number(val('ledd_staff_final_other')):null,match=componentTotal!==null&&present('ledd_staff_final_total')&&Math.abs(componentTotal-Number(val('ledd_staff_final_total')))<0.01;b.append(resultBox('四數值核對',[`三類合計：${componentTotal??'—'} mg`,`輸入Total：${val('ledd_staff_final_total')??'—'} mg`,componentTotal===null?'待完整':match?'一致':'不一致，請核對'],match?'good':'warn'));b.append(btn(val('ledd_staff_final_status')==='accepted'?'✓ 已採用Staff最終LEDD':'採用Staff最終LEDD',()=>{if(!staffFinalLeddCompletePhase2_()||!match)return;set('ledd_staff_final_status','accepted');applyStaffFinalLeddPhase2_();renderByFlow()},val('ledd_staff_final_status')==='accepted'?'choice selected':'primary'));s.append(b)};
+
 home();
 })();

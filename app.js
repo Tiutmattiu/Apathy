@@ -1200,5 +1200,56 @@ validateMRIVisit=function(s){
 const payloadPhase2MRIBase_=payload;
 payload=function(form,event,status){const out=payloadPhase2MRIBase_(form,event,status);if(event==='mri_scan'||event==='first_school_assessment'){out.participant_id=out.p_id||out.s_id||null;out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_only_pending_pid':'unresolved';const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean)}return out};
 
+/* ===== MRI MoCA optional-by-validity clarification ===== */
+function dateDigitsPhase2_(v){return String(v||'').replace(/\D/g,'').slice(0,8)}
+function ddmmyyyyToIsoPhase2_(v){const d=dateDigitsPhase2_(v);if(d.length!==8)return'';const day=Number(d.slice(0,2)),month=Number(d.slice(2,4)),year=Number(d.slice(4,8)),x=new Date(year,month-1,day);return x.getFullYear()===year&&x.getMonth()===month-1&&x.getDate()===day?`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`:''}
+function addPriorMocaDatePhase2_(parent){
+  const box=el('div','plain-block');box.append(el('h3','','補充上一次MoCA資料（如只是尚未錄入）'),el('p','hint','此區只用於補回已做但尚未錄入的舊MoCA。可用日曆，或連續輸入DDMMYYYY。不是本次MRI必填。'));
+  addStaffNumber(box,'上一次MoCA Raw','moca_prior_supplement_raw_total','／30');
+  const f=el('div','field'),cal=el('input','text'),digits=el('input','text');f.append(el('label','','上一次MoCA日期'));cal.type='date';cal.value=val('moca_prior_supplement_date')||'';digits.inputMode='numeric';digits.maxLength=8;digits.placeholder='DDMMYYYY，例如12062026';digits.value=val('moca_prior_supplement_date_ddmmyyyy')||'';
+  const apply=iso=>{set('moca_prior_supplement_date',iso||null);if(iso){setDerived('latest_valid_moca_date',iso);setDerived('moca_1_assessment_date',iso)}safeSave();renderMRIVisit()};
+  cal.onchange=()=>apply(cal.value);digits.oninput=()=>{digits.value=dateDigitsPhase2_(digits.value);set('moca_prior_supplement_date_ddmmyyyy',digits.value);const iso=ddmmyyyyToIsoPhase2_(digits.value);if(iso)apply(iso)};
+  f.append(cal,digits);box.append(f);
+  const raw=val('moca_prior_supplement_raw_total'),date=val('moca_prior_supplement_date');
+  if(raw!==null&&raw!==''&&date){setDerived('latest_valid_moca_raw_total',Number(raw));setDerived('latest_valid_moca_date',date);setDerived('latest_valid_moca_source','staff_supplemented_prior_record');setDerived('moca_1_raw_total',Number(raw));setDerived('moca_1_assessment_date',date);setDerived('moca_prior_supplement_status','complete')}
+  else setDerived('moca_prior_supplement_status',(raw!==null&&raw!=='')||date?'partial':'empty');
+  parent.append(box)
+}
+function addCurrentMocaOptionalPhase2_(parent,state){
+  const box=el('div','plain-block');box.append(el('h3','',state.status==='expired'?'本次MRI按規則需要重做MoCA':'本次MRI MoCA處理'),el('p','hint','只有超過兩個calendar months、沒有既有分數，或舊日期不足時才顯示此區。即使當日未能完成，MRI事件仍可保存，系統會保留待補狀態。'));
+  const choices=el('div','direct');[['completed_today','今日已重做'],['not_done_today','今日未重做／稍後補'],['prior_record_pending','舊紀錄尚待補錄']].forEach(x=>choices.append(btn(x[1],()=>{set('moca_mri_action',x[0]);renderMRIVisit()},'choice'+(sameValue(val('moca_mri_action'),x[0])?' selected':''))));box.append(choices);
+  if(val('moca_mri_action')==='completed_today'){
+    addStaffNumber(box,'MRI前／當日重做MoCA Raw','moca_2_raw_total','／30');
+    if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mriTodayPhase2_());setDerived('moca_repeat_status','completed');renderSecondMocaResult(box)}
+    else setDerived('moca_repeat_status','started_incomplete');
+  }else if(val('moca_mri_action')==='not_done_today')setDerived('moca_repeat_status',state.needs?'required_not_completed':'not_required_not_done');
+  else if(val('moca_mri_action')==='prior_record_pending')setDerived('moca_repeat_status','prior_record_pending');
+  else setDerived('moca_repeat_status',state.needs?'decision_pending':'not_required');
+  parent.append(box)
+}
+
+const renderMRIVisitMocaOptionalBase_=renderMRIVisit;
+renderMRIVisit=function(){
+  renderMRIVisitMocaOptionalBase_();
+  const s=q('section.summary');if(!s)return;
+  const state=mriMocaStatePhase2_();
+  const labels=qa('label',s),rawLabel=labels.find(x=>x.textContent.includes('MRI前／當日重做MoCA Raw'));
+  if(rawLabel){const field=rawLabel.closest('.field');if(field)field.remove()}
+  const identityCard=qa('.result',s).find(x=>x.textContent.includes('最近MoCA')||x.textContent.includes('沒有找到既有MoCA'));
+  const anchor=identityCard?.parentElement||qa('.result',s)[1]||q('h2.section-title',s);
+  const holder=el('div','moca-optional-holder');
+  if(state.status==='missing'||state.status==='date_unavailable')addPriorMocaDatePhase2_(holder);
+  if(state.needs)addCurrentMocaOptionalPhase2_(holder,state);
+  else{setDerived('moca_repeat_status','not_required_valid_prior');holder.append(resultBox('本次MRI不需要重做MoCA',['最近MoCA仍在兩個calendar months有效期內。','本次MoCA欄位不顯示，也不是必填。'],'good'))}
+  anchor.insertAdjacentElement('afterend',holder);safeSave()
+};
+
+const validateMRIVisitMocaOptionalBase_=validateMRIVisit;
+validateMRIVisit=function(s){
+  /* MoCA raw, prior date and repeat completion are deliberately not submission blockers. */
+  if(present('moca_2_raw_total')){setDerived('moca_mri_action','completed_today');setDerived('moca_2_assessment_date',mriTodayPhase2_());setDerived('moca_repeat_status','completed')}
+  return validateMRIVisitMocaOptionalBase_(s)
+};
+
 home();
 })();

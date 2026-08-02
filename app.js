@@ -1187,5 +1187,146 @@ identityGate=function(title){
   return identityGateBatch1Base_(title);
 };
 
+/* ===== Batch B: MRI historical load, prior-MoCA isolation, and sequence semantics ===== */
+function calendarAddMonthsIsoBatchB_(iso,count){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||''));
+  if(!m)return null;
+  const year=Number(m[1]),month=Number(m[2]),day=Number(m[3]);
+  const first=new Date(year,month-1+Number(count||0),1);
+  const lastDay=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+  return `${first.getFullYear()}-${String(first.getMonth()+1).padStart(2,'0')}-${String(Math.min(day,lastDay)).padStart(2,'0')}`;
+}
+function normalizeMriHistoricalFieldsBatchB_(){
+  const copyIfMissing=(target,sources)=>{
+    if(present(target))return;
+    for(const source of sources){
+      if(present(source)){setDerived(target,val(source));return}
+    }
+  };
+  copyIfMissing('mid_response_time_ms',['mid_res_time_ms']);
+  copyIfMissing('mid_res_time_ms',['mid_response_time_ms']);
+  copyIfMissing('mri_remark',['mri_visit_remark']);
+  copyIfMissing('mri_visit_remark',['mri_remark']);
+  if(present('digit_span_forward')&&present('digit_span_backward'))setDerived('digit_span_total',Number(val('digit_span_forward'))+Number(val('digit_span_backward')));
+  const id=String(val('pd_hc_status')||'').toUpperCase();
+  if(id==='HC'){
+    ['med_on_off','last_pd_med_minutes','last_pd_med_time','mri_med_on_off','mri_last_pd_med_minutes'].forEach(k=>setDerived(k,null));
+    setDerived('medication_applicability','not_applicable');
+    setDerived('on_off_status','not_applicable');
+    setDerived('ledd_status','not_applicable');
+  }
+}
+function latestMocaIsCurrentMriBatchB_(){
+  const source=String(val('latest_valid_moca_source')||'').toLowerCase();
+  const priorDate=String(val('latest_valid_moca_date')||'');
+  const currentDate=String(val('mri_date')||'');
+  const priorRaw=val('latest_valid_moca_raw_total');
+  const currentRaw=val('moca_2_raw_total');
+  const sameRaw=present('moca_2_raw_total')&&present('latest_valid_moca_raw_total')&&Number(priorRaw)===Number(currentRaw);
+  return source.includes('mri')&&priorDate&&currentDate&&priorDate===currentDate&&sameRaw;
+}
+function mriMocaStatePhase2_(){
+  if(latestMocaIsCurrentMriBatchB_()){
+    return{status:'current_event_only',needs:true,lines:[
+      '目前查到的MoCA屬於本次MRI事件，不能當作MRI前既有MoCA。',
+      `本次MRI MoCA：${val('moca_2_raw_total')}／30｜日期：${val('mri_date')||'—'}`,
+      '結果：未找到可用的MRI前MoCA；本次結果仍會保留為本次MRI MoCA。'
+    ]};
+  }
+  const raw=val('latest_valid_moca_raw_total'),date=String(val('latest_valid_moca_date')||'');
+  if(raw===null||raw==='')return{status:'missing',needs:true,lines:['沒有找到MRI前既有MoCA結果。','結果：需要重做或由Staff核實。']};
+  if(!date)return{status:'date_unavailable',needs:true,lines:[`最近MRI前MoCA Raw：${raw}／30`,`Adjusted：${val('latest_valid_moca_adjusted_total')??'—'}`,'評估日期缺失，不能宣稱仍在有效期內。','結果：需要Staff核實或重做。']};
+  const expiry=calendarAddMonthsIsoBatchB_(date,2),today=mriTodayPhase2_(),needs=!expiry||today>expiry;
+  return{status:needs?'expired':'valid',needs,lines:[`最近MRI前MoCA Raw：${raw}／30`,`Adjusted：${val('latest_valid_moca_adjusted_total')??'—'}`,`日期：${date}｜來源：${val('latest_valid_moca_source')||'—'}`,`有效至：${expiry||'—'}`,`本次MRI：${today}`,needs?'結果：需要重做MoCA':'結果：MRI前既有MoCA仍有效']};
+}
+async function loadLatestMocaPhase2_(status){
+  const params={p_id:val('p_id'),s_id:val('s_id')};
+  if(!params.p_id&&!params.s_id)return;
+  status.textContent='正在載入最近MoCA……';
+  try{
+    const o=await receiverGetPhase2_('latest_moca',params),m=o.latest_valid_moca||null;
+    if(m){
+      setDerived('latest_valid_moca_raw_total',m.raw_total??null);
+      setDerived('latest_valid_moca_adjusted_total',m.adjusted_total??null);
+      setDerived('latest_valid_moca_date',m.assessment_date||null);
+      setDerived('latest_valid_moca_source',m.source_event||null);
+      if(!(String(m.source_event||'').toLowerCase().includes('mri')&&String(m.assessment_date||'')===String(val('mri_date')||'')&&present('moca_2_raw_total')&&Number(m.raw_total)===Number(val('moca_2_raw_total')))){
+        setDerived('moca_1_raw_total',m.raw_total??null);
+        setDerived('moca_1_adjusted_total',m.adjusted_total??null);
+        setDerived('moca_1_assessment_date',m.assessment_date||null);
+      }
+    }else{
+      ['latest_valid_moca_raw_total','latest_valid_moca_adjusted_total','latest_valid_moca_date','latest_valid_moca_source'].forEach(k=>setDerived(k,null));
+    }
+    normalizeMriHistoricalFieldsBatchB_();safeSave();status.textContent=m?'已載入Participant及MoCA記錄。':'已載入Participant；未找到可用MoCA。';renderMRIVisit();
+  }catch(e){status.className='result warn';status.textContent='Participant已載入，但MoCA查詢失敗：'+e.message;renderMRIVisit()}
+}
+function renderMRIVisit(){
+  normalizeMriHistoricalFieldsBatchB_();mriSetApplicabilityPhase2_();
+  const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());
+  const s=el('section','summary'),id=String(val('pd_hc_status')||'').toUpperCase();
+  s.append(el('h2','section-title','MRI到訪資料'),resultBox('身份狀態',[`P_ID：${val('p_id')||'尚未取得'}`,`S_ID：${val('s_id')||'尚未取得'}`,`姓名：${val('participant_name')||'未載入'}`,`Participant類型：${id||'待確認'}`,val('mri_identity_status')==='sid_only_pending_pid'?'已用S_ID建立MRI記錄，日後由Admin補P_ID。':'身份資料已載入。'],id?'good':'warn'));
+  if(!id)addStaffChoices(s,'Participant類型','pd_hc_status',[['PD','PD'],['HC','HC'],['Pending','暫未確定']]);
+  addStaffChoices(s,'MRI到訪次數','visit_number',[[1,'第一次MRI'],[2,'第二次MRI']]);
+  if(!present('mri_date'))setDerived('mri_date',mriTodayPhase2_());
+  s.append(resultBox('MRI日期',[mriTodayPhase2_(),'MRI日期保留實際到訪日期；頁首本機記錄時間只表示目前開啟或修改時間。'],'good'));
+  const ms=mriMocaStatePhase2_();
+  s.append(resultBox('MRI前MoCA及兩個calendar months判定',ms.lines,ms.needs?'warn':'good'));
+  if(ms.needs&&ms.status!=='current_event_only'){
+    addStaffNumber(s,'MRI前／當日重做MoCA Raw','moca_2_raw_total','／30');
+    if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mriTodayPhase2_());renderSecondMocaResult(s)}
+  }else if(ms.status==='current_event_only'){
+    setDerived('moca_2_assessment_date',val('moca_2_assessment_date')||val('mri_date'));
+  }
+  addStaffChoices(s,'與首次MRI安全相比','mri_safety_changed_since_initial',[[0,'沒有變化'],[1,'有變化']]);
+  if(val('mri_safety_changed_since_initial')===1){
+    const g=el('div','toggle-grid');C.mriSafety.forEach(x=>g.append(toggleButton(x[1],'change_'+x[0],()=>renderMRIVisit())));s.append(g);
+    const t=el('textarea');t.placeholder='請說明MRI安全變化內容';t.value=val('mri_safety_change_detail')||'';t.oninput=()=>set('mri_safety_change_detail',t.value);s.append(t)
+  }
+  if(id==='PD'){
+    addStaffChoices(s,'MRI當日PD藥物狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addStaffNumber(s,'距上次服用PD藥物','last_pd_med_minutes','分鐘')
+  }else if(id==='HC')s.append(resultBox('PD專用資料',['Participant為HC。歷史舊前端曾強迫填寫的Medication、LEDD、ON／OFF及最後服藥時間不視為HC有效資料。'],'good'));
+  else s.append(resultBox('PD專用資料',['Participant類型尚未確定。PD專用欄位暫不顯示，MRI行政及掃描資料仍可保存。'],'warn'));
+  s.append(el('h3','','MID'));addStaffNumber(s,'MID反應時間','mid_response_time_ms','毫秒');
+  s.append(el('h3','','CGT'));addStaffCheckbox(s,'CGT已完成','cgt_done');
+  s.append(el('h3','','Digit Span'));addStaffNumber(s,'Forward','digit_span_forward','');addStaffNumber(s,'Backward','digit_span_backward','');
+  s.append(resultBox('Digit Span',[`Total：${present('digit_span_forward')&&present('digit_span_backward')?Number(val('digit_span_forward'))+Number(val('digit_span_backward')):'待完成'}`]));
+  s.append(el('h3','','MRI Sequence'),el('p','hint','預設完成；只點選沒有完成的Sequence。紅色×代表未完成。'));
+  const sg=el('div','chips');
+  B.sequences.items.forEach(x=>{
+    const incomplete=val(x.field)===0;
+    sg.append(btn((incomplete?'× ':'')+x.label,()=>{set(x.field,incomplete?1:0);renderMRIVisit()},incomplete?'toggle danger':'toggle'));
+  });
+  s.append(sg);
+  const incomplete=B.sequences.items.filter(x=>val(x.field)===0),rf=el('div','field'),rt=el('textarea');
+  rf.append(el('label','','MRI Sequence備註'));rt.value=val('mri_sequence_general_remark')||'';rt.placeholder=incomplete.length?'請說明未完成Sequence及原因':'MRI Sequence備註（可留空）';rt.oninput=()=>set('mri_sequence_general_remark',rt.value);rf.append(rt);
+  s.append(rf,resultBox('MRI Sequence',[`完成：${B.sequences.items.length-incomplete.length}／${B.sequences.items.length}`,incomplete.length?`未完成：${incomplete.map(x=>x.label).join('、')}`:'全部完成'],incomplete.length?'warn':'good'));
+  const remarkField=el('div','field'),remark=el('textarea');remarkField.append(el('label','','MRI一般備註'));remark.value=val('mri_remark')||'';remark.placeholder='本次MRI一般備註（可留空）';remark.oninput=()=>{set('mri_remark',remark.value);setDerived('mri_visit_remark',remark.value||null)};remarkField.append(remark);s.append(remarkField);
+  s.append(el('h3','','付款及Receipt'));addStaffCheckbox(s,'已付款','payment_status');addStaffCheckbox(s,'Receipt已處理','receipt_status');
+  const sb=el('div','submitbar');sb.append(btn('正式提交MRI到訪',()=>validateMRIVisit(s),'primary'));s.append(sb);m.append(s);safeSave();
+}
+
+const payloadMriHistoricalBatchBBase_=payload;
+payload=function(form,event,status){
+  if(event==='mri_scan'||event==='first_school_assessment'){
+    normalizeMriHistoricalFieldsBatchB_();
+    if(present('moca_2_raw_total')&&!present('moca_2_assessment_date'))setDerived('moca_2_assessment_date',val('mri_date')||mriTodayPhase2_());
+  }
+  const out=payloadMriHistoricalBatchBBase_(form,event,status);
+  if(event==='mri_scan'||event==='first_school_assessment'){
+    out.mid_res_time_ms=present('mid_response_time_ms')?Number(val('mid_response_time_ms')):null;
+    out.mid_response_time_ms=out.mid_res_time_ms;
+    out.mri_remark=val('mri_remark')||null;
+    out.mri_visit_remark=out.mri_remark;
+    if(String(val('pd_hc_status')||'').toUpperCase()==='HC'){
+      out.med_on_off=null;out.last_pd_med_minutes=null;out.last_pd_med_time=null;
+      out.medication_applicability='not_applicable';out.on_off_status='not_applicable';out.ledd_status='not_applicable';
+    }
+    const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean);
+  }
+  return out;
+};
+
+
 home();
 })();

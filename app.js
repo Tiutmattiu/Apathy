@@ -1328,5 +1328,122 @@ payload=function(form,event,status){
 };
 
 
+/* ===== Batch C candidate: entry roles and central Admin list ===== */
+const BATCH_C_UI_BUILD='entry-roles-admin-list-candidate-1';
+
+function clearNewEventIdentityDraftBatchC_(){
+  ST.answers={};ST.derived={};ST.meds=[];ST.step=0;ST.error='';
+  ST.submission=crypto.randomUUID?crypto.randomUUID():'sub-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+}
+
+function mriIdentityGateBatchC_(){
+  clearNewEventIdentityDraftBatchC_();
+  const m=appShell();m.append(toolbar('新增MRI到訪記錄'));
+  const s=el('section','identity'),error=el('div','error');
+  s.append(el('h2','','本次MRI身份資料'),el('p','hint','此入口只建立新的MRI事件，不搜尋、不載入、也不修改已提交的MRI記錄。歷史記錄及修正集中在Admin處理。'));
+  s.append(fieldIdDigits('S_ID','s_id','S','例：108'),fieldText('聯絡電話','contact_phone','例：9123 4567'),fieldIdDigits('P_ID（如已取得）','p_id','P','例：167'));
+  addStaffChoices(s,'Participant類型','pd_hc_status',[['PD','PD'],['HC','HC']]);
+  s.append(error,btn('開始本次MRI記錄',()=>{
+    const sid=numericIdValue(val('s_id')),pid=numericIdValue(val('p_id')),phone=String(val('contact_phone')||'').replace(/\D/g,'');
+    if(!sid||phone.length<8||!['PD','HC'].includes(String(val('pd_hc_status')||'').toUpperCase())){error.textContent='請填寫S_ID、有效聯絡電話及PD／HC。P_ID可稍後補。';return}
+    set('s_id',canonicalScanId(sid));set('p_id',pid?canonicalParticipantId(pid):null);setDerived('mri_identity_status',pid?'pid_sid_known':'sid_only_pending_pid');setDerived('mri_date',mriTodayPhase2_());safeSave();renderMRIVisit();
+  },'primary'));
+  m.append(s)
+}
+
+function clinicalIdentityGateBatchC_(){
+  clearNewEventIdentityDraftBatchC_();
+  const m=appShell();m.append(toolbar('新增PD臨床記錄'));
+  const s=el('section','identity'),error=el('div','error');
+  s.append(el('h2','','本次Clinical身份資料'),el('p','hint','此入口只建立新的PD Clinical事件，不搜尋或載入已提交Clinical。P_ID及S_ID可稍後補，聯絡電話必填。'));
+  s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'),fieldIdDigits('P_ID（如已取得）','p_id','P','例：167'),fieldIdDigits('S_ID（如已取得）','s_id','S','例：108'),error,btn('開始本次Clinical記錄',()=>{
+    const phone=String(val('contact_phone')||'').replace(/\D/g,'');const pid=numericIdValue(val('p_id')),sid=numericIdValue(val('s_id'));
+    if(phone.length<8){error.textContent='請填寫有效聯絡電話。';return}
+    set('p_id',pid?canonicalParticipantId(pid):null);set('s_id',sid?canonicalScanId(sid):null);set('pd_hc_status','PD');setDerived('clinical_identity_status',pid?'pid_known':sid?'sid_known':'submission_pending_pid');safeSave();renderClinical();
+  },'primary'));
+  m.append(s)
+}
+
+identityGate=function(title){
+  if(ST.flow==='mri_visit')return mriIdentityGateBatchC_();
+  if(ST.flow==='clinical')return clinicalIdentityGateBatchC_();
+  return identityGateBatch1Base_(title);
+};
+
+const payloadBatchCBase_=payload;
+payload=function(form,event,status){
+  const out=payloadBatchCBase_(form,event,status);
+  if(event==='clinical_supplement'&&!out.p_id&&!out.s_id){
+    out.participant_id=null;
+    out.identity_resolution_status='submission_pending_pid';
+    const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean);
+  }
+  return out;
+};
+
+function adminValueBatchC_(p,keys,fallback='—'){for(const k of keys){const v=p&&p[k];if(v!==undefined&&v!==null&&String(v)!=='')return v}return fallback}
+function adminStateBatchC_(v){if(v===1||v==='1'||v===true)return'✓';if(v===0||v==='0'||v===false)return'—';return v||'—'}
+function adminParticipantRowBatchC_(p,open){
+  const tr=el('tr');
+  const moca=adminValueBatchC_(p,['latest_moca_raw','latest_valid_moca_raw_total','moca_raw_total']);
+  const mocaDate=adminValueBatchC_(p,['latest_moca_date','latest_valid_moca_date','moca_assessment_date'],'');
+  const safety=adminValueBatchC_(p,['mri_safety_status','mri_safety_overall','mri_safety']);
+  const medication=adminValueBatchC_(p,['medication_status','ledd_status','ledd_final_status']);
+  const source=adminValueBatchC_(p,['data_source_summary','record_source','source_type']);
+  const vals=[
+    adminValueBatchC_(p,['p_id']),adminValueBatchC_(p,['s_id']),adminValueBatchC_(p,['participant_name']),adminValueBatchC_(p,['pd_hc_status']),adminValueBatchC_(p,['group','final_group']),adminValueBatchC_(p,['gender']),adminValueBatchC_(p,['age_years','age']),
+    adminStateBatchC_(adminValueBatchC_(p,['screening_status','screening_complete'],'')),adminStateBatchC_(adminValueBatchC_(p,['stage2_status','stage2_complete'],'')),adminStateBatchC_(adminValueBatchC_(p,['mri_status','mri_complete'],'')),adminStateBatchC_(adminValueBatchC_(p,['clinical_status','clinical_complete'],'')),adminStateBatchC_(adminValueBatchC_(p,['backfill_status','backfill_complete'],'')),
+    source,`${moca}${mocaDate?' / '+mocaDate:''}`,safety,medication,adminValueBatchC_(p,['review_summary','reviews','review_count']),adminValueBatchC_(p,['next_action','Next_Action'])
+  ];
+  vals.forEach(v=>tr.append(el('td','',String(v))));const td=el('td');td.append(btn('開啟',()=>open(p),'linkbtn'));tr.append(td);return tr
+}
+
+function adminDetailBatchC_(p,host,status){
+  host.innerHTML='';const box=el('div','plain-block');box.append(el('h2','section-title',`${adminValueBatchC_(p,['p_id'],'待補P_ID')} ${adminValueBatchC_(p,['s_id'],'')}`));
+  box.append(resultBox('基本資料',[
+    `姓名：${adminValueBatchC_(p,['participant_name'])}`,
+    `電話：${adminValueBatchC_(p,['contact_phone','contact_phone_last4'])}`,
+    `性別：${adminValueBatchC_(p,['gender'])}｜年齡：${adminValueBatchC_(p,['age_years','age'])}`,
+    `教育程度：${adminValueBatchC_(p,['education_level'])}｜教育年數：${adminValueBatchC_(p,['education_years'])}`,
+    `PD／HC：${adminValueBatchC_(p,['pd_hc_status'])}｜Group：${adminValueBatchC_(p,['group','final_group'])}`,
+    `研究狀態：${adminValueBatchC_(p,['recruitment_status','status'])}｜MRI：${adminValueBatchC_(p,['mri_status'])} ${adminValueBatchC_(p,['mri_date'],'')}`
+  ]));
+  box.append(resultBox('流程與來源',[
+    `Screening：${adminStateBatchC_(adminValueBatchC_(p,['screening_status','screening_complete'],''))}`,
+    `Stage 2：${adminStateBatchC_(adminValueBatchC_(p,['stage2_status','stage2_complete'],''))}`,
+    `MRI：${adminStateBatchC_(adminValueBatchC_(p,['mri_status','mri_complete'],''))}`,
+    `Clinical：${adminStateBatchC_(adminValueBatchC_(p,['clinical_status','clinical_complete'],''))}`,
+    `Backfill：${adminStateBatchC_(adminValueBatchC_(p,['backfill_status','backfill_complete'],''))}`,
+    `來源：${adminValueBatchC_(p,['data_source_summary','record_source','source_type'])}`
+  ]));
+  box.append(resultBox('關鍵管理資料',[
+    `MoCA：${adminValueBatchC_(p,['latest_moca_raw','latest_valid_moca_raw_total'])}｜日期：${adminValueBatchC_(p,['latest_moca_date','latest_valid_moca_date'])}｜來源：${adminValueBatchC_(p,['latest_moca_source','latest_valid_moca_source'])}`,
+    `MRI安全：${adminValueBatchC_(p,['mri_safety_status','mri_safety_overall'])}`,
+    `Medication／LEDD：${adminValueBatchC_(p,['medication_status','ledd_status','ledd_final_status'])}`,
+    `Payment：${adminValueBatchC_(p,['payment_status'])}｜Receipt：${adminValueBatchC_(p,['receipt_status'])}`,
+    `Review：${adminValueBatchC_(p,['review_summary','reviews','review_count'])}`,
+    `下一步：${adminValueBatchC_(p,['next_action','Next_Action'])}`
+  ]));
+  const edit=el('div','plain-block');edit.append(el('h3','','基礎資料修改'),el('p','hint','只修改身份及行政資料。Assessment逐題答案與Medication逐藥明細不可在Admin修改。'));
+  const pid=adminFieldV1_('P_ID',adminValueBatchC_(p,['p_id'],'')),sid=adminFieldV1_('S_ID',adminValueBatchC_(p,['s_id'],'')),name=adminFieldV1_('姓名',adminValueBatchC_(p,['participant_name'],'')),gender=adminFieldV1_('性別',adminValueBatchC_(p,['gender'],'')),kind=adminFieldV1_('PD／HC',adminValueBatchC_(p,['pd_hc_status'],'')),reason=adminFieldV1_('修改原因','','text');
+  edit.append(pid.wrap,sid.wrap,name.wrap,gender.wrap,kind.wrap,reason.wrap,btn('預覽並保存基礎身份修改',()=>adminConfirmV2_('保存基礎資料',[`P_ID：${pid.input.value||'空白'}｜S_ID：${sid.input.value||'空白'}`,'後端會保留Raw並建立需要的修正。'],'保存',async st=>{const x=await adminApiV1_('update_identity',{old_p_id:p.p_id||'',new_p_id:normalizeId(pid.input.value),s_id:normalizeId(sid.input.value),participant_name:name.input.value,gender:gender.input.value,pd_hc_status:kind.input.value,reason:reason.input.value,rebuild:1});st.textContent=`已保存；建立${x.corrections_created??'—'}筆修正。`}), 'primary'));
+  host.append(box,edit);status.textContent='已開啟Participant詳情。'
+}
+
+async function renderResearchAdmin(){
+  const m=appShell();m.append(toolbar('研究進度管理'));
+  const s=el('section','summary'),status=el('div','result','請輸入Admin Token。'),body=el('div'),auth=el('div','plain-block'),token=adminFieldV1_('Admin Token',adminTokenV1_(),'password');token.input.placeholder='Admin Token';
+  const connect=btn('連接',connectNow,'primary');auth.append(token.wrap,connect);s.append(auth,status,body);m.append(s);
+  async function connectNow(){if(token.input.value)sessionStorage.setItem('apathy_admin_token',token.input.value);status.textContent='正在連接……';try{await adminApiV1_('participant_lookup',{q:'__healthcheck__'});auth.style.display='none';status.className='result good';status.textContent=`已連接｜${BATCH_C_UI_BUILD}`;workspace()}catch(e){status.className='result warn';status.textContent='連接失敗：'+e.message}}
+  async function workspace(){
+    body.innerHTML='';const controls=el('div','plain-block'),search=adminFieldV1_('搜尋或篩選','','text'),list=el('div'),detail=el('div');search.input.placeholder='P_ID／S_ID／姓名／電話／狀態';
+    const load=async(term='')=>{status.textContent='正在載入名單……';list.innerHTML='';detail.innerHTML='';try{let rows=[];try{const d=await adminApiV1_('admin_dashboard',{});rows=d.records||d.participants||d.rows||[]}catch(e){const d=await adminApiV1_('participant_lookup',{q:term||'__all__'});rows=d.matches||[]}const qv=String(term||'').toLowerCase();if(qv)rows=rows.filter(p=>JSON.stringify(p).toLowerCase().includes(qv));status.textContent=`名單共顯示${rows.length}人。`;const wrap=el('div','table-scroll'),table=el('table','progress-table'),head=el('tr');['P_ID','S_ID','姓名','PD/HC','Group','性別','年齡','Screening','Stage 2','MRI','Clinical','Backfill','來源','MoCA','MRI安全','Medication/LEDD','Review','下一步',''].forEach(x=>head.append(el('th','',x)));table.append(head);rows.forEach(p=>table.append(adminParticipantRowBatchC_(p,x=>adminDetailBatchC_(x,detail,status))));wrap.append(table);list.append(wrap);if(!rows.length)list.append(el('div','result','沒有符合名單。'))}catch(e){status.className='result warn';status.textContent='名單載入失敗：'+e.message}};
+    const go=btn('搜尋',()=>load(search.input.value.trim()),'secondary'),all=btn('全部名單',()=>{search.input.value='';load('')},'primary'),rebuild=btn('更新所有結果',()=>adminConfirmV2_('更新所有結果',['將完整重建正式結果。'],'開始重建',adminRunRebuildV2_),'secondary');search.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};
+    controls.append(el('h2','section-title','Participant完整名單'),el('p','hint','查看身份、五個資料域、MoCA、MRI安全、Clinical、Medication／LEDD、Review及下一步。'),search.wrap,all,go,rebuild,list,detail);body.append(controls);load('')
+  }
+  if(adminTokenV1_()){token.input.value=adminTokenV1_();connectNow()}
+}
+
+
 home();
 })();

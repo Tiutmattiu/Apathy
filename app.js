@@ -56,16 +56,7 @@ function player(){const pages=playerPages();if(ST.step>=pages.length)ST.step=pag
 function jumpSection(i,pages){const blocker=pages.slice(0,i).findIndex(x=>!pageComplete(x));if(blocker>=0){ST.step=blocker;ST.error='請先完成目前及前面的必填內容。';return player()}ST.step=i;ST.error='';ST.sectionOpen=false;player()}
 function renderPage(pg,a){if(pg.kind==='choice')renderChoice(pg,a);else if(pg.kind==='input')renderInput(pg,a);else if(pg.kind==='dob')renderDOB(a);else if(pg.kind==='positiveOne')renderPositiveOne(pg,a);else if(pg.kind==='scale')renderScale(pg,a);else if(pg.kind==='moca')renderMoca(a);else if(pg.kind==='quipShared')renderQuipShared(pg,a);else if(pg.kind==='quipExtra')renderQuipExtra(pg,a);else if(pg.kind==='rbMain')renderRBMain(a);else if(pg.kind==='rbQ10')renderRBQ10(a);else if(pg.kind==='mriSafety')renderMRISafety(a);else if(pg.kind==='screenResult')renderScreenResult(a);else if(pg.kind==='examples')renderExamples(pg,a);else if(pg.kind==='pdiYes')renderPDIYes(pg,a);else if(pg.kind==='pdiDim')renderPDIDim(pg,a);else if(pg.kind==='pdiPage')renderPDIPage(pg,a);else if(pg.kind==='iorScenario')renderIORScenario(pg,a);else if(pg.kind==='stage2Summary')renderStage2Summary(a)}
 function renderChoice(pg,a){const g=el('div','direct');pg.options.forEach(o=>{const b=btn(o[1],()=>{set(pg.key,o[0]);if(pg.key==='education_level'&&o[2]!==null)set('education_years',o[2]);if(pg.key==='pd_status_self_report')set('pd_hc_status',Number(o[0])===1?'PD':'HC');b.classList.add('selected');setTimeout(autoNext,120)},'choice'+(sameValue(val(pg.key),o[0])?' selected':''));g.append(b)});a.append(g);if(pg.key==='education_level'&&val(pg.key)==='other'){const f=fieldText('實際教育年數','education_years','請輸入年數','number');a.append(f)}}
-function renderInput(pg,a){
-  const i=el('input','text');i.placeholder=pg.placeholder||'';i.value=val(pg.key)??'';
-  if(ST.flow==='stage2'&&['contact_phone'].includes(pg.key)){i.inputMode='tel';i.enterKeyHint='done'}
-  else if(ST.flow==='stage2')i.enterKeyHint='next';
-  i.oninput=()=>set(pg.key,i.value);
-  const commit=()=>{if(i.dataset.advanced==='1')return;const pages=playerPages(),current=pages[ST.step];if(current!==pg||!pageComplete(pg))return;i.dataset.advanced='1';autoNext()};
-  i.onkeydown=e=>{if(e.key==='Enter'&&i.value.trim()){e.preventDefault();commit()}};
-  if(ST.flow==='stage2'){i.onchange=commit;i.onblur=()=>setTimeout(commit,0)}
-  a.append(i)
-}
+function renderInput(pg,a){const i=el('input','text');i.placeholder=pg.placeholder||'';i.value=val(pg.key)??'';i.oninput=()=>set(pg.key,i.value);i.onkeydown=e=>{if(e.key==='Enter'&&i.value.trim())autoNext()};a.append(i)}
 function renderDOB(a){const row=el('div','date-row'),names=[['dob_d','DD',2],['dob_m','MM',2],['dob_y','YYYY',4]];names.forEach((x,n)=>{const i=el('input','digits');i.inputMode='numeric';i.maxLength=x[2];i.placeholder=x[1];i.value=val(x[0])||'';i.oninput=()=>{i.value=i.value.replace(/\D/g,'').slice(0,x[2]);set(x[0],i.value);if(i.value.length===x[2]&&n<2)qa('input',row)[n+1].focus();if(n===2&&i.value.length===4)finishDOB(a)};i.onkeydown=e=>{if(e.key==='Backspace'&&!i.value&&n>0)qa('input',row)[n-1].focus()};row.append(i)});a.append(row);const age=calcAge();if(age!==null)a.append(el('div','result',`年齡：${age}歲（自動計算）`))}
 function finishDOB(a){const d=+val('dob_d'),m=+val('dob_m'),y=+val('dob_y'),dt=new Date(y,m-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d||dt>new Date()){ST.error='出生日期無效，請核對。';return player()}set('date_of_birth',`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);autoNext()}
 function calcAge(){const s=val('date_of_birth');if(!s)return null;const b=new Date(s+'T00:00:00'),n=new Date();let y=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))y--;return y}
@@ -218,7 +209,7 @@ function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{typ
 async function submitPayload(form,event,status){if(ST.submitting)return;const p=payload(form,event,status);ST.submitting=true;const modal=el('div','modal'),box=el('div','modal-box submit-wait'),title=el('h2','','正在提交資料……'),msg=el('p','','請不要重新整理、關閉頁面或返回上一頁。一般約需15秒，請等待伺服器確認。'),timer=el('div','status','已等待0秒');box.append(title,msg,timer);modal.append(box);document.body.append(modal);let sec=0;const tick=setInterval(()=>{sec++;timer.textContent=`已等待${sec}秒${sec>15?'；仍在等待伺服器回應，請不要重新整理。':''}`},1000);try{const res=await fetch(C.receiverUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)});const text=await res.text();let out;try{out=JSON.parse(text)}catch(e){out={ok:res.ok,message:text}}if(!res.ok||out.ok===false)throw new Error(out.message||'後端未確認收到資料');clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交成功'),el('p','',`Submission ID：${ST.submission}`),btn('返回',()=>{modal.remove();ST.submission=uuid();saveDraft();if(form==='screening'&&event==='screening_core'&&['HC','Apathy','Pure_PD'].includes(val('final_screening_decision')))player()},'primary'))}catch(e){clearInterval(tick);box.innerHTML='';box.append(el('h2','','提交未完成'),el('p','',`資料仍保存在此裝置。${e.message}`));const a=el('div','submitbar');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('返回修改',()=>modal.remove(),'primary'));box.append(a)}finally{ST.submitting=false}}
 
 /* ===== Consolidated post-v9 implementation layer ===== */
-const APP_BUILD='batch-c3-direct-entry-admin';
+const APP_BUILD='batch-c5-input-recovery';
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
   historical_paper_reentry:'screening',field_correction:'screening',
@@ -1356,7 +1347,7 @@ async function loadLatestMocaPhase2_(status){
     normalizeMriHistoricalFieldsBatchB_();safeSave();status.textContent=m?'已載入Participant及MoCA記錄。':'已載入Participant；未找到可用MoCA。';renderMRIVisit();
   }catch(e){status.className='result warn';status.textContent='Participant已載入，但MoCA查詢失敗：'+e.message;renderMRIVisit()}
 }
-function renderMRIVisit(){
+function renderMRIVisitBatchC5_(){
   normalizeMriHistoricalFieldsBatchB_();mriSetApplicabilityPhase2_();
   const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());
   const s=el('section','summary'),id=String(val('pd_hc_status')||'').toUpperCase();
@@ -1400,6 +1391,7 @@ function renderMRIVisit(){
   s.append(el('h3','','付款及Receipt'));addStaffCheckbox(s,'已付款','payment_status');addStaffCheckbox(s,'Receipt已處理','receipt_status');
   const sb=el('div','submitbar');sb.append(btn('正式提交MRI到訪',()=>validateMRIVisit(s),'primary'));s.append(sb);m.append(s);safeSave();
 }
+renderMRIVisit=renderMRIVisitBatchC5_;
 
 const payloadMriHistoricalBatchBBase_=payload;
 payload=function(form,event,status){

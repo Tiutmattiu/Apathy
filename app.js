@@ -571,7 +571,7 @@ function medDose(line,drug,w){const slash=String(line||'').match(/(\d+(?:\.\d+)?
 function emptyLeddTotals(){return{levodopa:0,da:0,other:0}}
 function finalizeLeddResult(rows,tot,warnings){const unresolved=rows.filter(x=>x.status==='unresolved').length,review=rows.filter(x=>x.status==='review_required').length,ok=rows.filter(x=>x.status==='ok').length,complete=ok>0&&unresolved===0&&review===0;return{rows,levodopa:complete?medRound(tot.levodopa):null,da:complete?medRound(tot.da):null,other:complete?medRound(tot.other):null,total:complete?medRound(tot.levodopa+tot.da+tot.other):null,warnings,unresolved,review_required:review,complete,status:rows.length===0?'empty':complete?'complete':unresolved?'unresolved':'review_required'}}
 function medMedicationEntriesV13_(raw){
-  const text=String(raw||'').replace(/\r/g,'\n').replace(/[；]+/g,';').trim();
+  const text=String(raw||'').replace(/\\[nr]/gi,'\n').replace(/\r/g,'\n').replace(/[；]+/g,';').trim();
   if(!text)return[];
   const numbered=[],rx=/(?:^|[;\n]\s*)(\d+)\s*[.)、]\s*([\s\S]*?)(?=(?:[;\n]\s*\d+\s*[.)、]\s*)|$)/g;
   let hit;while((hit=rx.exec(text)))numbered.push(hit[2].replace(/[;\n]+/g,' ').replace(/\s+/g,' ').trim());

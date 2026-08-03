@@ -256,7 +256,7 @@
 
   const quipDomains = freezeList([
     {key: 'a', label: 'A', fullLabel: '賭博'},
-    {key: 'b', label: 'B', fullLabel: 'B'},
+    {key: 'b', label: 'B', fullLabel: '性行爲'},
     {key: 'c', label: 'C', fullLabel: '購物'},
     {key: 'd', label: 'D', fullLabel: '進食'}
   ]);
@@ -360,7 +360,7 @@
 
   const quipRsDomains = freezeList([
     {key: 'a', label: 'A', fullLabel: '賭博', description: '賭場、網上賭博、彩票、刮刮卡、投注或撲克機。'},
-    {key: 'b', label: 'B', fullLabel: 'B', description: '受控類別B。'},
+    {key: 'b', label: 'B', fullLabel: '性行爲', description: '對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情'},
     {key: 'c', label: 'C', fullLabel: '購物', description: '購買過多相同的東西或不需要／不使用的東西。'},
     {key: 'd', label: 'D', fullLabel: '飲食', description: '比以往吃更多或不同種類的食物、進食更快、直到不舒服地飽，或不餓時進食。'},
     {key: 'e1', label: 'E1', fullLabel: '愛好', description: '特定任務、愛好或其他有組織的活動。'},

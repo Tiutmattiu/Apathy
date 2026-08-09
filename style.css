@@ -12,3 +12,5 @@
   .bf-section.bf-simple-scale{max-width:none}
   .bf-section.bf-simple-scale .bf-row{grid-template-columns:minmax(180px,1fr) 68px}
 }
+
+.admin-review-section{margin-top:22px}.admin-review-card{margin:10px 0;border:1px solid #d7e0ea;border-left:5px solid #d98200;border-radius:10px;background:#fff}.admin-review-card>summary{padding:14px;font-weight:800;cursor:pointer}.admin-review-body{padding:0 14px 14px}.admin-review-body button{margin-top:10px}.modal-box select,.modal-box input,.modal-box textarea{display:block;width:100%;box-sizing:border-box;margin:9px 0;padding:10px}

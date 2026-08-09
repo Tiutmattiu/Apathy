@@ -830,7 +830,7 @@ submitFormal=function(){
 /* ========================================================================== *
  * Admin Operations UI v2.0-phase2
  * ========================================================================== */
-const ADMIN_UI_BUILD='2.4-cp2b';
+const ADMIN_UI_BUILD='3.0-operational-workbench';
 function adminTokenV1_(){return sessionStorage.getItem('apathy_admin_token')||''}
 function adminApiUrlV1_(action,params){const u=new URL(C.receiverUrl);u.searchParams.set('action',action);u.searchParams.set('token',adminTokenV1_());Object.keys(params||{}).forEach(k=>{const v=params[k];if(v!==undefined&&v!==null&&String(v)!=='')u.searchParams.set(k,String(v))});return u.toString()}
 async function adminApiV1_(action,params){const r=await fetch(adminApiUrlV1_(action,params||{}),{method:'GET',cache:'no-store'}),text=await r.text();let out;try{out=JSON.parse(text)}catch(e){throw new Error('伺服器回傳不是有效JSON：'+text.slice(0,160))}if(!r.ok||out.ok===false)throw new Error(out.message||out.error_code||'Admin API失敗');return out}
@@ -895,7 +895,6 @@ async function adminOpenParticipantV1_(match,host,status){
     ['MoCA分數','MoCA日期','MoCA來源','MRI安全','Medication／LEDD','Payment／Receipt','Review','下一步'].forEach(x=>kh.append(el('th','',x)));
     [state('latest_moca_raw','latest_valid_moca_raw_total'),state('latest_moca_date','latest_valid_moca_date'),state('latest_moca_source','latest_valid_moca_source'),state('mri_safety_status','mri_safety_overall'),state('ledd_status','medication_status'),`${state('payment_status')}／${state('receipt_status')}`,state('reviews','review_summary','review'),state('next_action','Next_Action')].forEach(x=>kv.append(el('td','',x)));
     keyTable.append(kh,kv);key.append(keyTable);section.append(key);
-    const reviewHost=el('div','admin-review-section');section.append(reviewHost);await adminReviewCP2B_(reviewHost,p,match,status);
     const note=el('p','hint','Admin可查看完整流程及修改基本身份／行政资料；正式Assessment逐题答案及逐药Medication明细不在此修改。');
     section.append(note);host.append(section);status.className='result good';status.textContent=`已載入${p.p_id||p.s_id||'Participant'}。`;
   }catch(e){status.className='result warn';status.textContent='載入失敗：'+e.message}
@@ -965,35 +964,23 @@ function adminRows_(d){
 function adminHasIdentity_(p){return Boolean(p&&(p.p_id||p.s_id||p.participant_name||p.contact_phone||p.contact_phone_last4))}
 
 async function renderResearchAdmin(){
-  const m=appShell();m.append(toolbar('研究進度管理'));
-  const s=el('section','summary'),status=el('div','result','請連接後端。'),body=el('div'),auth=el('div','plain-block'),token=adminFieldV1_('Admin Token',adminTokenV1_(),'password');
-  token.input.placeholder='Admin Token';const connect=btn('連接',connectNow,'primary');auth.append(token.wrap,connect);s.append(auth,status,body);m.append(s);
-  async function connectNow(){
-    if(token.input.value)sessionStorage.setItem('apathy_admin_token',token.input.value);
-    status.className='result';status.textContent='正在連接……';connect.disabled=true;
-    try{await adminApiV1_('participant_lookup',{q:'__healthcheck__'});auth.classList.add('hidden');status.className='result good';status.textContent='已連接';await workspace()}
-    catch(e){status.className='result warn';status.textContent='連接失敗：'+e.message;body.innerHTML=''}finally{connect.disabled=false}
-  }
-  async function workspace(){
-    body.innerHTML='';const tools=el('div','plain-block'),search=adminFieldV1_('搜尋或篩選','','text'),list=el('div'),detail=el('div');search.input.placeholder='P_ID／S_ID／姓名／電話／狀態';
-    const bar=el('div','submitbar'),all=btn('全部名單',()=>loadList(''),'secondary'),go=btn('搜尋',()=>loadList(search.input.value.trim()),'primary');bar.append(go,all,btn('更新所有結果',()=>adminConfirmV2_('更新所有結果',['將完整重建正式結果。'],'開始重建',adminRunRebuildV2_),'secondary'));
-    tools.append(el('h2','section-title','Participant名單'),search.wrap,bar,list,detail);body.append(tools);
-    search.input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go.click()}};await loadList('');
-    async function loadList(term){
-      list.innerHTML='';detail.innerHTML='';status.className='result';status.textContent='正在載入名單……';
-      try{
-        let rows=[];
-        try{const d=await adminApiV1_('admin_dashboard',{});rows=adminRows_(d)}catch(e){}
-        if(!Array.isArray(rows)||!rows.length){const r=await adminApiV1_('participant_lookup',{q:term||''});rows=adminRows_(r);if(!rows.length&&Array.isArray(r.matches))rows=r.matches.map(x=>adminCanonicalRow_(x)).filter(adminHasIdentity_)}
-        rows=rows.map(x=>adminCanonicalRow_(x)).filter(adminHasIdentity_);const t=String(term||'').trim().toLowerCase();if(t)rows=rows.filter(p=>[p.p_id,p.s_id,p.participant_name,p.contact_phone,p.contact_phone_last4,p.pd_hc_status,p.group,p.recruitment_status,p.mri_status].some(v=>String(v??'').toLowerCase().includes(t)));
-        status.className='result good';status.textContent=`共${rows.length}名Participant`;
-        if(!rows.length){list.append(el('div','result','目前沒有可顯示的Participant。'));return}
-        const table=el('table','progress-table'),head=el('tr');['P_ID','S_ID','姓名','PD／HC','Group','年齡','Screening','Stage 2','MRI','Clinical','Backfill','MoCA','MRI安全','Medication／LEDD','Review','下一步',''].forEach(x=>head.append(el('th','',x)));table.append(head);
-        const state=(p,...keys)=>{const v=adminPick_(p,...keys);return v===null?'—':String(v)};
-        rows.forEach(p=>{const tr=el('tr');[state(p,'p_id'),state(p,'s_id'),state(p,'participant_name'),state(p,'pd_hc_status'),state(p,'group','group_final'),state(p,'age_years','age'),state(p,'screening_status','screening_submission_id'),state(p,'stage2_status','stage2_submission_id'),state(p,'mri_status','mri_submission_id'),state(p,'clinical_status','clinical_submission_id'),state(p,'backfill_status','backfill_submission_id'),state(p,'latest_moca_raw','latest_valid_moca_raw_total'),state(p,'mri_safety_status','mri_safety_overall'),state(p,'ledd_status','medication_status'),state(p,'reviews','review_summary'),state(p,'next_action','Next_Action')].forEach(x=>tr.append(el('td','',x)));const op=el('td');op.append(btn('開啟',()=>{if(!adminHasIdentity_(p)){status.className='result warn';status.textContent='此列沒有可識別身份，不能開啟。';return}adminOpenParticipantV1_(p,detail,status)},'secondary'));tr.append(op);table.append(tr)});list.append(table)
-      }catch(e){status.className='result warn';status.textContent='名單載入失敗：'+e.message;list.append(el('div','result warn','後端未返回完整名單時，請使用搜尋；頁面不會顯示Raw／Record Control技術操作。'))}
-    }
-  }
+  const m=appShell();m.append(toolbar('研究管理中心'));
+  const shell=el('section','summary admin-v2'),status=el('div','result','正在連接後端……'),auth=el('div','plain-block admin-auth'),body=el('div');
+  const token=adminFieldV1_('Admin Token',adminTokenV1_(),'password'),connect=btn('連接管理中心',connectNow,'primary');token.input.placeholder='輸入管理員Token';auth.append(el('h2','section-title','管理員登入'),token.wrap,connect);shell.append(auth,status,body);m.append(shell);
+  let allRows=[],currentFilter='all';
+  async function connectNow(){if(token.input.value)sessionStorage.setItem('apathy_admin_token',token.input.value);connect.disabled=true;status.textContent='正在連接……';try{await adminApiV1_('participant_lookup',{q:'__healthcheck__'});auth.classList.add('hidden');status.className='result good';status.textContent='已連接';await loadWorkspace()}catch(e){status.className='result warn';status.textContent='連接失敗：'+e.message}finally{connect.disabled=false}}
+  async function loadWorkspace(){body.innerHTML='';try{let d=await adminApiV1_('admin_dashboard',{});allRows=adminRows_(d);if(!allRows.length){const x=await adminApiV1_('participant_lookup',{q:''});allRows=adminRows_(x)}renderWorkspace()}catch(e){status.className='result warn';status.textContent='管理資料載入失敗：'+e.message}}
+  function pending(p){return [p.screening_status,p.stage2_status,p.mri_status,p.clinical_status].some(v=>/pending|incomplete|required|待|未/i.test(String(v||'')))}
+  function review(p){return Number(p.review_count||0)>0||/review|exception|衝突|核實|待/i.test(String(p.reviews||''))}
+  function active(p){return !/withdraw|exclude|inactive|退出|排除|停用/i.test(String(p.recruitment_status||''))}
+  function renderWorkspace(){body.innerHTML='';const top=el('div','admin-topbar'),title=el('div');title.append(el('h1','admin-v2-title','研究管理中心'),el('p','hint','統一Participant Registry、進度追蹤、補資料與修正入口'));const actions=el('div','admin-actionbar');actions.append(btn('新增Participant',()=>openCreate(),'primary'),btn('新增補充資料',()=>openQuickForm('supplement'),'secondary'),btn('修正資料',()=>openQuickForm('correction'),'secondary'),btn('重新整理',loadWorkspace,'secondary'),btn('更新所有結果',()=>adminConfirmV2_('更新所有結果',['將完整重建正式結果。'],'開始重建',adminRunRebuildV2_),'secondary'));top.append(title,actions);body.append(top);
+    const counts={all:allRows.length,active:allRows.filter(active).length,pending:allRows.filter(pending).length,review:allRows.filter(review).length,excluded:allRows.filter(p=>!active(p)).length};const cards=el('div','admin-stat-grid');[['all','全部Participant'],['active','進行中'],['pending','待完成'],['review','需跟進'],['excluded','已排除／停用']].forEach(([k,l])=>{const c=el('button','admin-stat-card'+(currentFilter===k?' selected':'Plan',''),);c.type='button';c.innerHTML=`<strong>${counts[k]}</strong><span>${l}</span>`;c.onclick=()=>{currentFilter=k;renderWorkspace()};cards.append(c)});body.append(cards);
+    const tools=el('div','admin-filters'),q=el('input','admin-search');q.placeholder='搜尋P_ID、S_ID、姓名、電話或狀態';const type=el('select','admin-select');type.innerHTML='<option value="">全部PD／HC</option><option value="PD">PD</option><option value="HC">HC</option>';tools.append(q,type);body.append(tools);const list=el('div','admin-list'),detail=el('div','admin-detail');body.append(list,detail);
+    const draw=()=>{const term=q.value.trim().toLowerCase(),tp=type.value;let rows=allRows.filter(p=>currentFilter==='all'||currentFilter==='active'&&active(p)||currentFilter==='pending'&&pending(p)||currentFilter==='review'&&review(p)||currentFilter==='excluded'&&!active(p));if(tp)rows=rows.filter(p=>String(p.pd_hc_status||'').toUpperCase()===tp);if(term)rows=rows.filter(p=>Object.values(p).some(v=>String(v??'').toLowerCase().includes(term)));list.innerHTML='';const meta=el('div','admin-list-meta',`顯示 ${rows.length} / ${allRows.length} 名Participant`);list.append(meta);rows.forEach(p=>list.append(participantCard(p,detail)));if(!rows.length)list.append(el('div','result','沒有符合條件的Participant。'))};q.oninput=draw;type.onchange=draw;draw()}
+  function badge(text,kind='neutral'){return el('span','admin-badge '+kind,String(text||'—'))}
+  function participantCard(p,detail){const card=el('article','admin-person-card'),head=el('div','admin-person-head'),ident=el('div'),chips=el('div','admin-chip-row');ident.append(el('h3','',p.participant_name||p.p_id||p.s_id||'未命名Participant'),el('div','hint',[p.p_id,p.s_id,p.contact_phone||p.contact_phone_last4].filter(Boolean).join(' ｜ ')));chips.append(badge(p.pd_hc_status||'未分類','info'),badge(p.group||'Group pending',p.group?'good':'warn'),badge(p.recruitment_status||'進度未設定',active(p)?'good':'muted'));head.append(ident,chips);const progress=el('div','admin-progress-grid');[['Screening',p.screening_status],['Stage 2',p.stage2_status],['MRI',p.mri_status],['Clinical',p.clinical_status],['MoCA',p.latest_moca_raw],['LEDD',p.medication_status||p.ledd_status]].forEach(([l,v])=>{const x=el('div','admin-progress-item');x.append(el('span','',l),el('strong','',String(v??'—')));progress.append(x)});const foot=el('div','admin-person-foot');foot.append(el('div','admin-next-action',`下一步：${p.next_action||'檢視Participant資料'}`),btn('開啟個案',()=>{detail.innerHTML='';adminOpenParticipantV1_(p,detail,status);detail.scrollIntoView({behavior:'smooth',block:'start'})},'primary'));card.append(head,progress,foot);return card}
+  function openCreate(){const panel=el('div','admin-form-panel'),pid=adminFieldV1_('P_ID','','text'),sid=adminFieldV1_('S_ID','','text'),name=adminFieldV1_('姓名','','text'),phone=adminFieldV1_('電話','','tel');panel.append(el('h2','section-title','新增Participant'),el('p','hint','建立工作名單身份記錄。正式提交前不會修改Raw。'),pid.wrap,sid.wrap,name.wrap,phone.wrap,el('div','result','此版保留安全預覽，不直接寫入Raw；部署後由Registry API接管正式建立。'));body.prepend(panel);panel.scrollIntoView({behavior:'smooth'})}
+  function openQuickForm(kind){const panel=el('div','admin-form-panel'),id=adminFieldV1_('P_ID或S_ID','','text'),reason=adminFieldV1_('原因','','text'),field=adminFieldV1_(kind==='supplement'?'補充欄位／內容':'需修正欄位／正確值','','text');panel.append(el('h2','section-title',kind==='supplement'?'新增補充資料':'正式資料修正'),el('p','hint',kind==='supplement'?'後續接入historical supplement queue。':'後續接入field correction queue，保留原Raw並重建。'),id.wrap,field.wrap,reason.wrap,el('div','result','已建立正式工作流版面；未連接寫入API前不會建立假提交。'));body.prepend(panel);panel.scrollIntoView({behavior:'smooth'})}
   if(adminTokenV1_()){token.input.value=adminTokenV1_();connectNow()}
 }
 
@@ -1476,16 +1463,3 @@ validateClinical=function(s){if(!clinicalIdentityAvailablePhase3_()){showInlineE
 
 home();
 })();
-
-function adminReviewCP2B_(host,p,match,pageStatus){
- const v=(r,k)=>r?.[k]==null?'':String(r[k]), labels={SID_REGISTRY_COLLISION:'S_ID Registry碰撞',PID_NOT_IN_REGISTRY:'P_ID未在Registry',PHONE_REGISTRY_MISMATCH:'電話資料不一致',HADS_INCOMPLETE:'HADS未完成',SAS_INCOMPLETE:'SAS未完成',MOCA_PENDING:'MoCA待完成',QUIP_PENDING:'QUIP待完成',QUIPRS_PENDING:'QUIP-RS待完成',CLINICAL_DATA_GAP:'Clinical資料缺口',MEDICATION_REVIEW:'Medication／LEDD待核驗'};
- const load=async()=>{host.innerHTML='<h3>待處理資料事項</h3><p class="hint">只顯示聚合工作；本批不開放補錄、Field Correction或Identity Correction。</p>';
-  const d=await adminApiV1_('admin_review_worklist',{p_id:p.p_id||match.p_id||'',s_id:p.s_id||match.s_id||''}),rows=d.records||[];
-  if(!rows.length){host.append(el('div','result good','目前沒有待處理資料事項。'));return}
-  rows.forEach(r=>{const c=el('details','admin-review-card'),s=document.createElement('summary');s.textContent=`${v(r,'priority')||'REVIEW'} ｜ ${labels[v(r,'review_code')]||v(r,'detail')||v(r,'review_code')} ｜ ${v(r,'resolution_status')||'OPEN'}`;c.append(s);
-   const body=el('div','admin-review-body');body.append(el('p','',v(r,'detail')),el('p','hint',`缺少資料：${v(r,'missing_fields')||'—'}`),el('p','hint',`Affected participants：${v(r,'affected_participants')||'—'}`));
-   const tech=el('details','');tech.innerHTML=`<summary>來源及技術細節</summary><p>Review code：${v(r,'review_code')}</p><p>Source codes：${v(r,'source_codes')||'—'}</p><p>Review key：${v(r,'review_key')}</p>`;body.append(tech);
-   body.append(btn('行政處理',()=>open(r),'secondary'));c.append(body);host.append(c)});pageStatus.textContent=`已載入${rows.length}項Worklist。`};
- const open=r=>{const m=el('div','modal'),box=el('div','modal-box');box.append(el('h2','',labels[v(r,'review_code')]||v(r,'review_code')));const sel=document.createElement('select');[['DEFERRED','延後處理'],['ACKNOWLEDGED_NOT_COLLECTED','確認未收集'],['NOT_ACTIONABLE','不需處理']].forEach(x=>{const o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.append(o)});const action=document.createElement('input'),note=document.createElement('textarea'),date=document.createElement('input'),by=document.createElement('input'),st=el('div','status');date.type='date';by.placeholder='負責人';action.placeholder='動作，例如 VERIFY_IDENTITY';note.placeholder='原因／後續處理說明';note.rows=4;box.append(sel,action,note,date,by,el('div','result warn','此操作只關閉Admin待辦，不會製造分數或改變Result A。'),st,btn('保存Resolution',async()=>{if(!by.value.trim()||((sel.value==='DEFERRED'||sel.value==='NOT_ACTIONABLE')&&!note.value.trim())){st.textContent='請填寫負責人及必要說明。';return}try{await adminApiV1_('resolve_admin_review',{review_key:v(r,'review_key'),resolution_status:sel.value,resolution_action:action.value.trim(),resolution_note:[note.value.trim(),date.value&&`跟進日期：${date.value}`].filter(Boolean).join(' ｜ '),resolved_by:by.value.trim()});m.remove();await load()}catch(e){st.textContent=e.message}},'primary'));m.append(box);document.body.append(m)};
- return load().catch(e=>host.append(el('div','result warn','Worklist載入失敗：'+e.message)));
-}

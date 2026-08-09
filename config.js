@@ -2,7 +2,7 @@
 'use strict';
 window.FORM_CONFIG = Object.freeze({
   version: '10.0.8-medication-mri-rescue-test',
-  receiverVersionExpected: '5.2',
+  receiverVersionExpected: '5.9-batch1-production',
   receiverUrl: 'https://script.google.com/macros/s/AKfycbzK5d_w3IgytNY9XpImHsTr2o0Wyxl52wlymmcAPaFcdL8eE8Bln_pMCT9lUj79EaMG/exec',
   staffPassword: '080',
 

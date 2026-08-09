@@ -830,7 +830,7 @@ submitFormal=function(){
 /* ========================================================================== *
  * Admin Operations UI v2.0-phase2
  * ========================================================================== */
-const ADMIN_UI_BUILD='2.3-phase2-closeout';
+const ADMIN_UI_BUILD='2.4-cp2b';
 function adminTokenV1_(){return sessionStorage.getItem('apathy_admin_token')||''}
 function adminApiUrlV1_(action,params){const u=new URL(C.receiverUrl);u.searchParams.set('action',action);u.searchParams.set('token',adminTokenV1_());Object.keys(params||{}).forEach(k=>{const v=params[k];if(v!==undefined&&v!==null&&String(v)!=='')u.searchParams.set(k,String(v))});return u.toString()}
 async function adminApiV1_(action,params){const r=await fetch(adminApiUrlV1_(action,params||{}),{method:'GET',cache:'no-store'}),text=await r.text();let out;try{out=JSON.parse(text)}catch(e){throw new Error('伺服器回傳不是有效JSON：'+text.slice(0,160))}if(!r.ok||out.ok===false)throw new Error(out.message||out.error_code||'Admin API失敗');return out}
@@ -895,6 +895,7 @@ async function adminOpenParticipantV1_(match,host,status){
     ['MoCA分數','MoCA日期','MoCA來源','MRI安全','Medication／LEDD','Payment／Receipt','Review','下一步'].forEach(x=>kh.append(el('th','',x)));
     [state('latest_moca_raw','latest_valid_moca_raw_total'),state('latest_moca_date','latest_valid_moca_date'),state('latest_moca_source','latest_valid_moca_source'),state('mri_safety_status','mri_safety_overall'),state('ledd_status','medication_status'),`${state('payment_status')}／${state('receipt_status')}`,state('reviews','review_summary','review'),state('next_action','Next_Action')].forEach(x=>kv.append(el('td','',x)));
     keyTable.append(kh,kv);key.append(keyTable);section.append(key);
+    const reviewHost=el('div','admin-review-section');section.append(reviewHost);await adminReviewCP2B_(reviewHost,p,match,status);
     const note=el('p','hint','Admin可查看完整流程及修改基本身份／行政资料；正式Assessment逐题答案及逐药Medication明细不在此修改。');
     section.append(note);host.append(section);status.className='result good';status.textContent=`已載入${p.p_id||p.s_id||'Participant'}。`;
   }catch(e){status.className='result warn';status.textContent='載入失敗：'+e.message}
@@ -1475,3 +1476,16 @@ validateClinical=function(s){if(!clinicalIdentityAvailablePhase3_()){showInlineE
 
 home();
 })();
+
+function adminReviewCP2B_(host,p,match,pageStatus){
+ const v=(r,k)=>r?.[k]==null?'':String(r[k]), labels={SID_REGISTRY_COLLISION:'S_ID Registry碰撞',PID_NOT_IN_REGISTRY:'P_ID未在Registry',PHONE_REGISTRY_MISMATCH:'電話資料不一致',HADS_INCOMPLETE:'HADS未完成',SAS_INCOMPLETE:'SAS未完成',MOCA_PENDING:'MoCA待完成',QUIP_PENDING:'QUIP待完成',QUIPRS_PENDING:'QUIP-RS待完成',CLINICAL_DATA_GAP:'Clinical資料缺口',MEDICATION_REVIEW:'Medication／LEDD待核驗'};
+ const load=async()=>{host.innerHTML='<h3>待處理資料事項</h3><p class="hint">只顯示聚合工作；本批不開放補錄、Field Correction或Identity Correction。</p>';
+  const d=await adminApiV1_('admin_review_worklist',{p_id:p.p_id||match.p_id||'',s_id:p.s_id||match.s_id||''}),rows=d.records||[];
+  if(!rows.length){host.append(el('div','result good','目前沒有待處理資料事項。'));return}
+  rows.forEach(r=>{const c=el('details','admin-review-card'),s=document.createElement('summary');s.textContent=`${v(r,'priority')||'REVIEW'} ｜ ${labels[v(r,'review_code')]||v(r,'detail')||v(r,'review_code')} ｜ ${v(r,'resolution_status')||'OPEN'}`;c.append(s);
+   const body=el('div','admin-review-body');body.append(el('p','',v(r,'detail')),el('p','hint',`缺少資料：${v(r,'missing_fields')||'—'}`),el('p','hint',`Affected participants：${v(r,'affected_participants')||'—'}`));
+   const tech=el('details','');tech.innerHTML=`<summary>來源及技術細節</summary><p>Review code：${v(r,'review_code')}</p><p>Source codes：${v(r,'source_codes')||'—'}</p><p>Review key：${v(r,'review_key')}</p>`;body.append(tech);
+   body.append(btn('行政處理',()=>open(r),'secondary'));c.append(body);host.append(c)});pageStatus.textContent=`已載入${rows.length}項Worklist。`};
+ const open=r=>{const m=el('div','modal'),box=el('div','modal-box');box.append(el('h2','',labels[v(r,'review_code')]||v(r,'review_code')));const sel=document.createElement('select');[['DEFERRED','延後處理'],['ACKNOWLEDGED_NOT_COLLECTED','確認未收集'],['NOT_ACTIONABLE','不需處理']].forEach(x=>{const o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.append(o)});const action=document.createElement('input'),note=document.createElement('textarea'),date=document.createElement('input'),by=document.createElement('input'),st=el('div','status');date.type='date';by.placeholder='負責人';action.placeholder='動作，例如 VERIFY_IDENTITY';note.placeholder='原因／後續處理說明';note.rows=4;box.append(sel,action,note,date,by,el('div','result warn','此操作只關閉Admin待辦，不會製造分數或改變Result A。'),st,btn('保存Resolution',async()=>{if(!by.value.trim()||((sel.value==='DEFERRED'||sel.value==='NOT_ACTIONABLE')&&!note.value.trim())){st.textContent='請填寫負責人及必要說明。';return}try{await adminApiV1_('resolve_admin_review',{review_key:v(r,'review_key'),resolution_status:sel.value,resolution_action:action.value.trim(),resolution_note:[note.value.trim(),date.value&&`跟進日期：${date.value}`].filter(Boolean).join(' ｜ '),resolved_by:by.value.trim()});m.remove();await load()}catch(e){st.textContent=e.message}},'primary'));m.append(box);document.body.append(m)};
+ return load().catch(e=>host.append(el('div','result warn','Worklist載入失敗：'+e.message)));
+}

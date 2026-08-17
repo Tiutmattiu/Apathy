@@ -1462,4 +1462,347 @@ validateClinical=function(s){if(!clinicalIdentityAvailablePhase3_()){showInlineE
 
 
 home();
+/* ===== FINAL cross-origin submission transport fix ===== */
+
+function receiverJsonpFinal_(params, timeoutMs) {
+  return new Promise(function(resolve, reject) {
+    const callbackName =
+      '__apathy_receiver_' +
+      Date.now() + '_' +
+      Math.random().toString(36).slice(2);
+
+    const script = document.createElement('script');
+    const url = new URL(C.receiverUrl);
+
+    Object.keys(params || {}).forEach(function(key) {
+      const value = params[key];
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value) !== ''
+      ) {
+        url.searchParams.set(key, String(value));
+      }
+    });
+
+    url.searchParams.set('callback', callbackName);
+
+    let settled = false;
+
+    function cleanup() {
+      delete window[callbackName];
+
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    }
+
+    const timer = window.setTimeout(function() {
+      if (settled) return;
+
+      settled = true;
+      cleanup();
+
+      reject(new Error('Receiver確認逾時'));
+    }, timeoutMs || 12000);
+
+    window[callbackName] = function(result) {
+      if (settled) return;
+
+      settled = true;
+      window.clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+
+    script.onerror = function() {
+      if (settled) return;
+
+      settled = true;
+      window.clearTimeout(timer);
+      cleanup();
+
+      reject(new Error('未能連接Receiver確認服務'));
+    };
+
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
+}
+
+function receiverStatusFinal_(submissionId) {
+  return receiverJsonpFinal_({
+    action: 'status',
+    submission_id: submissionId
+  }, 12000);
+}
+
+function receiverIframePostFinal_(submissionPayload) {
+  return new Promise(function(resolve) {
+    const transportId =
+      'apathy_receiver_transport_' +
+      Date.now() + '_' +
+      Math.random().toString(36).slice(2);
+
+    const iframe = document.createElement('iframe');
+    iframe.name = transportId;
+    iframe.id = transportId;
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.display = 'none';
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = C.receiverUrl;
+    form.target = transportId;
+    form.enctype = 'application/x-www-form-urlencoded';
+    form.acceptCharset = 'UTF-8';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(submissionPayload);
+
+    form.appendChild(input);
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+
+    let finished = false;
+    let posted = false;
+
+    function cleanup() {
+      window.setTimeout(function() {
+        if (form.parentNode) {
+          form.parentNode.removeChild(form);
+        }
+
+        if (iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 1000);
+    }
+
+    function finish() {
+      if (finished) return;
+
+      finished = true;
+      cleanup();
+
+      resolve({
+        transport_ok: true,
+        submission_id: submissionPayload.submission_id
+      });
+    }
+
+    iframe.addEventListener('load', function() {
+      if (!posted) return;
+      finish();
+    });
+
+    posted = true;
+    form.submit();
+
+    // 跨域iframe不读取回应内容。
+    // 是否真正写入由公开status JSONP确认。
+    window.setTimeout(finish, 4000);
+  });
+}
+
+function receiverSleepFinal_(milliseconds) {
+  return new Promise(function(resolve) {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+async function submitPayload(form, event, status) {
+  if (ST.submitting) return;
+
+  const p = payload(form, event, status);
+
+  if (!p.submission_id) {
+    p.submission_id = ST.submission || uuid();
+    ST.submission = p.submission_id;
+  }
+
+  const submissionId = p.submission_id;
+
+  ST.submitting = true;
+
+  const modal = el('div', 'modal');
+  const box = el('div', 'modal-box submit-wait');
+  const title = el('h2', '', '正在提交資料……');
+  const msg = el(
+    'p',
+    '',
+    '請不要重新整理、關閉頁面或返回上一頁。系統正在傳送並確認資料。'
+  );
+  const timer = el('div', 'status', '已等待0秒');
+
+  box.append(title, msg, timer);
+  modal.append(box);
+  document.body.append(modal);
+
+  let seconds = 0;
+
+  const tick = window.setInterval(function() {
+    seconds += 1;
+
+    timer.textContent =
+      '已等待' + seconds + '秒' +
+      (seconds > 15
+        ? '；仍在等待Receiver確認，請不要重複提交。'
+        : '');
+  }, 1000);
+
+  try {
+    /*
+     * 不用跨域fetch读取POST回应。
+     * Receiver的parsePostPayload_已经支持e.parameter.data。
+     */
+    await receiverIframePostFinal_(p);
+
+    let confirmed = null;
+    let lastStatus = null;
+
+    for (let attempt = 1; attempt <= 7; attempt += 1) {
+      await receiverSleepFinal_(
+        attempt === 1 ? 800 : 1400
+      );
+
+      try {
+        lastStatus =
+          await receiverStatusFinal_(submissionId);
+
+        if (
+          lastStatus &&
+          lastStatus.ok === true &&
+          lastStatus.received === true
+        ) {
+          confirmed = lastStatus;
+          break;
+        }
+      } catch (verificationError) {
+        console.warn(
+          'Receiver status verification failed',
+          attempt,
+          verificationError
+        );
+      }
+    }
+
+    if (!confirmed) {
+      const unconfirmedError = new Error(
+        '資料已送出，但暫時未能確認Receiver完成寫入。' +
+        '請保留目前Submission ID，切勿建立新的Submission ID重複提交。'
+      );
+
+      unconfirmedError.code = 'SUBMISSION_UNCONFIRMED';
+      unconfirmedError.submission_id = submissionId;
+      unconfirmedError.last_status = lastStatus;
+
+      throw unconfirmedError;
+    }
+
+    window.clearInterval(tick);
+
+    box.innerHTML = '';
+    box.append(
+      el('h2', '', '提交成功'),
+      el('p', '', 'Submission ID：' + submissionId),
+      el(
+        'p',
+        'hint',
+        confirmed.result && confirmed.result.sheet
+          ? '已写入：' +
+            confirmed.result.sheet +
+            ' #' +
+            confirmed.result.row
+          : 'Receiver已确认收到资料。'
+      ),
+      btn('返回', function() {
+        modal.remove();
+
+        /*
+         * 仅在Receiver确认成功后生成下一笔submission_id。
+         */
+        ST.submission = uuid();
+        saveDraft();
+
+        if (
+          form === 'screening' &&
+          event === 'screening_core' &&
+          ['HC', 'Apathy', 'Pure_PD'].includes(
+            val('final_screening_decision')
+          )
+        ) {
+          player();
+        }
+      }, 'primary')
+    );
+  } catch (error) {
+    window.clearInterval(tick);
+
+    box.innerHTML = '';
+
+    if (error && error.code === 'SUBMISSION_UNCONFIRMED') {
+      box.append(
+        el('h2', '', '资料已发送，暂未确认'),
+        el(
+          'p',
+          '',
+          '请不要以新的Submission ID重复提交。'
+        ),
+        el(
+          'p',
+          '',
+          'Submission ID：' + submissionId
+        ),
+        el(
+          'p',
+          'hint',
+          '资料及原Submission ID仍保存在此装置。可稍后使用同一笔Submission ID重试。'
+        )
+      );
+    } else {
+      box.append(
+        el('h2', '', '提交未完成'),
+        el(
+          'p',
+          '',
+          '资料仍保存在此装置。' +
+          String(error && error.message
+            ? error.message
+            : error)
+        ),
+        el(
+          'p',
+          'hint',
+          'Submission ID：' + submissionId
+        )
+      );
+    }
+
+    const actions = el('div', 'submitbar');
+
+    actions.append(
+      btn(
+        '下载本地JSON',
+        downloadCurrent,
+        'linkbtn'
+      ),
+      btn(
+        '返回修改',
+        function() {
+          modal.remove();
+        },
+        'primary'
+      )
+    );
+
+    box.append(actions);
+  } finally {
+    ST.submitting = false;
+  }
+}
 })();

@@ -1805,4 +1805,184 @@ async function submitPayload(form, event, status) {
     ST.submitting = false;
   }
 }
+
+
+/* ===== FINAL transport recovery 2026-08-17 ===== */
+/*
+ * Scope: submission transport only.
+ * - Keeps the existing payload and Receiver contract unchanged.
+ * - Sends POST as a CORS-safelisted text/plain request in no-cors mode.
+ * - Confirms durable receipt through the Receiver's public status JSONP action.
+ * - Reuses the same submission_id until the Receiver confirms receipt.
+ */
+const SUBMISSION_TRANSPORT_BUILD='2026-08-17-no-cors-status-v1';
+
+function receiverStatusJsonpFinal_(submissionId,timeoutMs){
+  return new Promise(function(resolve,reject){
+    const callbackName='__apathy_status_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const url=new URL(C.receiverUrl);
+    let settled=false;
+
+    function cleanup(){
+      try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}
+      if(script.parentNode)script.parentNode.removeChild(script);
+    }
+
+    const timer=window.setTimeout(function(){
+      if(settled)return;
+      settled=true;
+      cleanup();
+      reject(new Error('Receiver status verification timed out'));
+    },timeoutMs||12000);
+
+    window[callbackName]=function(result){
+      if(settled)return;
+      settled=true;
+      window.clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+
+    script.onerror=function(){
+      if(settled)return;
+      settled=true;
+      window.clearTimeout(timer);
+      cleanup();
+      reject(new Error('Receiver status endpoint could not be loaded'));
+    };
+
+    url.searchParams.set('action','status');
+    url.searchParams.set('submission_id',String(submissionId||''));
+    url.searchParams.set('callback',callbackName);
+    url.searchParams.set('_ts',String(Date.now()));
+    script.src=url.toString();
+    script.async=true;
+    document.head.appendChild(script);
+  });
+}
+
+async function receiverPostNoCorsFinal_(submissionPayload){
+  await fetch(C.receiverUrl,{
+    method:'POST',
+    mode:'no-cors',
+    cache:'no-store',
+    redirect:'follow',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(submissionPayload)
+  });
+  return{transport_ok:true,submission_id:submissionPayload.submission_id};
+}
+
+function receiverWaitFinal_(milliseconds){
+  return new Promise(function(resolve){window.setTimeout(resolve,milliseconds)});
+}
+
+async function confirmSubmissionFinal_(submissionId){
+  let lastStatus=null;
+  let lastError=null;
+  const waits=[900,1200,1600,2200,3000,4000,5000];
+
+  for(let attempt=0;attempt<waits.length;attempt++){
+    await receiverWaitFinal_(waits[attempt]);
+    try{
+      lastStatus=await receiverStatusJsonpFinal_(submissionId,12000);
+      if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true){
+        return{confirmed:true,status:lastStatus,attempt:attempt+1};
+      }
+    }catch(error){
+      lastError=error;
+      console.warn('Receiver status verification failed',attempt+1,error);
+    }
+  }
+
+  return{confirmed:false,status:lastStatus,error:lastError};
+}
+
+submitPayload=async function(form,event,status){
+  if(ST.submitting)return;
+
+  const p=payload(form,event,status);
+  if(!p.submission_id){
+    ST.submission=ST.submission||uuid();
+    p.submission_id=ST.submission;
+  }
+
+  const submissionId=String(p.submission_id);
+  ST.submission=submissionId;
+  saveDraft();
+  ST.submitting=true;
+
+  const modal=el('div','modal');
+  const box=el('div','modal-box submit-wait');
+  const title=el('h2','','正在提交資料……');
+  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並以Submission ID確認寫入。');
+  const timer=el('div','status','已等待0秒');
+  box.append(title,msg,timer);
+  modal.append(box);
+  document.body.append(modal);
+
+  let seconds=0;
+  const tick=window.setInterval(function(){
+    seconds++;
+    timer.textContent='已等待'+seconds+'秒'+(seconds>15?'；仍在確認Receiver写入，请不要重复提交。':'');
+  },1000);
+
+  try{
+    await receiverPostNoCorsFinal_(p);
+    const verification=await confirmSubmissionFinal_(submissionId);
+
+    if(!verification.confirmed){
+      const error=new Error('资料已发送，但Receiver暂时没有确认写入。');
+      error.code='SUBMISSION_UNCONFIRMED';
+      error.submission_id=submissionId;
+      error.last_status=verification.status;
+      error.cause=verification.error;
+      throw error;
+    }
+
+    window.clearInterval(tick);
+    box.innerHTML='';
+    const found=verification.status&&verification.status.result;
+    box.append(
+      el('h2','','提交成功'),
+      el('p','',`Submission ID：${submissionId}`),
+      el('p','hint',found&&found.sheet?`Receiver已确认写入：${found.sheet} #${found.row}`:'Receiver已确认收到资料。'),
+      btn('返回',function(){
+        modal.remove();
+        ST.submission=uuid();
+        saveDraft();
+        if(form==='screening'&&event==='screening_core'&&['HC','Apathy','Pure_PD'].includes(val('final_screening_decision')))player();
+      },'primary')
+    );
+  }catch(error){
+    window.clearInterval(tick);
+    box.innerHTML='';
+
+    if(error&&error.code==='SUBMISSION_UNCONFIRMED'){
+      box.append(
+        el('h2','','资料尚未确认写入'),
+        el('p','','Receiver目前没有确认这笔资料。请保留原Submission ID；修复连接后可用同一ID重试。'),
+        el('p','',`Submission ID：${submissionId}`),
+        el('p','hint','本机草稿及原Submission ID均已保留。此提示不算提交成功。')
+      );
+    }else{
+      box.append(
+        el('h2','','提交未完成'),
+        el('p','',`资料仍保存在此装置。${String(error&&error.message?error.message:error)}`),
+        el('p','hint',`Submission ID：${submissionId}`)
+      );
+    }
+
+    const actions=el('div','submitbar');
+    actions.append(
+      btn('下载本地JSON',downloadCurrent,'linkbtn'),
+      btn('返回修改',function(){modal.remove()},'primary')
+    );
+    box.append(actions);
+  }finally{
+    ST.submitting=false;
+  }
+};
+
 })();

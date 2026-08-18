@@ -2,7 +2,7 @@
 'use strict';
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
-const FRONTEND_RELEASE='11.0.2-fe-clean-r3-display-transport-repair';
+const FRONTEND_RELEASE='11.0.3-fe-clean-r3-clean-interaction-rewrite';
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 const ST={flow:'home',step:0,answers:{},error:'',submission:uuid(),sectionOpen:false,meds:[],submitting:false,staffUnlocked:false};
 const q=(s,p=document)=>p.querySelector(s), qa=(s,p=document)=>Array.from(p.querySelectorAll(s));
@@ -374,11 +374,11 @@ function addBFChoices(parent,label,key,options){
 }
 function addStaffChoices(s,label,key,opts){
   const f=el('div','field');f.append(el('div','label',label));const g=el('div','direct');
-  opts.forEach(o=>{const b=btn(o[1],e=>{e?.stopPropagation?.();set(key,o[0]);b.classList.add('selected');requestAnimationFrame(renderByFlow)},'choice'+(sameValue(val(key),o[0])?' selected':''));b.dataset.field=key;b.dataset.value=String(o[0]);g.append(b)});
+  opts.forEach(o=>{const b=btn(o[1],e=>{e?.stopPropagation?.();set(key,o[0]);b.classList.add('selected');requestAnimationFrame(()=>{renderByFlow();if(ST.flow==='clinical')setTimeout(()=>window.scrollBy({top:260,behavior:'smooth'}),30)})},'choice'+(sameValue(val(key),o[0])?' selected':''));b.dataset.field=key;b.dataset.value=String(o[0]);g.append(b)});
   f.append(g);s.append(f)
 }
 function addStaffCheckbox(s,label,key){
-  const b=btn(label,e=>{e?.stopPropagation?.();set(key,val(key)===1?0:1);requestAnimationFrame(renderByFlow)},'toggle'+(val(key)===1?' selected':''));s.append(b)
+  const b=btn(label,e=>{e?.stopPropagation?.();set(key,val(key)===1?0:1);requestAnimationFrame(()=>{renderByFlow();if(ST.flow==='clinical')setTimeout(()=>window.scrollBy({top:260,behavior:'smooth'}),30)})},'toggle'+(val(key)===1?' selected':''));s.append(b)
 }
 function renderSecondMocaResult(s){
   if(!present('moca_2_raw_total'))return;
@@ -1001,7 +1001,7 @@ function renderMRIVisitBatchC5_(){
   const sg=el('div','chips');
   B.sequences.items.forEach(x=>{
     const incomplete=val(x.field)===0;
-    sg.append(btn((incomplete?'× ':'')+x.label,()=>{set(x.field,incomplete?1:0);renderMRIVisit()},incomplete?'toggle danger':'toggle'));
+    sg.append(btn((incomplete?'× ':'')+x.label,()=>{set(x.field,incomplete?1:0);renderMRIVisit()},incomplete?'toggle danger selected':'toggle'));
   });
   s.append(sg);
   const incomplete=B.sequences.items.filter(x=>val(x.field)===0),rf=el('div','field'),rt=el('textarea');
@@ -1476,9 +1476,13 @@ function renderCdarsScale(pg,a){const x=Object.assign({},pg,{label:cdarsStem(pg)
 function setPdiAnswer(item,answer){set(item.yesField,answer);if(answer===0)Object.values(item.dimensions).forEach(d=>set(d.name,null))}
 function renderPDIPage(pg,a){return renderPdiItem({pdi:pg.pdi||B.pdi21.items[pg.item-1],item:pg.item,total:21},a)}
 function renderPdiItem(pg,a){
-  const x=pg.pdi;a.append(el('p','instruction',`${pg.item}/21。請明確選擇「是」或「否」。未選擇不能進入下一題。`),el('h3','',x.fullLabel));
-  const g=el('div','direct');g.append(btn('是',()=>{setPdiAnswer(x,1);player()},'choice'+(val(x.yesField)===1?' selected':'')),btn('否',()=>{setPdiAnswer(x,0);player()},'choice'+(val(x.yesField)===0?' selected':'')));a.append(g);
-  if(val(x.yesField)===1){[['distress','困擾程度'],['preoccupation','反覆想到'],['conviction','确信程度']].forEach(([k,label])=>labelledScale(label,x.dimensions[k].name,['1','2','3','4','5'],a))}
+ const x=pg.pdi;
+ a.append(el('p','instruction',`${pg.item}/21。請明確選擇「是」或「否」。未選擇不能進入下一題。`),el('h3','',x.fullLabel));
+ const yn=el('div','direct'),choose=answer=>{setPdiAnswer(x,answer);ST.error='';player()};
+ yn.append(btn('是',()=>choose(1),'choice'+(val(x.yesField)===1?' selected':'')),btn('否',()=>choose(0),'choice'+(val(x.yesField)===0?' selected':'')));a.append(yn);
+ if(val(x.yesField)!==1)return;
+ const dims=[['distress','這件事是否對您造成困擾？',['1 沒有困擾','2 輕微困擾','3 中等困擾','4 相當困擾','5 十分困擾']],['preoccupation','您是否時常想起這件事？',['1 幾乎沒有','2 偶爾想到','3 有時想到','4 經常想到','5 一直在想']],['conviction','您相信這件事是真的嗎？',['1 一點也不真實','2 有點不真實','3 半信半疑','4 相當真實','5 非常真實']]];
+ dims.forEach(([kind,title,labels])=>{const block=el('div','plain-block'),g=el('div','scale-buttons'),key=x.dimensions[kind].name;block.append(el('strong','',title));labels.forEach((label,index)=>{const value=index+1;g.append(btn(label,()=>{set(key,value);ST.error='';player()},val(key)===value?'selected':''))});block.append(g);a.append(block)});
 }
 function pageComplete(pg){
   if(pg.kind==='pdiItem'){const x=pg.pdi;if(val(x.yesField)===0)return true;if(val(x.yesField)!==1)return false;return ['distress','preoccupation','conviction'].every(k=>present(x.dimensions[k].name))}

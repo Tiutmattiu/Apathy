@@ -2,7 +2,7 @@
 'use strict';
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
-const FRONTEND_RELEASE='11.0.0-fe-clean-r3-candidate';
+const FRONTEND_RELEASE='11.0.1-fe-clean-r3-repair';
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 const ST={flow:'home',step:0,answers:{},error:'',submission:uuid(),sectionOpen:false,meds:[],submitting:false,staffUnlocked:false};
 const q=(s,p=document)=>p.querySelector(s), qa=(s,p=document)=>Array.from(p.querySelectorAll(s));
@@ -300,8 +300,12 @@ function renderStage2Summary(a){a.append(resultBox('問卷已完成',['所有題
 function splitExamples(v){return String(v||'').split(/[，,、；;\n]+/).map(x=>x.trim()).filter(Boolean)}
 function validExamples(v){return splitExamples(v).length>0}
 
-const oldRenderScale=renderScale;
 function renderScale(pg,a){
+  function oldRenderScale(pg,a){
+  const opts=pg.options||[],g=el('div',opts.length===5?'scale-buttons':'options');
+  opts.forEach((o,n)=>{const keyText=opts.length===5?String(o.value):String(n+1),b=btn('',()=>{set(pg.key,o.value);if(ST.flow==='stage2')player();else autoNext()},(opts.length===5?'':'choice')+(val(pg.key)===o.value?' selected':''));b.append(el('strong','',keyText),document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,'')));g.append(b)});a.append(g)
+}
+
   const item=B.cdars.items.find(x=>x.name===pg.key);if(item){const domain=B.cdars.domains.find(d=>d.key===item.domain),examples=val(domain.examplesField);if(examples)a.append(resultBox('您之前填寫的活動',[String(examples)]))}
   oldRenderScale(pg,a)
 }
@@ -455,8 +459,9 @@ const calcAgeOriginalFinal=calcAge;
 function calcAge(){const byDob=calcAgeFromDobFinal();if(byDob!==null)return byDob;const n=Number(val('age_years'));return Number.isFinite(n)&&n>=0&&n<=120?n:null}
 
 /* Education category and verified actual years stay on the same screen. */
-const renderChoiceBeforeContractFinal=renderChoice;
-function renderChoice(pg,a){renderChoiceBeforeContractFinal(pg,a);if(pg.key==='education_level'&&val(pg.key)!=='other'){const f=fieldText('實際受教育年數','education_years','請輸入實際年數','number');a.append(f)}}
+function renderChoice(pg,a){
+  function renderChoiceBeforeContractFinal(pg,a){const g=el('div','direct');pg.options.forEach(o=>{const b=btn(o[1],()=>{set(pg.key,o[0]);if(pg.key==='education_level'&&o[2]!==null)set('education_years',o[2]);if(pg.key==='pd_status_self_report')set('pd_hc_status',Number(o[0])===1?'PD':'HC');if(ST.flow==='stage2')player();else{b.classList.add('selected');setTimeout(autoNext,120)}},'choice'+(sameValue(val(pg.key),o[0])?' selected':''));g.append(b)});a.append(g);if(pg.key==='education_level'&&val(pg.key)==='other'){const f=fieldText('實際教育年數','education_years','請輸入年數','number');a.append(f)}}
+renderChoiceBeforeContractFinal(pg,a);if(pg.key==='education_level'&&val(pg.key)!=='other'){const f=fieldText('實際受教育年數','education_years','請輸入實際年數','number');a.append(f)}}
 
 /* Stage 2 phone is required by validation; visible label remains simply 聯絡電話. */
 const pageCompleteBeforeContractFinal=pageComplete;
@@ -512,10 +517,37 @@ function pdiConfirmKey(pg){return `pdi_page${pg.page}_confirmed`}
 function renderIORScenario(pg,a){const n=String(pg.scenario).padStart(2,'0');a.append(el('p','context',pg.scenarioText));[['frequency','出現頻率',['從不','很少','有時','經常','非常頻繁']],['conviction','相信程度',['完全不相信','有點相信','半信半疑','相當相信','完全相信']],['distress','不安程度',['完全沒有不安','輕微不安','中等不安','相當不安','非常不安']]].forEach((z,zi)=>{const block=el('div','ior-block'),g=el('div','scale-buttons');block.append(el('h4','',z[1]));z[2].forEach((lab,i)=>{const v=i+1,key=`ior${n}_${z[0]}`;g.append(btn(`${v} ${lab}`,()=>{set(key,v);if(zi<2)player();else if(pageComplete(pg))autoNext();else player()},val(key)===v?'selected':''))});block.append(g);a.append(block)})}
 const pageCompleteBefore105=pageComplete;
 
-const playerBefore105=player;function player(){playerBefore105();const pg=playerPages()[ST.step];if(pg&&pg.kind==='pdiPage'){const next=qa('.nav .next').pop();if(next)next.textContent=pg.page===1?'下一頁，我已經完成本頁題目':'完成PDI，我已經完成本頁題目'}}
+function player(){
+  function playerBefore105(){
+  calculateAllDerived();const pages=playerPages();if(ST.step>=pages.length)ST.step=pages.length-1;const pg=pages[ST.step],m=appShell();
+  m.append(toolbar(ST.flow==='stage2'?'第二階段問卷':'首次篩查'));
+  const h=el('div','flow-head');h.append(el('h2','',pg.section));
+  const sectionPages=pages.filter(x=>x.section===pg.section),localIndex=sectionPages.indexOf(pg)+1;
+  const answerPages=pages.filter(x=>!['stage2Summary','scaleResult'].includes(x.kind));h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${answerPages.filter(pageComplete).length}／${answerPages.length}`));
+  const sm=el('div','section-menu');[...new Set(pages.map(x=>x.section))].forEach(s=>{
+    const first=pages.findIndex(x=>x.section===s),ps=pages.filter(x=>x.section===s),done=ps.every(pageComplete),partial=!done&&ps.some(pageComplete);
+    sm.append(btn(`${done?'✓ ':''}${s}`,()=>jumpSection(first,pages),(s===pg.section?'current ':'')+(done?'done':partial?'partial':'')))
+  });h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
+  const qbox=el('section','question');if(pg.context)qbox.append(el('div','context',pg.context));qbox.append(el('h3','',pg.label));renderPage(pg,qbox);if(ST.error)qbox.append(el('div','error',ST.error));m.append(qbox);
+  const nav=el('div','nav');nav.append(btn('返回上一個',()=>{if(ST.step>0){ST.step--;ST.error='';saveDraft();player()}},'secondary'));
+  const needsExplicit=['examples','positiveOne','moca','quipGroup','quipRsMatrix','pdiPage','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult'];
+  if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){
+    const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';
+    nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'));
+  }
+  m.append(nav);setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30)
+}
+playerBefore105();const pg=playerPages()[ST.step];if(pg&&pg.kind==='pdiPage'){const next=qa('.nav .next').pop();if(next)next.textContent=pg.page===1?'下一頁，我已經完成本頁題目':'完成PDI，我已經完成本頁題目'}}
 
 
-const fieldIdDigitsBefore105=fieldIdDigits;function fieldIdDigits(label,key,prefix,placeholder,onDone){const f=fieldIdDigitsBefore105(label,key,prefix,placeholder,onDone),i=q('input',f);i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const digits=numericIdValue(i.value);if(digits)set(key,key==='s_id'?canonicalScanId(digits):canonicalParticipantId(digits));const all=qa('input,textarea',i.closest('main')||document),n=all[all.indexOf(i)+1];if(n)n.focus()}};return f}
+function fieldIdDigits(label,key,prefix,placeholder,onDone){
+  function fieldIdDigitsBefore105(label,key,prefix,placeholder,onDone){
+  const f=el('div','field');f.append(el('label','',label));const row=el('div','id-input-row');
+  row.append(el('span','id-prefix',prefix));const i=el('input','text');i.inputMode='numeric';i.placeholder=placeholder;i.value=numericIdValue(val(key));
+  const save=()=>{const digits=numericIdValue(i.value);i.value=digits;set(key,key==='s_id'?canonicalScanId(digits):canonicalParticipantId(digits));return digits};
+  i.oninput=save;i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const digits=save();if(digits&&onDone)onDone()}};row.append(i);f.append(row);return f
+}
+const f=fieldIdDigitsBefore105(label,key,prefix,placeholder,onDone),i=q('input',f);i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const digits=numericIdValue(i.value);if(digits)set(key,key==='s_id'?canonicalScanId(digits):canonicalParticipantId(digits));const all=qa('input,textarea',i.closest('main')||document),n=all[all.indexOf(i)+1];if(n)n.focus()}};return f}
 /* Backfill matrices: auto-advance only inside the same scale; never cross PDI->IOR or leave IOR. */
 function matrixInput105(key,placeholder,disabled,list){const i=el('input');i.inputMode='numeric';i.maxLength=1;i.placeholder=placeholder;i.disabled=disabled;i.value=val(key)??'';i.onkeydown=e=>{if(/^[1-5]$/.test(e.key)){e.preventDefault();i.value=e.key;set(key,Number(e.key));const n=list[list.indexOf(i)+1];if(n)n.focus();else i.blur()}else if(!['Tab','Shift','Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))e.preventDefault()};i.oninput=()=>{const v=i.value.replace(/[^1-5]/g,'').slice(-1);i.value=v;set(key,v===''?null:Number(v))};return i}
 function renderPDIBF(s){s.append(el('p','hint','困擾、反覆想到、確信均為1–5；只在PDI內自動移到下一格，最後一格不會跳到IOR。'));const list=[];B.pdi21.items.forEach((x,n)=>{const r=el('div','bf-pdi');r.append(btn(`${String(n+1).padStart(2,'0')} ${x.fullLabel}`,()=>{const y=val(x.yesField)===1?0:1;set(x.yesField,y);Object.values(x.dimensions).forEach(d=>set(d.name,y?null:0));backfill()},'toggle'+(val(x.yesField)===1?' selected':'')));['distress','preoccupation','conviction'].forEach((k,j)=>{const i=matrixInput105(x.dimensions[k].name,j===0?'困擾1–5':j===1?'反覆1–5':'確信1–5',val(x.yesField)!==1,list);list.push(i);r.append(i)});s.append(r)});calculateAllDerived();s.append(resultBox('PDI即時計算',[`完成：${val('pdi_complete')?'21／21':'未完整'}`,`Yes數：${val('pdi_yes_count')??'—'}`,`PDI Total：${val('pdi_total')??'—'}`]))}
@@ -544,7 +576,7 @@ function addBFNumber106(parent,label,key,min,max,unit,onChange){const r=el('div'
 function addBFScale(parent,items,min,max){parent.append(el('p','hint',`直接輸入正式Raw分數${min}–${max}；0是有效答案，只有空白才是缺失。`));const keys=items.map(x=>x.name||x.responseName),host=el('div','bf-live-summary');const refresh=()=>{calculateAllDerived();host.innerHTML='';host.append(resultBox('即時完整性',[`完成：${keys.filter(present).length}／${keys.length}`,`缺失：${keys.filter(k=>!present(k)).join('、')||'沒有'}`]));renderBackfillScaleResult(host,items)};items.forEach((x,index)=>{const type=bfScaleType(items),hint=bfHint(type,index),label=(x.backfillLabel||x.fullLabel)+(hint?'　【'+hint+'】':'');addBFNumber106(parent,label,x.name||x.responseName,min,max,'',refresh)});parent.append(host);refresh()}
 /* Backfill IDs: Enter navigation is explicit P_ID -> S_ID -> Name, including blank S_ID. */
 function wireBackfillIdentityEnter106(){const identity=q('#bf-identity');if(!identity)return;const all=qa('input',identity),pid=all.find(i=>i.closest('.field')?.textContent.includes('P_ID')),sid=all.find(i=>i.closest('.field')?.textContent.includes('S_ID')),name=all.find(i=>i.closest('.field')?.textContent.includes('姓名'));if(pid)pid.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();sid?.focus()}};if(sid)sid.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();name?.focus()}}}
-const backfillBefore106=backfill;
+const backfillBefore106=function(){try{calculateAllDerived();oldBackfill()}catch(e){console.error(e);const m=q('main.backfill')||appShell();const box=resultBox('補錄頁載入錯誤',[String(e.message||e),'其他Section不應因單一量表失敗而消失；請下載本地JSON。'],'bad');m.append(box)}};
 
 
 /* 10.0.6 canonical completion and navigation: no chained fallback. */
@@ -576,10 +608,12 @@ function renderQuipGroup(pg,a){
   a.append(el('p','hint','如上方有任何符合項目，請直接選取後按「下一組」；如全部沒有，必須選擇「以上項目全部沒有」才可翻頁。'));
 }
 
-const renderMRISafetyV3Base=renderMRISafety;
-function renderMRISafety(a){renderMRISafetyV3Base(a);const key='mri_safety_none_confirmed',keys=C.mriSafety.map(x=>x[0]);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))}
-const renderRBQ10V3Base=renderRBQ10;
-function renderRBQ10(a){renderRBQ10V3Base(a);const key='rbq10_none_confirmed',keys=B.rbdsq.diseaseItems.map(x=>x.name);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))}
+function renderMRISafety(a){
+  function renderMRISafetyV3Base(a){a.append(el('p','instruction','請選擇參加者存在的情況。未選項目代表「沒有／否」。'));const g=el('div','toggle-grid');C.mriSafety.forEach(x=>g.append(toggleButton(x[1],x[0],()=>player())));a.append(g);const selected=C.mriSafety.filter(x=>val(x[0])===1);if(selected.length){const r=el('div','result bad');r.append(el('strong','',`已選MRI安全／一般項目：${selected.map(x=>x[1]).join('、')}`));const t=el('textarea');t.placeholder='補充資料／待核實內容';t.value=val('mri_safety_detail')||'';t.oninput=()=>set('mri_safety_detail',t.value);r.append(t);a.append(r)}else a.append(el('div','result good','未申報MRI安全項目。'))}
+renderMRISafetyV3Base(a);const key='mri_safety_none_confirmed',keys=C.mriSafety.map(x=>x[0]);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))}
+function renderRBQ10(a){
+  function renderRBQ10V3Base(a){const g=el('div','toggle-grid');B.rbdsq.diseaseItems.forEach(i=>{const w=el('div');w.append(toggleButton(i.fullLabel,i.name,()=>player()));if(i.detailField&&val(i.name)===1){const t=el('textarea','conditional');t.placeholder='請說明其他神經系統疾病';t.value=val(i.detailField)||'';t.oninput=()=>set(i.detailField,t.value);w.append(t)}g.append(w)});a.append(g);const score=scoreRB();a.append(el('div','result',`RBDSQ總分：${score.total}/13　${score.note}`))}
+renderRBQ10V3Base(a);const key='rbq10_none_confirmed',keys=B.rbdsq.diseaseItems.map(x=>x.name);a.append(btn('以上項目全部沒有',()=>{setAllNoV3(keys);set(key,1);player()},'choice'+(val(key)===1?' selected':'')))}
 
 const pageCompleteV3Base=pageComplete;
 
@@ -686,7 +720,13 @@ function clinicalSyncUpdrsPhase3_(){
 const payloadPhase3Base_=payload;
 
 
-const renderClinicalPhase3Base_=renderClinical;
+const renderClinicalPhase3Base_=function(){const m=appShell();m.append(toolbar('PD臨床資料'),identityStrip());const s=el('section','summary');s.append(el('h2','section-title','PD臨床資料'));s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));addStaffNumber(s,'核實PD病程','pd_duration_verified_years','年');addStaffChoices(s,'UPDRS Part III資料路徑','updrs3_route',[['hospital_total_only','醫院只提供總分'],['hospital_items','醫院提供小分'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);
+ if(val('updrs3_route')==='hospital_total_only')addStaffNumber(s,'UPDRS Part III總分','updrs3_reported_total','/132');if(['hospital_items','research_assessed'].includes(val('updrs3_route'))){s.append(el('h3','','UPDRS Part III 33項'));renderUPDRSItems(s,val('updrs3_route')==='research_assessed')}
+ if(val('updrs3_route')==='research_assessed'){addStaffCheckbox(s,'正接受PD藥物治療','updrs3a_pd_treatment');if(val('updrs3a_pd_treatment')===1)addStaffChoices(s,'臨床狀態','updrs3b_clinical_state',[['ON','ON／來電'],['OFF','OFF／停電']]);addStaffCheckbox(s,'有服用Levodopa','updrs3c_levodopa');if(val('updrs3c_levodopa')===1)addStaffNumber(s,'距最後服用Levodopa','updrs3c1_last_levodopa_minutes','分鐘');addStaffCheckbox(s,'檢查期間出現異動症','updrs3_dyskinesia_present');if(val('updrs3_dyskinesia_present')===1)addStaffCheckbox(s,'異動症干擾動作功能檢查','updrs3_dyskinesia_interference')}
+ addStaffChoices(s,'UPDRS 1.5資料路徑','updrs15_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('updrs15_route'))){s.append(el('h3','','UPDRS 1.5 冷漠感'));renderAnchorChoices(s,'updrs_item_1_5',B.clinical.updrs15.text.options)}
+ addStaffChoices(s,'Hoehn & Yahr資料路徑','hy_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊評估'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('hy_route'))){s.append(el('h3','','Hoehn & Yahr'));renderAnchorChoices(s,'hy_stage',B.clinical.hy.text.options)}
+ s.append(el('h3','','Medication'),btn('＋新增藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',times:'',units:''});saveDraft();renderClinical()},'primary'));renderMedicationRows(s);renderLeddPanel(s);if(!ST.meds.length)s.append(el('div','result','尚未加入藥物；LEDD暫不可計算。'));
+ const total=updrsTotal();s.append(el('div','result',`UPDRS完成：${total.count}/33${total.count===33?'；總分：'+total.total:'/132'}`));const sb=el('div','submitbar');sb.append(btn('正式提交Clinical資料',()=>validateClinical(s),'primary'));s.append(sb);m.append(s)};
 
 
 
@@ -727,7 +767,16 @@ function mriIdentityGatePhase2_(){
   s.append(btn('開始本次MRI記錄',open,'primary'));m.append(s)
 }
 
-const identityGatePhase2MRIBase_=identityGate;
+const identityGatePhase2MRIBase_=function(title){
+  const m=appShell();m.append(toolbar(title));const s=el('section','identity');
+  s.append(el('h2','',title),el('p','hint','只需輸入編號數字；系統會自動加入P／Y及S前綴。確認身份後才顯示後續資料。'));
+  const e=el('div','error');
+  const go=()=>{const digits=numericIdValue(val('p_id'));const id=canonicalParticipantId(digits);if(!/^[PY]\d{3,6}$/.test(id)){e.textContent='請輸入3至6位Participant編號，例如140。';return}set('p_id',id);const sd=numericIdValue(val('s_id'));if(sd)set('s_id',canonicalScanId(sd));if(ST.flow==='mri_visit')renderMRIVisit();else renderClinical()};
+  s.append(fieldIdDigits('P_ID','p_id',val('participant_series')==='Y'?'Y':'P','例：140'));
+  if(ST.flow==='mri_visit')s.append(fieldIdDigits('S_ID（可選）','s_id','S','例：082',go));
+  if(ST.flow==='clinical')s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));
+  s.append(e,btn('載入Participant',go,'primary'));m.append(s);setTimeout(()=>q('input',s)?.focus(),30)
+};
 
 
 function mocaCutoff(age,edu){if(!Number.isFinite(Number(age))||Number(age)<=0)return null;age=Number(age);edu=Number(edu);if(age<65)return 24;if(!Number.isFinite(edu))return null;if(age<=69)return edu<=3?17:edu<=6?19:edu<=9?21:edu<=12?22:25;if(age<=79)return edu<=3?15:edu<=6?18:edu<=9?20:22;return edu<=6?13:17}
@@ -770,7 +819,20 @@ function validateMRIVisit(s){
   setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
 }
 
-const payloadPhase2MRIBase_=payload;
+const payloadPhase2MRIBase_=function(form,event,status){
+  const out=payloadPhase3Base_(form,event,status);
+  if(event==='clinical_supplement'){
+    const phone=clinicalNormalizedPhonePhase3_();
+    out.participant_id=out.p_id||out.s_id||('TEMP-'+out.submission_id);
+    out.contact_phone_normalized=phone||null;
+    out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_known':'temporary_phone_pending';
+    out.data_source='staff_assisted_clinical';
+    const clean=Object.assign({},out);
+    delete clean.payload_json;
+    out.payload_json=JSON.stringify(clean);
+  }
+  return out;
+};
 
 
 
@@ -785,8 +847,9 @@ function setBackfillApplicabilityBatch1_(){
     ['med_on_off','last_pd_med_minutes','last_pd_med_time','mri_med_on_off','mri_last_pd_med_minutes'].forEach(k=>setDerived(k,null));
   }
 }
-const backfillIdentityApplicabilityBase_=backfill;
 function backfill(){
+  function backfillIdentityApplicabilityBase_(){backfillBefore106();wireBackfillIdentityEnter106()}
+
   setBackfillApplicabilityBatch1_();
   backfillIdentityApplicabilityBase_();
   const id=String(val('pd_hc_status')||'').toUpperCase(),clinical=q('#bf-clinical'),meds=q('#bf-meds');
@@ -823,8 +886,9 @@ function clinicalIdentityGateBatch1_(){
   };
   s.append(btn('開始本次Clinical記錄',open,'primary'));m.append(s)
 }
-const identityGateBatch1Base_=identityGate;
 function identityGate(title){
+  function identityGateBatch1Base_(title){if(ST.flow==='mri_visit')return mriIdentityGatePhase2_();return identityGatePhase2MRIBase_(title)}
+
   if(ST.flow==='mri_visit')return mriIdentityGatePhase2_();
   if(ST.flow==='clinical')return clinicalIdentityGateBatch1_();
   return identityGateBatch1Base_(title);
@@ -950,8 +1014,9 @@ function renderMRIVisitBatchC5_(){
 }
 renderMRIVisit=renderMRIVisitBatchC5_;
 
-const payloadMriHistoricalBatchBBase_=payload;
 function payload(form,event,status){
+  function payloadMriHistoricalBatchBBase_(form,event,status){const out=payloadPhase2MRIBase_(form,event,status);if(event==='mri_scan'||event==='first_school_assessment'){out.participant_id=out.p_id||out.s_id||null;out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_only_pending_pid':'unresolved';const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean)}return out}
+
   if(event==='mri_scan'||event==='first_school_assessment'){
     normalizeMriHistoricalFieldsBatchB_();
     if(present('moca_2_raw_total')&&!present('moca_2_assessment_date'))setDerived('moca_2_assessment_date',val('mri_date')||mriTodayPhase2_());
@@ -1024,8 +1089,21 @@ renderMedicationRows=renderMedicationRowsHV_;
 function renderLeddPanelHV_(s){const m=calculateManualLeddHV_();setDerived('medication_coefficient_version','hospital-v1.0');setDerived('ledd_system_levodopa',m.levodopa);setDerived('ledd_system_da',m.da);setDerived('ledd_system_other',m.other);setDerived('ledd_system_total',m.complete?m.total:null);setDerived('medication_manual_review_json',JSON.stringify(m));s.append(resultBox('系統計算LEDD',[`Levodopa：${m.levodopa} mg`,`DA：${m.da} mg`,`Other：${m.other} mg`,`Total：${m.total} mg`,m.pending?`仍有 ${m.pending} 款需要核驗；正式System Total保持不可用。`:'所有已加入藥物均已處理。'],m.complete?'good':'warn'));const h=el('div','plain-block');h.append(el('h3','','醫院提供結果（如有）'),el('p','hint','醫院沒有提供時可留空。系統計算不會覆蓋醫院值。'));addDirectLedd(h,'Levodopa LEDD','ledd_hospital_levodopa');addDirectLedd(h,'DA LEDD','ledd_hospital_da');addDirectLedd(h,'Other LEDD（如有）','ledd_hospital_other');addDirectLedd(h,'Total LEDD','ledd_hospital_total');s.append(h);const hosp={levodopa:medHVNum_(val('ledd_hospital_levodopa')),da:medHVNum_(val('ledd_hospital_da')),other:medHVNum_(val('ledd_hospital_other')),total:medHVNum_(val('ledd_hospital_total'))};const hasHosp=hosp.total!==null;const src=hasHosp?'hospital_supplied':m.complete?'system_calculated':'pending';setDerived('ledd_final_source',src);setDerived('ledd_final_levodopa',hasHosp?hosp.levodopa:m.complete?m.levodopa:null);setDerived('ledd_final_da',hasHosp?hosp.da:m.complete?m.da:null);setDerived('ledd_final_other',hasHosp?hosp.other:m.complete?m.other:null);setDerived('ledd_final_total',hasHosp?hosp.total:m.complete?m.total:null);setDerived('levodopa_ledd_mg',val('ledd_final_levodopa'));setDerived('da_ledd_mg',val('ledd_final_da'));setDerived('total_ledd_mg',val('ledd_final_total'));s.append(resultBox('提交前核驗',[`Final來源：${src}`,`Hospital：${hasHosp?hosp.total:'—'} mg`,`System：${m.complete?m.total:'—'} mg`,`Final：${val('ledd_final_total')??'—'} mg`],hasHosp||m.complete?'good':'warn'));}
 renderLeddPanel=renderLeddPanelHV_;
 function renderMedicationBF(s){s.append(btn('＋新增一款藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',units:'',times:'',matchedLevodopa:''});medHVSave_();backfill()},'primary'));renderMedicationRowsHV_(s);renderLeddPanelHV_(s)}
-const renderClinicalHVBase_=renderClinical;
-function renderClinical(){renderClinicalHVBase_()}
+function renderClinical(){
+  function renderClinicalHVBase_(){
+  renderClinicalPhase3Base_();
+  const section=q('section.summary');
+  if(!section)return;
+  const title=q('h2.section-title',section);
+  if(title){
+    const note=el('div','result good','Clinical支援部分保存：P_ID、S_ID或聯絡電話有其中一項即可提交。若只有電話，系統會以本次Submission建立臨時身份，等待日後由Admin配對；電話不會自動合併Participant。UPDRS、Medication及LEDD可分開完成，未完成LEDD不會寫成0。');
+    title.insertAdjacentElement('afterend',note);
+  }
+  qa('button',section).forEach(button=>{
+    if(button.textContent==='正式提交Clinical資料')button.textContent='保存Clinical資料（可部分完成）';
+  });
+}
+renderClinicalHVBase_()}
 
 
 

@@ -524,7 +524,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "item": 2,
         "name": "sas02_score",
         "responseName": "sas02_response",
-        "fullLabel": "有什麼會令您感興趣嗎？",
+        "fullLabel": "有事物會令您感興趣？",
         "backfillLabel": "02 會令我感興趣",
         "responseOptions": [
           {
@@ -1117,7 +1117,6 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "backfillLabel": "Q1 相關行為問題｜B",
         "defaultValueOnGroupCompletion": 0,
         "selectedValue": 1,
-        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情"
       },
       {
         "name": "quip_c1_yes",
@@ -1266,7 +1265,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_a5_yes",
         "stemIndex": 5,
         "domain": "A",
-        "fullStem": "您是否會設法讓自己能繼續賭博、B相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
+        "fullStem": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
         "fullDomainLabel": "賭博",
         "backfillLabel": "Q5 設法繼續｜A",
         "defaultValueOnGroupCompletion": 0,
@@ -1276,7 +1275,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_b5_yes",
         "stemIndex": 5,
         "domain": "B",
-        "fullStem": "您是否會設法讓自己能繼續賭博、B相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
+        "fullStem": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
         "fullDomainLabel": "【请在这里粘贴已批准的B类完整中文标题】",
         "backfillLabel": "Q5 設法繼續｜B",
         "defaultValueOnGroupCompletion": 0,
@@ -1287,7 +1286,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_c5_yes",
         "stemIndex": 5,
         "domain": "C",
-        "fullStem": "您是否會設法讓自己能繼續賭博、B相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
+        "fullStem": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
         "fullDomainLabel": "購物行為",
         "backfillLabel": "Q5 設法繼續｜C",
         "defaultValueOnGroupCompletion": 0,
@@ -1297,7 +1296,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_d5_yes",
         "stemIndex": 5,
         "domain": "D",
-        "fullStem": "您是否會設法讓自己能繼續賭博、B相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
+        "fullStem": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
         "fullDomainLabel": "進食行為",
         "backfillLabel": "Q5 設法繼續｜D",
         "defaultValueOnGroupCompletion": 0,
@@ -1809,8 +1808,8 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 2,
         "domain": "B",
         "fullStem": "您有多經常對以下行為出現過度的衝動或渴望，並認為這些衝動過度或造成困擾，例如不能參與時變得焦躁不安或容易激惹？",
-        "fullDomainLabel": "【请在这里粘贴已批准的B类完整中文标题】",
-        "domainDescription": "【请在这里粘贴已批准的B类中文说明】",
+        "fullDomainLabel": "性行为",
+        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情",
         "backfillLabel": "2 衝動／困擾｜B",
         "options": [
           {
@@ -2033,8 +2032,8 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 3,
         "domain": "B",
         "fullStem": "您有多經常難以控制以下行為，例如行為不斷增加，或難以減少或停止？",
-        "fullDomainLabel": "【请在这里粘贴已批准的B类完整中文标题】",
-        "domainDescription": "【请在这里粘贴已批准的B类中文说明】",
+        "fullDomainLabel": "性行为",
+        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情",
         "backfillLabel": "3 控制困難｜B",
         "options": [
           {
@@ -3011,7 +3010,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
       {
         "key": "pastimes",
         "title": "消閒娛樂／嗜好",
-        "examplePrompt": "請寫下至少兩項您喜歡的单人消閒娛樂或嗜好。 請分別填寫兩個例子（例如：读书、园艺、看剧。",
+        "examplePrompt": "請寫下至少兩項您喜歡的单人消閒娛樂或嗜好。 請分別填寫兩個例子（例如：读书、园艺、看剧）",
         "items": [
           [
             "enjoy",
@@ -3036,14 +3035,14 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         ],
         "minimumExamples": 2,
         "examplesMainlyNonSocial": true,
-        "exampleValidationMessage": "請再寫一項。這一題需要至少兩項主自己一个人进行的消閒娛樂或嗜好。",
+        "exampleValidationMessage": "請再寫一項。這一題需要至少兩項主自己一个人进行的消閒娛樂或嗜好）",
         "example1Field": "cdars_pastimes_example_1",
         "example2Field": "cdars_pastimes_example_2"
       },
       {
         "key": "food_drink",
         "title": "食物／飲品",
-        "examplePrompt": "請寫下一種或多種您喜歡的食物或飲品。 請分別填寫兩個例子（如咖啡、虾饺、云吞面）。",
+        "examplePrompt": "請寫下一種或多種您喜歡的食物或飲品。 請分別填寫兩個例子（如咖啡、虾饺、云吞面）",
         "items": [
           [
             "effort",
@@ -3073,7 +3072,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
       {
         "key": "social",
         "title": "社交活動",
-        "examplePrompt": "請寫下一項或多項您喜歡的社交活動。 請分別填寫兩個例子（如参加社区活动、聚餐、和亲友唱歌）。",
+        "examplePrompt": "請寫下一項或多項您喜歡的社交活動。 請分別填寫兩個例子（如参加社区活动、聚餐、和亲友唱歌）",
         "items": [
           [
             "happy",
@@ -3103,7 +3102,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
       {
         "key": "sensory",
         "title": "感官體驗",
-        "examplePrompt": "請寫下一項或多項您喜歡的感官體驗(望闻常听触）。請分別填寫兩個例子（例如：聽音樂、聞花香、品茶）。",
+        "examplePrompt": "請寫下一項或多項您喜歡的感官體驗(望闻常听触）。請分別填寫兩個例子（例如：聽音樂、聞花香、品茶）",
         "items": [
           [
             "seek",

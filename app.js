@@ -2,7 +2,7 @@
 'use strict';
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
-const FRONTEND_RELEASE='11.0.1-fe-clean-r3-repair';
+const FRONTEND_RELEASE='11.0.2-fe-clean-r3-display-transport-repair';
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 const ST={flow:'home',step:0,answers:{},error:'',submission:uuid(),sectionOpen:false,meds:[],submitting:false,staffUnlocked:false};
 const q=(s,p=document)=>p.querySelector(s), qa=(s,p=document)=>Array.from(p.querySelectorAll(s));
@@ -518,26 +518,38 @@ function renderIORScenario(pg,a){const n=String(pg.scenario).padStart(2,'0');a.a
 const pageCompleteBefore105=pageComplete;
 
 function player(){
-  function playerBefore105(){
-  calculateAllDerived();const pages=playerPages();if(ST.step>=pages.length)ST.step=pages.length-1;const pg=pages[ST.step],m=appShell();
+  calculateAllDerived();
+  const pages=playerPages();
+  if(!pages.length)return home();
+  if(ST.step<0)ST.step=0;
+  if(ST.step>=pages.length)ST.step=pages.length-1;
+  const pg=pages[ST.step],m=appShell();
   m.append(toolbar(ST.flow==='stage2'?'第二階段問卷':'首次篩查'));
   const h=el('div','flow-head');h.append(el('h2','',pg.section));
   const sectionPages=pages.filter(x=>x.section===pg.section),localIndex=sectionPages.indexOf(pg)+1;
-  const answerPages=pages.filter(x=>!['stage2Summary','scaleResult'].includes(x.kind));h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${answerPages.filter(pageComplete).length}／${answerPages.length}`));
-  const sm=el('div','section-menu');[...new Set(pages.map(x=>x.section))].forEach(s=>{
-    const first=pages.findIndex(x=>x.section===s),ps=pages.filter(x=>x.section===s),done=ps.every(pageComplete),partial=!done&&ps.some(pageComplete);
-    sm.append(btn(`${done?'✓ ':''}${s}`,()=>jumpSection(first,pages),(s===pg.section?'current ':'')+(done?'done':partial?'partial':'')))
-  });h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
+  const isAnswerPage=x=>!['stage2Summary','scaleResult'].includes(x.kind);
+  const answerPages=pages.filter(isAnswerPage);
+  h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${answerPages.filter(pageComplete).length}／${answerPages.length}`));
+  const sm=el('div','section-menu');
+  [...new Set(pages.map(x=>x.section))].forEach(section=>{
+    const first=pages.findIndex(x=>x.section===section);
+    const required=pages.filter(x=>x.section===section&&isAnswerPage(x));
+    const completed=required.filter(pageComplete).length;
+    const done=required.length>0&&completed===required.length;
+    const partial=completed>0&&!done;
+    sm.append(btn(`${done?'✓ ':''}${section}`,()=>jumpSection(first,pages),(section===pg.section?'current ':'')+(done?'done':partial?'partial':'')));
+  });
+  h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
   const qbox=el('section','question');if(pg.context)qbox.append(el('div','context',pg.context));qbox.append(el('h3','',pg.label));renderPage(pg,qbox);if(ST.error)qbox.append(el('div','error',ST.error));m.append(qbox);
   const nav=el('div','nav');nav.append(btn('返回上一個',()=>{if(ST.step>0){ST.step--;ST.error='';saveDraft();player()}},'secondary'));
-  const needsExplicit=['examples','positiveOne','moca','quipGroup','quipRsMatrix','pdiPage','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult'];
+  const needsExplicit=['examples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','cdarsExamples','iorScenario'];
   if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){
     const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';
     nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'));
   }
-  m.append(nav);setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30)
+  m.append(nav);
+  setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30);
 }
-playerBefore105();const pg=playerPages()[ST.step];if(pg&&pg.kind==='pdiPage'){const next=qa('.nav .next').pop();if(next)next.textContent=pg.page===1?'下一頁，我已經完成本頁題目':'完成PDI，我已經完成本頁題目'}}
 
 
 function fieldIdDigits(label,key,prefix,placeholder,onDone){
@@ -819,20 +831,7 @@ function validateMRIVisit(s){
   setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
 }
 
-const payloadPhase2MRIBase_=function(form,event,status){
-  const out=payloadPhase3Base_(form,event,status);
-  if(event==='clinical_supplement'){
-    const phone=clinicalNormalizedPhonePhase3_();
-    out.participant_id=out.p_id||out.s_id||('TEMP-'+out.submission_id);
-    out.contact_phone_normalized=phone||null;
-    out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_known':'temporary_phone_pending';
-    out.data_source='staff_assisted_clinical';
-    const clean=Object.assign({},out);
-    delete clean.payload_json;
-    out.payload_json=JSON.stringify(clean);
-  }
-  return out;
-};
+const payloadPhase2MRIBase_=payload;
 
 
 
@@ -1015,25 +1014,21 @@ function renderMRIVisitBatchC5_(){
 renderMRIVisit=renderMRIVisitBatchC5_;
 
 function payload(form,event,status){
-  function payloadMriHistoricalBatchBBase_(form,event,status){const out=payloadPhase2MRIBase_(form,event,status);if(event==='mri_scan'||event==='first_school_assessment'){out.participant_id=out.p_id||out.s_id||null;out.identity_resolution_status=out.p_id?'pid_known':out.s_id?'sid_only_pending_pid':'unresolved';const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean)}return out}
-
+  calculateAllDerived();
+  const receiverForm=RECEIVER_FORM_BY_EVENT[event]||((form==='mri')?'mri':'screening');
+  const clean={schema_version:'frontend-11.0.2',submission_id:ST.submission,form_type:receiverForm,event_type:event,workflow_stage:event==='stage_2_questionnaires'?'stage_2':'stage_1',workflow_part:ST.flow,record_status:status,p_id:val('p_id'),s_id:val('s_id'),visit_number:val('visit_number'),participant_id:val('p_id'),submitted_at:new Date().toISOString(),data_source:event==='historical_paper_reentry'?'historical_paper_reentry':event==='stage_2_questionnaires'?'participant_remote':event==='clinical_supplement'?'hospital_record':'staff_assisted'};
+  Object.keys(ST.answers).forEach(k=>{if(k!=='payload_json'&&k!=='hkid_prefix4')clean[k]=ST.answers[k]===undefined?null:ST.answers[k]});
+  if(clean.contact_phone!=null)clean.contact_phone_normalized=String(clean.contact_phone).replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
+  if(clean.age_years!==null&&clean.age_years!==undefined&&clean.age_years!=='')clean.age_source=clean.date_of_birth?'recorded_with_dob':'staff_recorded';
+  ST.meds.forEach((m,n)=>{const k=String(n+1).padStart(2,'0');clean[`medication_${k}_name`]=m.name||null;clean[`medication_${k}_strength`]=m.strength||null;clean[`medication_${k}_times_per_day`]=m.times===''||m.times==null?null:Number(m.times);clean[`medication_${k}_units_per_time`]=m.units===''||m.units==null?null:Number(m.units);clean[`medication_${k}_formulation`]=m.formulation||null;clean[`medication_${k}_matched_levodopa_ledd`]=m.matchedLevodopa===''||m.matchedLevodopa==null?null:Number(m.matchedLevodopa)});
   if(event==='mri_scan'||event==='first_school_assessment'){
-    normalizeMriHistoricalFieldsBatchB_();
-    if(present('moca_2_raw_total')&&!present('moca_2_assessment_date'))setDerived('moca_2_assessment_date',val('mri_date')||mriTodayPhase2_());
+    clean.participant_id=clean.p_id||clean.s_id||clean.contact_phone_normalized||null;
+    clean.identity_resolution_status=clean.p_id?'pid_known':clean.s_id?'sid_only_pending_pid':clean.contact_phone_normalized?'phone_only_recovery':'unresolved';
+    clean.mid_res_time_ms=present('mid_response_time_ms')?Number(val('mid_response_time_ms')):present('mid_res_time_ms')?Number(val('mid_res_time_ms')):null;
+    clean.mid_response_time_ms=clean.mid_res_time_ms;
+    clean.mri_remark=val('mri_remark')||val('mri_visit_remark')||null;clean.mri_visit_remark=clean.mri_remark;
   }
-  const out=payloadMriHistoricalBatchBBase_(form,event,status);
-  if(event==='mri_scan'||event==='first_school_assessment'){
-    out.mid_res_time_ms=present('mid_response_time_ms')?Number(val('mid_response_time_ms')):null;
-    out.mid_response_time_ms=out.mid_res_time_ms;
-    out.mri_remark=val('mri_remark')||null;
-    out.mri_visit_remark=out.mri_remark;
-    if(String(val('pd_hc_status')||'').toUpperCase()==='HC'){
-      out.med_on_off=null;out.last_pd_med_minutes=null;out.last_pd_med_time=null;
-      out.medication_applicability='not_applicable';out.on_off_status='not_applicable';out.ledd_status='not_applicable';
-    }
-    const clean=Object.assign({},out);delete clean.payload_json;out.payload_json=JSON.stringify(clean);
-  }
-  return out;
+  return Object.assign({},clean,{payload_json:JSON.stringify(clean)});
 }
 
 
@@ -1512,10 +1507,24 @@ function validateClinical(s){
   saveDraft();return submitPayload('clinical','clinical_supplement','submitted');
 }
 function handleGlobalKeydown(e){
-  if(e.altKey||e.ctrlKey||e.metaKey||e.isComposing)return;const active=document.activeElement;if(active&&(['INPUT','TEXTAREA','SELECT'].includes(active.tagName)||active.isContentEditable))return;if(ST.flow==='clinical'&&/^\d$/.test(e.key)&&Number(e.key)<=4){const route=val('updrs3_route');if(!['hospital_items','research_assessed'].includes(route))return;const items=B.clinical.updrs3.items||[],key=ST.updrsActiveKey||items.find(x=>!present(x.name))?.name;if(!key)return;e.preventDefault();set(key,Number(e.key));const ix=items.findIndex(x=>x.name===key);ST.updrsActiveKey=items[ix+1]?.name||key;return renderClinical()}if(ST.flow!=='stage2')return;const pg=playerPages()[ST.step];
-  if(e.key==='Enter'){e.preventDefault();return manualNext(pg,playerPages())}
-  if(!/^\d$/.test(e.key))return;const n=Number(e.key);if(pg.kind==='scale'||pg.kind==='cdarsScale'){const opts=pg.options||[];const hit=opts.find(o=>Number(o.value)===n);if(hit){e.preventDefault();set(pg.key,hit.value);if(pageComplete(pg))autoNext();else player()}}
-  if(pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);player()}}
+  if(e.altKey||e.ctrlKey||e.metaKey||e.isComposing)return;
+  const active=document.activeElement;if(active&&(['INPUT','TEXTAREA','SELECT'].includes(active.tagName)||active.isContentEditable))return;
+  if(ST.flow==='clinical'&&/^[0-4]$/.test(e.key)){
+    const route=val('updrs3_route');if(!['hospital_items','research_assessed'].includes(route))return;
+    const items=B.clinical.updrs3.items||[],key=ST.updrsActiveKey||items.find(x=>!present(x.name))?.name;if(!key)return;
+    e.preventDefault();set(key,Number(e.key));const ix=items.findIndex(x=>x.name===key);ST.updrsActiveKey=items[ix+1]?.name||key;return renderClinical();
+  }
+  if(!['stage2','screening'].includes(ST.flow))return;
+  const pg=playerPages()[ST.step];
+  if(ST.flow==='stage2'&&e.key==='Enter'){e.preventDefault();return manualNext(pg,playerPages())}
+  if(!/^\d$/.test(e.key))return;
+  const n=Number(e.key);
+  if(pg.kind==='scale'||pg.kind==='cdarsScale'){
+    const opts=pg.options||[];let hit=opts.find(o=>Number(o.value)===n);
+    if(!hit&&opts.length===4&&n>=1&&n<=4)hit=opts[n-1];
+    if(hit){e.preventDefault();set(pg.key,hit.value);if(ST.flow==='screening')return autoNext();if(pageComplete(pg))return autoNext();return player()}
+  }
+  if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);player()}}
 }
 document.addEventListener('keydown',handleGlobalKeydown);
 

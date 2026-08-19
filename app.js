@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R6';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.1';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -207,7 +207,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-19-R6';
+const APP_BUILD='FE-CLEAN-2026-08-19-R8.1';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -308,35 +308,26 @@ function renderQuipRsMatrix(a){
   const status=String(val('quiprs_section_confirmed')||'');
   a.append(el('p','instruction','請逐格填寫0至4，或明確選擇「以上情況全部沒有」。只有完成確認後，導航欄才會顯示完成。'));
   a.append(el('div','scale-legend','0＝從不　1＝極少　2＝有時　3＝經常　4＝非常頻繁'));
-  const actions=el('div','direct');
-  actions.append(
-    btn('尚未回答',()=>{B.quiprs.matrixCells.forEach(x=>set(x.name,null));set('quiprs_section_confirmed','unanswered');player()},'choice'+(status==='unanswered'?' selected':'')),
-    btn('以上情況全部沒有',()=>{B.quiprs.matrixCells.forEach(x=>set(x.name,0));set('quiprs_section_confirmed','none');player()},'choice'+(status==='none'?' selected':''))
-  );
-  a.append(actions);
-  const defs=el('div','quip-definitions');
-  B.quiprs.domains.forEach(d=>{const x=el('div','definition');x.append(el('strong','',d.fullLabel));if(d.description)x.append(document.createTextNode('：'+d.description));defs.append(x)});
-  a.append(defs);
-  const grid=el('div','quiprs-grid');grid.append(el('div','head','完整共享題幹'));
-  B.quiprs.domains.forEach(d=>grid.append(el('div','head',d.fullLabel)));
-  B.quiprs.sharedStems.forEach(st=>{
-    grid.append(el('div','q',`${st.index}. ${st.fullText}`));
-    B.quiprs.domains.forEach(d=>{
-      const cell=B.quiprs.matrixCells.find(x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase());
-      const i=el('input','quiprs-input');i.inputMode='numeric';i.maxLength=1;i.pattern='[0-4]';i.dataset.key=cell.name;i.value=val(cell.name)??'';
-      const commit=v=>{set(cell.name,v);set('quiprs_section_confirmed','grid_pending');i.value=String(v)};
-      i.onkeydown=e=>{if(/^[0-4]$/.test(e.key)){e.preventDefault();commit(Number(e.key));requestAnimationFrame(()=>{const all=qa('.quiprs-input');all[all.indexOf(i)+1]?.focus()})}else if(!['Tab','Shift','Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))e.preventDefault()};
-      i.onpaste=e=>{e.preventDefault();const x=(e.clipboardData||window.clipboardData).getData('text').trim();if(/^[0-4]$/.test(x))commit(Number(x))};
-      i.oninput=()=>{if(!/^[0-4]$/.test(i.value)){i.value='';set(cell.name,null);set('quiprs_section_confirmed','grid_pending')}};
-      grid.append(i);
-    });
-  });
-  a.append(grid);
-  const count=B.quiprs.matrixCells.filter(x=>present(x.name)).length;
-  a.append(el('div','result',`已明確填寫：${count}／28`));
+  const writeAllNone=()=>{const next=Object.assign({},ST.answers);B.quiprs.matrixCells.forEach(x=>next[x.name]=0);next.quiprs_section_confirmed='none';ST.answers=next;ST.error='';saveDraft();player()};
+  const actions=el('div','direct');actions.append(
+    btn('尚未回答',()=>{const next=Object.assign({},ST.answers);B.quiprs.matrixCells.forEach(x=>next[x.name]=null);next.quiprs_section_confirmed='unanswered';ST.answers=next;ST.error='';saveDraft();player()},'choice'+(status==='unanswered'?' selected':'')),
+    btn('以上情況全部沒有',writeAllNone,'choice'+(status==='none'?' selected':''))
+  );a.append(actions);
+  const defs=el('div','quip-definitions');B.quiprs.domains.forEach(d=>{const x=el('div','definition');x.append(el('strong','',d.fullLabel));if(d.description)x.append(document.createTextNode('：'+d.description));defs.append(x)});a.append(defs);
+  const grid=el('div','quiprs-grid');grid.append(el('div','head','完整共享題幹'));B.quiprs.domains.forEach(d=>grid.append(el('div','head',d.fullLabel)));
+  const paint=i=>{const answered=i.value!=='';i.classList.toggle('selected',answered);i.style.backgroundColor=answered?'#d9ebfb':'';i.style.borderColor=answered?'#145a96':'';i.style.color=answered?'#0b2740':'';i.style.boxShadow=answered?'inset 0 0 0 2px #145a96':''};
+  B.quiprs.sharedStems.forEach(st=>{grid.append(el('div','q',`${st.index}. ${st.fullText}`));B.quiprs.domains.forEach(d=>{const cell=B.quiprs.matrixCells.find(x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase()),i=el('input','quiprs-input');i.inputMode='numeric';i.maxLength=1;i.pattern='[0-4]';i.dataset.key=cell.name;i.value=val(cell.name)??'';paint(i);
+    const commit=v=>{ST.answers[cell.name]=v;ST.answers.quiprs_section_confirmed='grid_pending';saveDraft();i.value=String(v);paint(i)};
+    i.onkeydown=e=>{if(/^[0-4]$/.test(e.key)){e.preventDefault();commit(Number(e.key));requestAnimationFrame(()=>{const all=qa('.quiprs-input');all[all.indexOf(i)+1]?.focus()})}else if(!['Tab','Shift','Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))e.preventDefault()};
+    i.onpaste=e=>{e.preventDefault();const x=(e.clipboardData||window.clipboardData).getData('text').trim();if(/^[0-4]$/.test(x))commit(Number(x))};
+    i.oninput=()=>{if(/^[0-4]$/.test(i.value))commit(Number(i.value));else{ST.answers[cell.name]=null;ST.answers.quiprs_section_confirmed='grid_pending';saveDraft();i.value='';paint(i)}};grid.append(i)
+  })});a.append(grid);
+  const currentCount=()=>B.quiprs.matrixCells.filter(x=>present(x.name)).length;
+  a.append(el('div','result',`已明確填寫：${currentCount()}／28`));
   a.append(btn('確認28格已逐格完成',()=>{
-    if(count!==28){ST.error=`尚有${28-count}格未完成。`;return player()}
-    set('quiprs_section_confirmed','answered');ST.error='';player();
+    const inputs=qa('.quiprs-input',grid);inputs.forEach(i=>{const key=i.dataset.key,v=String(i.value||'').trim();ST.answers[key]=/^[0-4]$/.test(v)?Number(v):null});
+    const count=currentCount();if(count!==28){ST.error=`尚有${28-count}格未完成。`;saveDraft();return player()}
+    ST.answers.quiprs_section_confirmed='answered';ST.error='';saveDraft();player();
   },'choice'+(status==='answered'?' selected':'')));
 }
 
@@ -360,19 +351,14 @@ function renderScale(pg,a){
   opts.forEach((o,n)=>{
     const keyText=opts.length===5?String(o.value):String(n+1);
     const b=btn('',()=>{
-      set(pg.key,o.value);
-      ST.error='';
-      if(ST.flow==='screening'){
-        b.classList.add('selected');
-        setTimeout(autoNext,120);
-      }else{
-        player();
-      }
+      set(pg.key,o.value);ST.error='';
+      b.classList.add('selected');
+      b.style.backgroundColor='#145a96';b.style.borderColor='#145a96';b.style.color='#ffffff';
+      if(ST.flow==='screening')setTimeout(autoNext,220);else player();
     },(opts.length===5?'':'choice')+(sameValue(val(pg.key),o.value)?' selected':''));
-    b.append(el('strong','',keyText),document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,'')));
-    g.append(b);
-  });
-  a.append(g);
+    b.dataset.answerKey=pg.key;b.dataset.answerValue=String(o.value);b.dataset.answerPosition=String(n+1);
+    b.append(el('strong','',keyText),document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,'')));g.append(b);
+  });a.append(g);
 }
 
 function renderQuipRsBF(s){
@@ -448,7 +434,16 @@ function renderSecondMocaResult(s){
   s.append(resultBox('第二次MoCA結果',[`Raw：${raw}／30`,`教育年數：${edu}年｜教育調整：+${adj}`,`Adjusted：${adjusted}／30`,`第16百分位Cutoff：${cut??'無法判定'}`,`與Cutoff差異：${cut===null?'—':(raw-cut>=0?'+':'')+(raw-cut)}`,val('moca_change_remark')],cut!==null&&raw<=cut?'bad':'good'))
 }
 
-function renderUPDRSItems(s,withCue){const items=B.clinical.updrs3.items||[],firstIncomplete=items.find(x=>!present(x.name));if(!ST.updrsActiveKey)ST.updrsActiveKey=firstIncomplete?.name||items[0]?.name;items.forEach(x=>{const w=el('div','clinical-anchor');w.dataset.updrsKey=x.name;if(ST.updrsActiveKey===x.name)w.classList.add('active');w.append(el('strong','',x.fullLabel||x.name));if(withCue&&x.instruction)w.append(el('p','hint',x.instruction));const g=el('div',withCue?'options':'direct');(x.options||[0,1,2,3,4].map(v=>({value:v,label:String(v)}))).forEach(o=>{const b=btn(`${o.value}　${o.label}`,()=>{ST.updrsActiveKey=x.name;set(x.name,o.value);const ix=items.findIndex(y=>y.name===x.name);ST.updrsActiveKey=items[ix+1]?.name||x.name;renderClinical();setTimeout(()=>{const next=q(`[data-updrs-key="${ST.updrsActiveKey}"]`);next?.scrollIntoView({behavior:'smooth',block:'center'})},40)},'choice'+(sameValue(val(x.name),o.value)?' selected':''));g.append(b)});w.append(g);s.append(w)})}
+function scrollClinicalToActive(){
+  const move=()=>{const target=q(`[data-updrs-key="${ST.updrsActiveKey}"]`);if(target){target.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>window.scrollBy({top:-12,behavior:'smooth'}),40)}else window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})};
+  requestAnimationFrame(()=>requestAnimationFrame(move));setTimeout(move,120);setTimeout(move,320);
+}
+function renderUPDRSItems(s,withCue){
+  const items=B.clinical.updrs3.items||[],firstIncomplete=items.find(x=>!present(x.name));if(!ST.updrsActiveKey)ST.updrsActiveKey=firstIncomplete?.name||items[0]?.name;
+  items.forEach(x=>{const w=el('div','clinical-anchor');w.dataset.updrsKey=x.name;if(ST.updrsActiveKey===x.name)w.classList.add('active');w.append(el('strong','',x.fullLabel||x.name));if(withCue&&x.instruction)w.append(el('p','hint',x.instruction));const g=el('div',withCue?'options':'direct');
+    (x.options||[0,1,2,3,4].map(v=>({value:v,label:String(v)}))).forEach(o=>{const b=btn(`${o.value}　${o.label}`,()=>{ST.updrsActiveKey=x.name;set(x.name,o.value);const ix=items.findIndex(y=>y.name===x.name);ST.updrsActiveKey=items[ix+1]?.name||x.name;renderClinical();scrollClinicalToActive()},'choice'+(sameValue(val(x.name),o.value)?' selected':''));g.append(b)});w.append(g);s.append(w)
+  });
+}
 
 const MED_CATALOG_V11=Object.freeze([
   {id:'levodopa_ir',label:'Levodopa IR',aliases:['levodopa','l-dopa'],factor:1,cat:'levodopa',component:'single',source:'LEDD v11 supplied calculator'},
@@ -789,7 +784,7 @@ function renderMRIVisit(){
   const sg=el('div','chips');
   B.sequences.items.forEach(x=>{
     const incomplete=val(x.field)===0;
-    sg.append(btn((incomplete?'× ':'')+x.label,()=>{set(x.field,incomplete?1:0);renderMRIVisit()},incomplete?'toggle danger selected':'toggle'));
+    const b=btn((incomplete?'× ':'')+x.label,()=>{set(x.field,incomplete?1:0);renderMRIVisit()},incomplete?'toggle danger':'toggle');if(incomplete){b.style.backgroundColor='#b42318';b.style.borderColor='#b42318';b.style.color='#ffffff';b.style.fontWeight='700'}sg.append(b);
   });
   s.append(sg);
   const incomplete=B.sequences.items.filter(x=>val(x.field)===0),rf=el('div','field'),rt=el('textarea');
@@ -1339,19 +1334,17 @@ async function submitPayload(form,event,status){
 function stage2Pages(){
   const p=[];
   p.push(inputPage('身份確認','姓名','participant_name','請輸入姓名'));
-  p.push({section:'身份確認',kind:'dob',label:'出生日期'});
-  p.push(choicePage('身份確認','性別','gender',[['M','M'],['F','F']]));
-  p.push({section:'身份確認',kind:'stage2Pd',label:'您是否有柏金遜症（PD）？'});
   p.push(inputPage('身份確認','聯絡電話','contact_phone','例：9123 4567'));
   addScalePages(p,'GAS',B.gas.items);addScalePages(p,'AMI-18',B.ami18.items);
   B.cdars.domains.forEach(d=>{
     const e1=d.example1Field||`cdars_${d.key}_example_1`,e2=d.example2Field||`cdars_${d.key}_example_2`;
     p.push({section:'C-DARS',kind:'cdarsExamples',label:d.examplePrompt||`請填寫兩項${d.title||d.key}例子`,domain:d,example1Key:e1,example2Key:e2});
-    B.cdars.items.filter(x=>x.domain===d.key).forEach((x,n)=>p.push({section:'C-DARS',kind:'cdarsScale',label:x.fullLabel||x.combinedFormalLabel,key:x.name,options:x.options||x.responseOptions,item:n+1,total:B.cdars.items.filter(y=>y.domain===d.key).length,domain:d,example1Key:e1,example2Key:e2,instruction:x.instructions||''}));
+    const items=B.cdars.items.filter(x=>x.domain===d.key);
+    items.forEach((x,n)=>p.push({section:'C-DARS',kind:'cdarsScale',label:x.fullLabel||x.combinedFormalLabel,key:x.name,options:x.options||x.responseOptions,item:n+1,total:items.length,domain:d,example1Key:e1,example2Key:e2,instruction:x.instructions||''}));
   });
   addScalePages(p,'R-GPTS',B.rgpts.items);
   B.pdi21.items.forEach((item,index)=>p.push({section:'PDI-21',kind:'pdiItem',label:`PDI ${index+1}/21`,pdi:item,item:index+1,total:21}));
-  B.ior.scenarios.forEach((s,n)=>p.push({section:'IOR',kind:'iorScenario',label:`情境 ${n+1}：${s}`,scenario:n+1,scenarioText:s}));
+  B.ior.scenarios.forEach((x,n)=>p.push({section:'IOR',kind:'iorScenario',label:`情境 ${n+1}：${x}`,scenario:n+1,scenarioText:x}));
   p.push({section:'完成',kind:'stage2Summary',label:'第二階段問卷完成檢查'});return p;
 }
 
@@ -1429,17 +1422,18 @@ function handleGlobalKeydown(e){
   if(ST.flow==='clinical'&&/^[0-4]$/.test(e.key)){
     const route=val('updrs3_route');if(!['hospital_items','research_assessed'].includes(route))return;
     const items=B.clinical.updrs3.items||[],key=ST.updrsActiveKey||items.find(x=>!present(x.name))?.name;if(!key)return;
-    e.preventDefault();set(key,Number(e.key));const ix=items.findIndex(x=>x.name===key);ST.updrsActiveKey=items[ix+1]?.name||key;return renderClinical();
+    e.preventDefault();set(key,Number(e.key));const ix=items.findIndex(x=>x.name===key);ST.updrsActiveKey=items[ix+1]?.name||key;renderClinical();return scrollClinicalToActive();
   }
   if(!['stage2','screening'].includes(ST.flow))return;
   const pg=playerPages()[ST.step];
   if(ST.flow==='stage2'&&e.key==='Enter'){e.preventDefault();return manualNext(pg,playerPages())}
-  if(!/^\d$/.test(e.key))return;
-  const n=Number(e.key);
+  if(!/^\d$/.test(e.key))return;const n=Number(e.key);
   if(pg.kind==='scale'||pg.kind==='cdarsScale'){
-    const opts=pg.options||[];let hit=opts.find(o=>Number(o.value)===n);if(!hit&&opts.length===4&&n>=1&&n<=4)hit=opts[n-1];
-    if(hit){e.preventDefault();set(pg.key,hit.value);ST.error='';return ST.flow==='screening'?autoNext():player()}
+    const opts=pg.options||[];let hit=null,position=null;
+    if(ST.flow==='stage2'&&opts.length===4&&n>=1&&n<=4){hit=opts[n-1];position=n}else{hit=opts.find(o=>Number(o.value)===n)||((opts.length===4&&n>=1&&n<=4)?opts[n-1]:null);position=hit?opts.indexOf(hit)+1:null}
+    if(hit){e.preventDefault();set(pg.key,hit.value);ST.error='';const selector=`[data-answer-key="${pg.key}"][data-answer-position="${position}"]`,button=q(selector);if(button){button.classList.add('selected');button.style.backgroundColor='#145a96';button.style.borderColor='#145a96';button.style.color='#ffffff'}return ST.flow==='screening'?setTimeout(autoNext,220):player()}
   }
+  if(ST.flow==='stage2'&&pg.kind==='iorScenario'&&n>=1&&n<=5){const id=String(pg.scenario).padStart(2,'0'),missing=['frequency','conviction','distress'].find(k=>!present(`ior${id}_${k}`))||'distress';e.preventDefault();set(`ior${id}_${missing}`,n);ST.error='';return player()}
   if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);ST.error='';player()}}
 }
 

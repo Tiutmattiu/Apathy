@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.1';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.2-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -207,7 +207,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-19-R8.1';
+const APP_BUILD='FE-CLEAN-2026-08-19-R8.2-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -930,7 +930,7 @@ async function loadLatestMocaPhase2_(status){
 function payload(form,event,status){
  calculateAllDerived();normalizeMriHistoricalFieldsBatchB_();clinicalPersistMedicationRowsPhase3_();
  const route={screening_core:'screening',stage_2_questionnaires:'stage2',first_school_assessment:'mri',mri_scan:'mri',clinical_supplement:'clinical',historical_paper_reentry:'backfill',field_correction:'screening'}[event]||form||'screening';
- const clean={schema_version:'apathy-event-payload-v1',frontend_release:'FE-CLEAN-2026-08-19-R5',receiver_contract_expected:'APATHY-RECEIVER-C2-2026-08-19',submission_id:ST.submission,form_type:route,event_type:event,workflow_stage:event==='stage_2_questionnaires'?'stage_2':'stage_1',workflow_part:ST.flow,record_status:status,p_id:val('p_id'),s_id:val('s_id'),visit_number:val('visit_number'),participant_id:val('p_id')||val('s_id')||(String(val('contact_phone')||'').replace(/\D/g,'')?'PHONE-'+String(val('contact_phone')||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,''):'TEMP-'+ST.submission),submitted_at:new Date().toISOString(),data_source:event==='historical_paper_reentry'?'historical_paper_reentry':event==='stage_2_questionnaires'?'participant_remote':event==='clinical_supplement'?'staff_assisted_clinical':'staff_assisted'};
+ const clean={schema_version:'apathy-event-payload-v1',frontend_release:FRONTEND_RELEASE,receiver_contract_expected:'APATHY-RECEIVER-C2-2026-08-19',submission_id:ST.submission,form_type:route,event_type:event,workflow_stage:event==='stage_2_questionnaires'?'stage_2':'stage_1',workflow_part:ST.flow,record_status:status,p_id:val('p_id'),s_id:val('s_id'),visit_number:val('visit_number'),participant_id:val('p_id')||val('s_id')||(String(val('contact_phone')||'').replace(/\D/g,'')?'PHONE-'+String(val('contact_phone')||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,''):'TEMP-'+ST.submission),submitted_at:new Date().toISOString(),data_source:event==='historical_paper_reentry'?'historical_paper_reentry':event==='stage_2_questionnaires'?'participant_remote':event==='clinical_supplement'?'staff_assisted_clinical':'staff_assisted'};
  Object.keys(ST.answers).forEach(k=>{if(k!=='payload_json'&&k!=='hkid_prefix4')clean[k]=ST.answers[k]===undefined?null:ST.answers[k]});
  clean.contact_phone_normalized=String(clean.contact_phone||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'')||null;
  if(event==='mri_scan'||event==='first_school_assessment'){
@@ -1010,157 +1010,6 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-function receiverJsonpFinal_(params, timeoutMs) {
-  return new Promise(function(resolve, reject) {
-    const callbackName =
-      '__apathy_receiver_' +
-      Date.now() + '_' +
-      Math.random().toString(36).slice(2);
-
-    const script = document.createElement('script');
-    const url = new URL(C.receiverUrl);
-
-    Object.keys(params || {}).forEach(function(key) {
-      const value = params[key];
-
-      if (
-        value !== undefined &&
-        value !== null &&
-        String(value) !== ''
-      ) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-
-    url.searchParams.set('callback', callbackName);
-
-    let settled = false;
-
-    function cleanup() {
-      delete window[callbackName];
-
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    }
-
-    const timer = window.setTimeout(function() {
-      if (settled) return;
-
-      settled = true;
-      cleanup();
-
-      reject(new Error('Receiver確認逾時'));
-    }, timeoutMs || 12000);
-
-    window[callbackName] = function(result) {
-      if (settled) return;
-
-      settled = true;
-      window.clearTimeout(timer);
-      cleanup();
-      resolve(result);
-    };
-
-    script.onerror = function() {
-      if (settled) return;
-
-      settled = true;
-      window.clearTimeout(timer);
-      cleanup();
-
-      reject(new Error('未能連接Receiver確認服務'));
-    };
-
-    script.src = url.toString();
-    document.head.appendChild(script);
-  });
-}
-
-function receiverStatusFinal_(submissionId) {
-  return receiverJsonpFinal_({
-    action: 'status',
-    submission_id: submissionId
-  }, 12000);
-}
-
-function receiverIframePostFinal_(submissionPayload) {
-  return new Promise(function(resolve) {
-    const transportId =
-      'apathy_receiver_transport_' +
-      Date.now() + '_' +
-      Math.random().toString(36).slice(2);
-
-    const iframe = document.createElement('iframe');
-    iframe.name = transportId;
-    iframe.id = transportId;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.display = 'none';
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = C.receiverUrl;
-    form.target = transportId;
-    form.enctype = 'application/x-www-form-urlencoded';
-    form.acceptCharset = 'UTF-8';
-    form.style.display = 'none';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'data';
-    input.value = JSON.stringify(submissionPayload);
-
-    form.appendChild(input);
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
-
-    let finished = false;
-    let posted = false;
-
-    function cleanup() {
-      window.setTimeout(function() {
-        if (form.parentNode) {
-          form.parentNode.removeChild(form);
-        }
-
-        if (iframe.parentNode) {
-          iframe.parentNode.removeChild(iframe);
-        }
-      }, 1000);
-    }
-
-    function finish() {
-      if (finished) return;
-
-      finished = true;
-      cleanup();
-
-      resolve({
-        transport_ok: true,
-        submission_id: submissionPayload.submission_id
-      });
-    }
-
-    iframe.addEventListener('load', function() {
-      if (!posted) return;
-      finish();
-    });
-
-    posted = true;
-    form.submit();
-
-    // 跨域iframe不读取回应内容。
-    // 是否真正写入由公开status JSONP确认。
-    window.setTimeout(finish, 4000);
-  });
-}
-
-function receiverSleepFinal_(milliseconds) {
-  return new Promise(function(resolve) {
-    window.setTimeout(resolve, milliseconds);
-  });
-}
-
 const SUBMISSION_TRANSPORT_BUILD='2026-08-17-no-cors-status-v1';
 
 function receiverStatusJsonpFinal_(submissionId,timeoutMs){
@@ -1169,35 +1018,39 @@ function receiverStatusJsonpFinal_(submissionId,timeoutMs){
     const script=document.createElement('script');
     const url=new URL(C.receiverUrl);
     let settled=false;
-
-    function cleanup(){
-      try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}
-      if(script.parentNode)script.parentNode.removeChild(script);
+    let retired=false;
+    function removeScript(){if(script.parentNode)script.parentNode.removeChild(script)}
+    function retireCallback(){
+      if(retired)return;
+      retired=true;
+      window[callbackName]=function(){};
+      window.setTimeout(function(){
+        try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}
+      },120000);
     }
-
     const timer=window.setTimeout(function(){
       if(settled)return;
       settled=true;
-      cleanup();
+      removeScript();
+      retireCallback();
       reject(new Error('Receiver status verification timed out'));
-    },timeoutMs||12000);
-
+    },timeoutMs||45000);
     window[callbackName]=function(result){
       if(settled)return;
       settled=true;
       window.clearTimeout(timer);
-      cleanup();
+      removeScript();
+      retireCallback();
       resolve(result);
     };
-
     script.onerror=function(){
       if(settled)return;
       settled=true;
       window.clearTimeout(timer);
-      cleanup();
+      removeScript();
+      retireCallback();
       reject(new Error('Receiver status endpoint could not be loaded'));
     };
-
     url.searchParams.set('action','status');
     url.searchParams.set('submission_id',String(submissionId||''));
     url.searchParams.set('callback',callbackName);
@@ -1227,12 +1080,11 @@ function receiverWaitFinal_(milliseconds){
 async function confirmSubmissionFinal_(submissionId){
   let lastStatus=null;
   let lastError=null;
-  const waits=[900,1200,1600,2200,3000,4000,5000];
-
+  const waits=[800,1600,3000,5000];
   for(let attempt=0;attempt<waits.length;attempt++){
     await receiverWaitFinal_(waits[attempt]);
     try{
-      lastStatus=await receiverStatusJsonpFinal_(submissionId,12000);
+      lastStatus=await receiverStatusJsonpFinal_(submissionId,45000);
       if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true){
         return{confirmed:true,status:lastStatus,attempt:attempt+1};
       }
@@ -1241,8 +1093,7 @@ async function confirmSubmissionFinal_(submissionId){
       console.warn('Receiver status verification failed',attempt+1,error);
     }
   }
-
-  return{confirmed:false,status:lastStatus,error:lastError};
+  return{confirmed:false,status:lastStatus,error:lastError,confirmation_timed_out:Boolean(lastError)};
 }
 
 async function submitPayload(form,event,status){
@@ -1307,10 +1158,10 @@ async function submitPayload(form,event,status){
 
     if(error&&error.code==='SUBMISSION_UNCONFIRMED'){
       box.append(
-        el('h2','','资料尚未确认写入'),
-        el('p','','Receiver目前没有确认这笔资料。请保留原Submission ID；修复连接后可用同一ID重试。'),
+        el('h2','','资料写入状态尚未确认'),
+        el('p','','资料已经发送，但浏览器的Receiver状态确认逾时。资料可能已经写入，请保留原Submission ID；确认Raw后如需重试，必须使用同一ID。'),
         el('p','',`Submission ID：${submissionId}`),
-        el('p','hint','本机草稿及原Submission ID均已保留。此提示不算提交成功。')
+        el('p','hint','本机草稿及原Submission ID均已保留。此提示不代表写入失败，也不算浏览器已确认提交成功。')
       );
     }else{
       box.append(

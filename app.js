@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.2-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.3-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -207,7 +207,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-19-R8.2-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-19-R8.3-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -435,8 +435,23 @@ function renderSecondMocaResult(s){
 }
 
 function scrollClinicalToActive(){
-  const move=()=>{const target=q(`[data-updrs-key="${ST.updrsActiveKey}"]`);if(target){target.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>window.scrollBy({top:-12,behavior:'smooth'}),40)}else window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})};
-  requestAnimationFrame(()=>requestAnimationFrame(move));setTimeout(move,120);setTimeout(move,320);
+  const requestedKey=ST.updrsActiveKey;
+  if(!requestedKey)return;
+  const requestId=(ST.clinicalScrollRequest||0)+1;
+  ST.clinicalScrollRequest=requestId;
+  window.setTimeout(function(){
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        if(ST.flow!=='clinical'||ST.clinicalScrollRequest!==requestId)return;
+        const target=qa('[data-updrs-key]').find(function(node){return node.dataset.updrsKey===requestedKey});
+        if(!target)return;
+        const toolbar=q('.toolbar');
+        const offset=(toolbar?toolbar.getBoundingClientRect().height:0)+16;
+        const top=Math.max(0,window.scrollY+target.getBoundingClientRect().top-offset);
+        window.scrollTo({top:top,behavior:'smooth'});
+      });
+    });
+  },60);
 }
 function renderUPDRSItems(s,withCue){
   const items=B.clinical.updrs3.items||[],firstIncomplete=items.find(x=>!present(x.name));if(!ST.updrsActiveKey)ST.updrsActiveKey=firstIncomplete?.name||items[0]?.name;

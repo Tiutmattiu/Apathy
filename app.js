@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R5';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R6';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -85,7 +85,25 @@ function renderQuipExtra(pg,a){const g=el('div','toggle-grid');pg.items.forEach(
 
 function toggleButton(label,key,rerender){return btn(label,()=>{set(key,val(key)===1?0:1);rerender&&rerender()},'toggle'+(val(key)===1?' selected':''))}
 
-function renderRBMain(a){const f=el('div','field');f.append(el('div','label','資料由誰提供？'));const src=el('div','direct');B.rbdsq.sourceOptions.forEach(o=>src.append(btn(o.label,()=>{set(B.rbdsq.sourceField,sameValue(val(B.rbdsq.sourceField),o.value)?null:o.value);player()},'choice'+(sameValue(val(B.rbdsq.sourceField),o.value)?' selected':''))));f.append(src);a.append(f);const g=el('div','toggle-grid');B.rbdsq.items.forEach(i=>g.append(toggleButton(i.fullLabel,i.name,()=>player())));a.append(g,el('p','hint','未選項目代表「否」。'))}
+function renderRBMain(a){
+  const f=el('div','field');f.append(el('div','label','資料由誰提供？'));
+  const source=el('div','direct');
+  B.rbdsq.sourceOptions.forEach(o=>source.append(btn(o.label,()=>{
+    set(B.rbdsq.sourceField,sameValue(val(B.rbdsq.sourceField),o.value)?null:o.value);
+    set('rbdsq_section_confirmed',0);player();
+  },'choice'+(sameValue(val(B.rbdsq.sourceField),o.value)?' selected':''))));
+  f.append(source);a.append(f);
+  const g=el('div','toggle-grid');
+  B.rbdsq.items.forEach(i=>g.append(btn(i.fullLabel,()=>{
+    set(i.name,val(i.name)===1?null:1);
+    set('rbdsq_section_confirmed',0);player();
+  },'toggle'+(val(i.name)===1?' selected':''))));
+  a.append(g,el('p','hint','選中的項目代表「是」。核對完成後，請按下方確認；未選項目才會正式記為「否」。'));
+  a.append(btn('本頁已核對，未選項目均為否',()=>{
+    B.rbdsq.items.forEach(i=>{if(!present(i.name))set(i.name,0)});
+    set('rbdsq_section_confirmed',1);player();
+  },'choice'+(val('rbdsq_section_confirmed')===1?' selected':'')));
+}
 
 function renderScreenResult(a){calculateAllDerived();const s=screenScores();a.append(resultBox('首次篩查臨時計分',[s.moca,`HADS：焦慮 ${s.hadsA}/21（Review >6），抑鬱 ${s.hadsD}/21（Review >9）`,`SAS：${s.sas}`,`QUIP-RS：${s.quiprs}`,`RBDSQ：${s.rb}`,`MRI安全：${s.mri}`,'以上為前端臨時預覽，正式結果以後端Result Core為準。'],s.blockers.length?'warn':'good'));a.append(resultBox('臨時分類提示',[`系統提示：${s.suggestion}`,...(s.reasons.length?s.reasons:['目前沒有額外提示。']),'此提示不等於正式Group或Decision。'],s.blockers.length?'warn':'good'));const g=el('div','direct');C.finalDecisions.forEach(x=>g.append(btn(x[1],()=>{set('final_screening_decision',x[0]);player()},'choice'+(sameValue(val('final_screening_decision'),x[0])?' selected':''))));a.append(el('h3','','工作人員最終決定'),g);renderMRIAdminFields(a);if(['OTHER_EXCLUDE','PENDING'].includes(val('final_screening_decision'))){const t=el('textarea');t.placeholder='請說明最終決定原因';t.value=val('final_screening_reason')||'';t.oninput=()=>set('final_screening_reason',t.value);a.append(t)}}
 
@@ -189,7 +207,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-19-R5';
+const APP_BUILD='FE-CLEAN-2026-08-19-R6';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -287,11 +305,39 @@ function completeQuipGroup(pg){
 }
 
 function renderQuipRsMatrix(a){
-  a.append(el('p','instruction','請在同一頁完成全部28格。每格只輸入一個0至4；輸入合法數字後會立即保存並自動移到下一格。'));
-  const legend=el('div','scale-legend','0＝從不　1＝極少　2＝有時　3＝經常　4＝非常頻繁');a.append(legend);
-  const defs=el('div','quip-definitions');B.quiprs.domains.forEach(d=>{const x=el('div','definition');x.append(el('strong','',d.fullLabel));if(d.description)x.append(document.createTextNode('：'+d.description));defs.append(x)});a.append(defs);
-  const grid=el('div','quiprs-grid');grid.append(el('div','head','完整共享題幹'));B.quiprs.domains.forEach(d=>grid.append(el('div','head',d.fullLabel)));
-  B.quiprs.sharedStems.forEach(st=>{grid.append(el('div','q',`${st.index}. ${st.fullText}`));B.quiprs.domains.forEach(d=>{const cell=B.quiprs.matrixCells.find(x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase()),i=el('input','quiprs-input');i.inputMode='numeric';i.maxLength=1;i.pattern='[0-4]';i.dataset.key=cell.name;i.value=val(cell.name)??'';i.onkeydown=e=>{if(/^[0-4]$/.test(e.key)){e.preventDefault();if(i.dataset.busy==='1')return;i.dataset.busy='1';set(cell.name,Number(e.key));i.value=e.key;requestAnimationFrame(()=>{i.dataset.busy='0';const all=qa('.quiprs-input');const next=all[all.indexOf(i)+1];if(next){next.value=val(next.dataset.key)??'';next.focus()}else i.blur()})}else if(!['Tab','Shift','Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault()};i.onpaste=e=>{e.preventDefault();const x=(e.clipboardData||window.clipboardData).getData('text').trim();if(/^[0-4]$/.test(x)){set(cell.name,Number(x));i.value=x;const all=qa('.quiprs-input');all[all.indexOf(i)+1]?.focus()}};i.oninput=()=>{if(!/^[0-4]$/.test(i.value)){i.value='';set(cell.name,null)}};grid.append(i)});});a.append(grid)
+  const status=String(val('quiprs_section_confirmed')||'');
+  a.append(el('p','instruction','請逐格填寫0至4，或明確選擇「以上情況全部沒有」。只有完成確認後，導航欄才會顯示完成。'));
+  a.append(el('div','scale-legend','0＝從不　1＝極少　2＝有時　3＝經常　4＝非常頻繁'));
+  const actions=el('div','direct');
+  actions.append(
+    btn('尚未回答',()=>{B.quiprs.matrixCells.forEach(x=>set(x.name,null));set('quiprs_section_confirmed','unanswered');player()},'choice'+(status==='unanswered'?' selected':'')),
+    btn('以上情況全部沒有',()=>{B.quiprs.matrixCells.forEach(x=>set(x.name,0));set('quiprs_section_confirmed','none');player()},'choice'+(status==='none'?' selected':''))
+  );
+  a.append(actions);
+  const defs=el('div','quip-definitions');
+  B.quiprs.domains.forEach(d=>{const x=el('div','definition');x.append(el('strong','',d.fullLabel));if(d.description)x.append(document.createTextNode('：'+d.description));defs.append(x)});
+  a.append(defs);
+  const grid=el('div','quiprs-grid');grid.append(el('div','head','完整共享題幹'));
+  B.quiprs.domains.forEach(d=>grid.append(el('div','head',d.fullLabel)));
+  B.quiprs.sharedStems.forEach(st=>{
+    grid.append(el('div','q',`${st.index}. ${st.fullText}`));
+    B.quiprs.domains.forEach(d=>{
+      const cell=B.quiprs.matrixCells.find(x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase());
+      const i=el('input','quiprs-input');i.inputMode='numeric';i.maxLength=1;i.pattern='[0-4]';i.dataset.key=cell.name;i.value=val(cell.name)??'';
+      const commit=v=>{set(cell.name,v);set('quiprs_section_confirmed','grid_pending');i.value=String(v)};
+      i.onkeydown=e=>{if(/^[0-4]$/.test(e.key)){e.preventDefault();commit(Number(e.key));requestAnimationFrame(()=>{const all=qa('.quiprs-input');all[all.indexOf(i)+1]?.focus()})}else if(!['Tab','Shift','Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))e.preventDefault()};
+      i.onpaste=e=>{e.preventDefault();const x=(e.clipboardData||window.clipboardData).getData('text').trim();if(/^[0-4]$/.test(x))commit(Number(x))};
+      i.oninput=()=>{if(!/^[0-4]$/.test(i.value)){i.value='';set(cell.name,null);set('quiprs_section_confirmed','grid_pending')}};
+      grid.append(i);
+    });
+  });
+  a.append(grid);
+  const count=B.quiprs.matrixCells.filter(x=>present(x.name)).length;
+  a.append(el('div','result',`已明確填寫：${count}／28`));
+  a.append(btn('確認28格已逐格完成',()=>{
+    if(count!==28){ST.error=`尚有${28-count}格未完成。`;return player()}
+    set('quiprs_section_confirmed','answered');ST.error='';player();
+  },'choice'+(status==='answered'?' selected':'')));
 }
 
 function renderScaleCompletion(pg,a){
@@ -309,7 +355,25 @@ function splitExamples(v){return String(v||'').split(/[，,、；;\n]+/).map(x=>
 
 function validExamples(v){return splitExamples(v).length>0}
 
-function renderScale(pg,a){const opts=pg.options||[],g=el('div',opts.length===5?'scale-buttons':'options');opts.forEach((o,n)=>{const keyText=opts.length===5?String(o.value):String(n+1),b=btn('',()=>{set(pg.key,o.value);b.classList.add('selected');setTimeout(autoNext,120)},(opts.length===5?'':'choice')+(sameValue(val(pg.key),o.value)?' selected':''));b.append(el('strong','',keyText),document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,'')));g.append(b)});a.append(g)}
+function renderScale(pg,a){
+  const opts=pg.options||[],g=el('div',opts.length===5?'scale-buttons':'options');
+  opts.forEach((o,n)=>{
+    const keyText=opts.length===5?String(o.value):String(n+1);
+    const b=btn('',()=>{
+      set(pg.key,o.value);
+      ST.error='';
+      if(ST.flow==='screening'){
+        b.classList.add('selected');
+        setTimeout(autoNext,120);
+      }else{
+        player();
+      }
+    },(opts.length===5?'':'choice')+(sameValue(val(pg.key),o.value)?' selected':''));
+    b.append(el('strong','',keyText),document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,'')));
+    g.append(b);
+  });
+  a.append(g);
+}
 
 function renderQuipRsBF(s){
   s.append(el('p','hint','0＝從不　1＝極少　2＝有時　3＝經常　4＝非常頻繁。輸入合法單個數字後立即保存並移到下一格。'));
@@ -317,7 +381,23 @@ function renderQuipRsBF(s){
   B.quiprs.sharedStems.forEach(st=>{grid.append(el('div','q',st.fullText));B.quiprs.domains.forEach(d=>{const cell=B.quiprs.matrixCells.find(x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase()),i=el('input','quiprs-input');i.inputMode='numeric';i.maxLength=1;i.value=val(cell.name)??'';i.onkeydown=e=>{if(/^[0-4]$/.test(e.key)){e.preventDefault();set(cell.name,Number(e.key));i.value=e.key;requestAnimationFrame(()=>qa('.backfill-quiprs .quiprs-input')[qa('.backfill-quiprs .quiprs-input').indexOf(i)+1]?.focus())}else if(!['Tab','Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault()};grid.append(i)})});s.append(grid);calculateAllDerived();const z=scoreQuipRS();s.append(resultBox('QUIP-RS即時計算',[`完成：${B.quiprs.matrixCells.filter(x=>present(x.name)).length}／28`,`A ${z.complete?z.tot.a:'—'}｜B ${z.complete?z.tot.b:'—'}｜C ${z.complete?z.tot.c:'—'}｜D ${z.complete?z.tot.d:'—'}`,`E1 ${z.complete?z.tot.e1:'—'}｜E2 ${z.complete?z.tot.e2:'—'}｜E ${z.complete?z.E:'—'}｜F ${z.complete?z.tot.f:'—'}`,`AD ${z.complete?z.AD:'—'}｜AF ${z.complete?z.AF:'—'}｜Cutoff ${z.complete?(z.hit.join('、')||'沒有'):'待完成'}`]))
 }
 
-function renderMRIAdminFields(a){const w=el('div','plain-block');w.append(el('h3','','MRI行政安排'),el('p','hint','此區供安排與聯絡使用，可留空，不影響首次篩查提交。'));const months=el('div','chips');for(let m=1;m<=12;m++)months.append(toggleButton(`${m}月`,`mri_avail_month_${m}`,()=>player()));w.append(el('h4','','方便到校月份'),months);[['星期一','mon'],['星期二','tue'],['星期三','wed'],['星期四','thu'],['星期五','fri']].forEach(x=>{const r=el('div','form-grid'),g=el('div','chips');r.append(el('strong','',x[0]));g.append(toggleButton('上午',`mri_avail_${x[1]}_am`,()=>player()),toggleButton('下午',`mri_avail_${x[1]}_pm`,()=>player()));r.append(g);w.append(r)});const g=el('div','toggle-grid');[['需要入口接應','mri_need_pickup'],['有陪同人士','mri_has_companion'],['需要借用輪椅','mri_need_wheelchair'],['自備輪椅','mri_own_wheelchair'],['需要無障礙路線','mri_need_accessible_route'],['可使用電子收款','electronic_payment_available']].forEach(x=>g.append(toggleButton(x[0],x[1],()=>player())));w.append(g);if(val('mri_has_companion')===1)w.append(fieldText('陪同人數','mri_companion_count','例：1','number'));w.append(fieldText('MRI行政備註','mri_admin_remark','可留空'));a.append(w)}
+function renderMRIAdminFields(a){
+  const w=el('div','plain-block');
+  w.append(el('h3','','MRI行政安排'),el('p','hint','此區供安排與聯絡使用，可全部留空，不影響首次篩查提交。'));
+  const months=el('div','chips');for(let m=1;m<=12;m++)months.append(toggleButton(`${m}月`,`mri_avail_month_${m}`,()=>player()));
+  w.append(el('h4','','方便到校月份'),months);
+  [['星期一','mon'],['星期二','tue'],['星期三','wed'],['星期四','thu'],['星期五','fri']].forEach(x=>{const r=el('div','form-grid'),g=el('div','chips');r.append(el('strong','',x[0]));g.append(toggleButton('上午',`mri_avail_${x[1]}_am`,()=>player()),toggleButton('下午',`mri_avail_${x[1]}_pm`,()=>player()));r.append(g);w.append(r)});
+  const g=el('div','toggle-grid');
+  [['需要入口接應','mri_need_pickup'],['有陪同人士','mri_has_companion'],['需要借用輪椅','mri_need_wheelchair'],['自備輪椅','mri_own_wheelchair'],['需要無障礙路線','mri_need_accessible_route'],['可使用電子收款','electronic_payment_available']].forEach(x=>g.append(toggleButton(x[0],x[1],()=>player())));
+  w.append(g);
+  if(val('mri_has_companion')===1){
+    const f=el('div','field');f.append(el('label','','陪同人數'));
+    const i=el('input','text');i.type='number';i.inputMode='numeric';i.min='0';i.step='1';i.placeholder='例：1';i.value=val('mri_companion_count')??'';
+    i.oninput=()=>{if(i.value===''){set('mri_companion_count',null);return}const n=Number(i.value);const safe=Number.isFinite(n)?Math.max(0,Math.floor(n)):0;i.value=String(safe);set('mri_companion_count',safe)};
+    f.append(i);w.append(f);
+  }else if(present('mri_companion_count'))setDerived('mri_companion_count',0);
+  w.append(fieldText('MRI行政備註','mri_admin_remark','可留空'));a.append(w);
+}
 
 function addCalendarMonths(date,count){const d=new Date(date+'T00:00:00');if(!Number.isFinite(d.getTime()))return null;const day=d.getDate(),target=new Date(d.getFullYear(),d.getMonth()+count+1,0);target.setDate(Math.min(day,target.getDate()));return target}
 
@@ -484,40 +564,41 @@ function renderStage2Pd(a){const g=el('div','direct');[[1,'有PD'],[0,'沒有PD'
 
 function pdiConfirmKey(pg){return `pdi_page${pg.page}_confirmed`}
 
-function renderIORScenario(pg,a){const n=String(pg.scenario).padStart(2,'0');a.append(el('p','context',pg.scenarioText));[['frequency','出現頻率',['從不','很少','有時','經常','非常頻繁']],['conviction','相信程度',['完全不相信','有點相信','半信半疑','相當相信','完全相信']],['distress','不安程度',['完全沒有不安','輕微不安','中等不安','相當不安','非常不安']]].forEach((z,zi)=>{const block=el('div','ior-block'),g=el('div','scale-buttons');block.append(el('h4','',z[1]));z[2].forEach((lab,i)=>{const v=i+1,key=`ior${n}_${z[0]}`;g.append(btn(`${v} ${lab}`,()=>{set(key,v);if(zi<2)player();else if(pageComplete(pg))autoNext();else player()},val(key)===v?'selected':''))});block.append(g);a.append(block)})}
+function renderIORScenario(pg,a){
+  const n=String(pg.scenario).padStart(2,'0');
+  a.append(el('p','context',pg.scenarioText));
+  [
+    ['frequency','出現頻率',['從不','很少','有時','經常','非常頻繁']],
+    ['conviction','相信程度',['完全不相信','有點相信','半信半疑','相當相信','完全相信']],
+    ['distress','不安程度',['完全沒有不安','輕微不安','中等不安','相當不安','非常不安']]
+  ].forEach(z=>{
+    const block=el('div','ior-block'),g=el('div','scale-buttons');
+    block.append(el('h4','',z[1]));
+    z[2].forEach((lab,i)=>{
+      const v=i+1,key=`ior${n}_${z[0]}`;
+      g.append(btn(`${v} ${lab}`,()=>{set(key,v);ST.error='';player()},val(key)===v?'selected':''));
+    });
+    block.append(g);a.append(block);
+  });
+}
 
 function player(){
-  calculateAllDerived();
-  const pages=playerPages();
-  if(!pages.length)return home();
-  if(ST.step<0)ST.step=0;
-  if(ST.step>=pages.length)ST.step=pages.length-1;
-  const pg=pages[ST.step],m=appShell();
-  m.append(toolbar(ST.flow==='stage2'?'第二階段問卷':'首次篩查'));
+  calculateAllDerived();const pages=playerPages();if(!pages.length)return home();if(ST.step<0)ST.step=0;if(ST.step>=pages.length)ST.step=pages.length-1;
+  const pg=pages[ST.step],m=appShell();m.append(toolbar(ST.flow==='stage2'?'第二階段問卷':'首次篩查'));
   const h=el('div','flow-head');h.append(el('h2','',pg.section));
-  const sectionPages=pages.filter(x=>x.section===pg.section),localIndex=sectionPages.indexOf(pg)+1;
-  const isAnswerPage=x=>!['stage2Summary','scaleResult'].includes(x.kind);
-  const answerPages=pages.filter(isAnswerPage);
+  const sectionPages=pages.filter(x=>x.section===pg.section),localIndex=sectionPages.indexOf(pg)+1,isAnswer=x=>!['stage2Summary','scaleResult'].includes(x.kind),answerPages=pages.filter(isAnswer);
   h.append(el('div','progress',`目前：第${localIndex}／${sectionPages.length}個畫面　｜　已回答：${answerPages.filter(pageComplete).length}／${answerPages.length}`));
-  const sm=el('div','section-menu');
-  [...new Set(pages.map(x=>x.section))].forEach(section=>{
-    const first=pages.findIndex(x=>x.section===section);
-    const required=pages.filter(x=>x.section===section&&isAnswerPage(x));
-    const completed=required.filter(pageComplete).length;
-    const done=required.length>0&&completed===required.length;
-    const partial=completed>0&&!done;
-    sm.append(btn(`${done?'✓ ':''}${section}`,()=>jumpSection(first,pages),(section===pg.section?'current ':'')+(done?'done':partial?'partial':'')));
+  const sections=[...new Set(pages.map(x=>x.section))],sm=el('div','section-menu');
+  sections.forEach(section=>{const first=pages.findIndex(x=>x.section===section),required=pages.filter(x=>x.section===section&&isAnswer(x)),completed=required.filter(pageComplete).length,done=required.length>0&&completed===required.length,partial=completed>0&&!done,label=`${done?'✓ ':''}${section}`;
+    if(ST.flow==='stage2')sm.append(btn(label,()=>{},(section===pg.section?'current ':'')+(done?'done':partial?'partial':'')+' disabled'));
+    else sm.append(btn(label,()=>jumpSection(first,pages),(section===pg.section?'current ':'')+(done?'done':partial?'partial':'')));
   });
   h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
   const qbox=el('section','question');if(pg.context)qbox.append(el('div','context',pg.context));qbox.append(el('h3','',pg.label));renderPage(pg,qbox);if(ST.error)qbox.append(el('div','error',ST.error));m.append(qbox);
   const nav=el('div','nav');nav.append(btn('返回上一個',()=>{if(ST.step>0){ST.step--;ST.error='';saveDraft();player()}},'secondary'));
-  const needsExplicit=['examples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','cdarsExamples','iorScenario'];
-  if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){
-    const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';
-    nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'));
-  }
-  m.append(nav);
-  setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30);
+  const needsExplicit=['cdarsExamples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','iorScenario'];
+  if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'))}
+  m.append(nav);setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30);
 }
 
 function fieldIdDigits(label,key,prefix,placeholder,onDone){const f=el('div','field');f.append(el('label','',label));const row=el('div','id-input-row');row.append(el('span','id-prefix',prefix));const i=el('input','text');i.inputMode='numeric';i.placeholder=placeholder;i.value=numericIdValue(val(key));const save=()=>{const digits=numericIdValue(i.value);i.value=digits;set(key,key==='s_id'?canonicalScanId(digits):canonicalParticipantId(digits));return digits};i.oninput=save;i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const digits=save();if(digits&&onDone)return onDone();const all=qa('input,textarea',i.closest('main')||document),n=all[all.indexOf(i)+1];if(n)n.focus()}};row.append(i);f.append(row);return f}
@@ -720,7 +801,7 @@ function renderMRIVisit(){
 }
 
 function validateMRIVisit(s){
-  const missing=[];if(!val('p_id')&&!val('s_id'))missing.push('P_ID或S_ID');if(val('visit_number')===null)missing.push('MRI到訪次數');if(!mriTodayPhase2_())missing.push('MRI日期');if(val('mri_safety_changed_since_initial')===null)missing.push('MRI安全變化');if(val('mri_safety_changed_since_initial')===1&&!String(val('mri_safety_change_detail')||'').trim())missing.push('MRI安全變化內容');if(String(val('pd_hc_status')||'').toUpperCase()==='PD'&&val('med_on_off')===null)missing.push('ON／OFF');if(incompleteSequences()&&!String(val('mri_sequence_general_remark')||'').trim())missing.push('Sequence未完成原因');if(missing.length){showInlineError(s,'尚未完成：'+missing.join('、'));return}
+  const missing=[];if(!val('p_id')&&!val('s_id')&&!/^\d{8}$/.test(String(val('contact_phone')||'').replace(/\D/g,'')))missing.push('P_ID、S_ID或8位電話');if(val('visit_number')===null)missing.push('MRI到訪次數');if(!mriTodayPhase2_())missing.push('MRI日期');if(val('mri_safety_changed_since_initial')===null)missing.push('MRI安全變化');if(val('mri_safety_changed_since_initial')===1&&!String(val('mri_safety_change_detail')||'').trim())missing.push('MRI安全變化內容');if(String(val('pd_hc_status')||'').toUpperCase()==='PD'&&val('med_on_off')===null)missing.push('ON／OFF');if(incompleteSequences()&&!String(val('mri_sequence_general_remark')||'').trim())missing.push('Sequence未完成原因');if(missing.length){showInlineError(s,'尚未完成：'+missing.join('、'));return}
   mriSetApplicabilityPhase2_();if(present('digit_span_forward')&&present('digit_span_backward'))setDerived('digit_span_total',Number(val('digit_span_forward'))+Number(val('digit_span_backward')));else setDerived('digit_span_total',null);
   setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
 }
@@ -922,7 +1003,7 @@ function medHVSave_(){saveDraft()}
 
 function medHVInput_(value,placeholder,onchange,type='number'){const x=el('input');x.type=type;x.value=value??'';x.placeholder=placeholder;if(type==='number'){x.step='any';x.inputMode='decimal'}x.oninput=()=>onchange(x.value);x.onchange=()=>renderByFlow();return x}
 
-function renderMedicationBF(s){s.append(btn('＋新增一款藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',units:'',times:'',matchedLevodopa:''});medHVSave_();backfill()},'primary'));renderMedicationRowsHV_(s);renderLeddPanelHV_(s)}
+function renderMedicationBF(s){s.append(btn('＋新增一款藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',units:'',times:'',matchedLevodopa:''});medHVSave_();backfill()},'primary'));renderMedicationRows(s);renderLeddPanel(s)}
 
 function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),identityStrip());const s=el('section','summary');s.append(el('h2','section-title','PD臨床資料'));s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));addStaffNumber(s,'核實PD病程','pd_duration_verified_years','年');addStaffChoices(s,'UPDRS Part III資料路徑','updrs3_route',[['hospital_total_only','醫院只提供總分'],['hospital_items','醫院提供小分'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);
  if(val('updrs3_route')==='hospital_total_only')addStaffNumber(s,'UPDRS Part III總分','updrs3_reported_total','/132');if(['hospital_items','research_assessed'].includes(val('updrs3_route'))){s.append(el('h3','','UPDRS Part III 33項'));renderUPDRSItems(s,val('updrs3_route')==='research_assessed')}
@@ -1278,8 +1359,8 @@ function renderPage(pg,a){
   if(pg.kind==='choice')return renderChoice(pg,a);if(pg.kind==='input')return renderInput(pg,a);if(pg.kind==='dob')return renderDOB(a);
   if(pg.kind==='pdIdentity')return renderPdIdentity(a);if(pg.kind==='educationVerified')return renderEducationVerified(a);if(pg.kind==='stage2Pd')return renderStage2Pd(a);
   if(pg.kind==='positiveOne')return renderPositiveOne(pg,a);if(pg.kind==='scale')return renderScale(pg,a);if(pg.kind==='moca')return renderMoca(a);
-  if(pg.kind==='quipShared')return renderQuipShared(pg,a);if(pg.kind==='quipExtra')return renderQuipExtra(pg,a);if(pg.kind==='quipGroup')return renderQuipGroup(pg,a);if(pg.kind==='quipRsMatrix')return renderQuipRsMatrix(pg,a);
-  if(pg.kind==='rbMain')return renderRBMain(a);if(pg.kind==='rbQ10')return renderRBQ10(a);if(pg.kind==='mriSafety')return renderMRISafety(a);if(pg.kind==='screenResult')return renderScreenResult(a);if(pg.kind==='scaleResult')return renderScaleResult(pg,a);
+  if(pg.kind==='quipShared')return renderQuipShared(pg,a);if(pg.kind==='quipExtra')return renderQuipExtra(pg,a);if(pg.kind==='quipGroup')return renderQuipGroup(pg,a);if(pg.kind==='quipRsMatrix')return renderQuipRsMatrix(a);
+  if(pg.kind==='rbMain')return renderRBMain(a);if(pg.kind==='rbQ10')return renderRBQ10(a);if(pg.kind==='mriSafety')return renderMRISafety(a);if(pg.kind==='screenResult')return renderScreenResult(a);if(pg.kind==='scaleResult')return renderScaleCompletion(pg,a);
   if(pg.kind==='cdarsExamples')return renderCdarsExamples(pg,a);if(pg.kind==='cdarsScale')return renderCdarsScale(pg,a);if(pg.kind==='pdiItem')return renderPdiItem(pg,a);if(pg.kind==='iorScenario')return renderIORScenario(pg,a);if(pg.kind==='stage2Summary')return renderStage2Summary(a);
 }
 
@@ -1308,7 +1389,21 @@ function renderPdiItem(pg,a){
  dims.forEach(([kind,title,labels])=>{const block=el('div','plain-block'),g=el('div','scale-buttons'),key=x.dimensions[kind].name;block.append(el('strong','',title));labels.forEach((label,index)=>{const value=index+1;g.append(btn(label,()=>{set(key,value);ST.error='';player()},val(key)===value?'selected':''))});block.append(g);a.append(block)});
 }
 
-function pageComplete(pg){if(pg.kind==='pdiItem'){const x=pg.pdi;if(val(x.yesField)===0)return true;if(val(x.yesField)!==1)return false;return ['distress','preoccupation','conviction'].every(k=>present(x.dimensions[k].name))}if(pg.kind==='cdarsExamples')return Boolean(String(val(pg.example1Key)||'').trim()&&String(val(pg.example2Key)||'').trim());if(pg.kind==='cdarsScale')return present(pg.key);if(pg.kind==='iorScenario'){const n=String(pg.scenario).padStart(2,'0');return ['frequency','conviction','distress'].every(k=>present(`ior${n}_${k}`))}if(pg.kind==='quipRsMatrix')return B.quiprs.matrixCells.length===28&&B.quiprs.matrixCells.every(x=>present(x.name)&&Number(val(x.name))>=0&&Number(val(x.name))<=4);if(pg.kind==='quipGroup')return anySelectedV3(quipKeysV3(pg))||val(`quip_group_${pg.group}_confirmed`)==='none';if(pg.kind==='mriSafety')return anySelectedV3(C.mriSafety.map(x=>x[0]))||val('mri_safety_none_confirmed')===1;if(pg.kind==='rbQ10')return anySelectedV3(B.rbdsq.diseaseItems.map(x=>x.name))||val('rbq10_none_confirmed')===1;if(pg.kind==='rbMain')return present(B.rbdsq.sourceField)&&B.rbdsq.items.every(x=>present(x.name));if(pg.kind==='screenResult')return present('final_screening_decision');if(pg.kind==='dob')return present('date_of_birth');if(pg.kind==='moca')return present('moca_1_raw_total');if(['stage2Summary','scaleResult'].includes(pg.kind))return true;return pg.key?present(pg.key):true}
+function pageComplete(pg){
+  if(pg.kind==='pdiItem'){const x=pg.pdi;if(val(x.yesField)===0)return true;if(val(x.yesField)!==1)return false;return ['distress','preoccupation','conviction'].every(k=>present(x.dimensions[k].name))}
+  if(pg.kind==='cdarsExamples')return Boolean(String(val(pg.example1Key)||'').trim()&&String(val(pg.example2Key)||'').trim());
+  if(pg.kind==='cdarsScale')return present(pg.key);
+  if(pg.kind==='iorScenario'){const n=String(pg.scenario).padStart(2,'0');return ['frequency','conviction','distress'].every(k=>present(`ior${n}_${k}`))}
+  if(pg.kind==='quipRsMatrix'){const status=val('quiprs_section_confirmed');return (status==='none'||status==='answered')&&B.quiprs.matrixCells.length===28&&B.quiprs.matrixCells.every(x=>present(x.name)&&Number(val(x.name))>=0&&Number(val(x.name))<=4)}
+  if(pg.kind==='quipGroup')return anySelectedV3(quipKeysV3(pg))||val(`quip_group_${pg.group}_confirmed`)==='none';
+  if(pg.kind==='mriSafety')return anySelectedV3(C.mriSafety.map(x=>x[0]))||val('mri_safety_none_confirmed')===1;
+  if(pg.kind==='rbQ10')return anySelectedV3(B.rbdsq.diseaseItems.map(x=>x.name))||val('rbq10_none_confirmed')===1;
+  if(pg.kind==='rbMain')return present(B.rbdsq.sourceField)&&val('rbdsq_section_confirmed')===1&&B.rbdsq.items.every(x=>present(x.name));
+  if(pg.kind==='screenResult')return present('final_screening_decision');
+  if(pg.kind==='dob')return present('date_of_birth');if(pg.kind==='moca')return present('moca_1_raw_total');
+  if(['stage2Summary','scaleResult'].includes(pg.kind))return true;
+  return pg.key?present(pg.key):true;
+}
 
 function manualNext(pg,pages){
   if(!pageComplete(pg)){ST.error='此題尚未完成，請先完成目前内容。';return player()}
@@ -1342,11 +1437,10 @@ function handleGlobalKeydown(e){
   if(!/^\d$/.test(e.key))return;
   const n=Number(e.key);
   if(pg.kind==='scale'||pg.kind==='cdarsScale'){
-    const opts=pg.options||[];let hit=opts.find(o=>Number(o.value)===n);
-    if(!hit&&opts.length===4&&n>=1&&n<=4)hit=opts[n-1];
-    if(hit){e.preventDefault();set(pg.key,hit.value);if(ST.flow==='screening')return autoNext();if(pageComplete(pg))return autoNext();return player()}
+    const opts=pg.options||[];let hit=opts.find(o=>Number(o.value)===n);if(!hit&&opts.length===4&&n>=1&&n<=4)hit=opts[n-1];
+    if(hit){e.preventDefault();set(pg.key,hit.value);ST.error='';return ST.flow==='screening'?autoNext():player()}
   }
-  if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);player()}}
+  if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);ST.error='';player()}}
 }
 
 document.addEventListener('keydown',handleGlobalKeydown);

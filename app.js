@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.9-SINGLE-POST-RECEIPT-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.10-LOAD-STATUS-AUTOBACKUP-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -251,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.9-SINGLE-POST-RECEIPT-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.10-LOAD-STATUS-AUTOBACKUP-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -1023,7 +1023,7 @@ function payload(form,event,status){
   clean.identity_resolution_status=clean.p_id?'pid_known':clean.s_id?'sid_phone_pending_pid':clean.contact_phone_normalized?'phone_only_recovery':'unresolved';
  }
  if(B.pdi21&&B.pdi21.items){clean.pdi_page1_confirmed=B.pdi21.items.slice(0,10).every(x=>present(x.yesField))?1:0;clean.pdi_page2_confirmed=B.pdi21.items.slice(10).every(x=>present(x.yesField))?1:0;}
- return Object.assign({},clean,{payload_json:JSON.stringify(clean)})
+ return clean
 }
 
 const MED_HV1=Object.freeze([
@@ -1093,29 +1093,54 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-20-single-post-iframe-receipt-v4';
+const SUBMISSION_TRANSPORT_BUILD='2026-08-20-iframe-load-status-autobackup-v5';
 
-function receiverPostIframeReceiptFinal_(submissionPayload,timeoutMs){
+function receiverPostLoadThenStatusFinal_(submissionPayload,timeoutMs){
   return new Promise(function(resolve,reject){
-    const nonce=uuid(),iframe=document.createElement('iframe'),form=document.createElement('form');
-    const frameName='apathy_receipt_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    let settled=false;
-    iframe.name=frameName;iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
+    const iframe=document.createElement('iframe'),form=document.createElement('form');
+    const frameName='apathy_submit_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const totalBudget=Math.max(1000,Number(timeoutMs)||10000),deadline=Date.now()+totalBudget;
+    let settled=false,phase='initial';
+    iframe.name=frameName;iframe.src='about:blank';iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
     form.method='POST';form.action=C.receiverUrl;form.target=frameName;form.style.display='none';
     function hidden(name,value){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input)}
-    hidden('data',JSON.stringify(submissionPayload));hidden('receipt_mode','iframe');hidden('receipt_nonce',nonce);hidden('parent_origin',location.origin);
-    function cleanup(){window.removeEventListener('message',onMessage);window.clearTimeout(timer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
-    function finishError(error){if(settled)return;settled=true;cleanup();reject(error)}
-    function onMessage(event){
-      const d=event&&event.data;
-      if(!d||d.type!=='APATHY_SUBMISSION_RECEIPT'||d.receipt_nonce!==nonce)return;
-      if(String(d.submission_id||'')!==String(submissionPayload.submission_id||''))return;
-      if(!/^(https:\/\/script\.google\.com|https:\/\/script\.googleusercontent\.com)$/.test(String(event.origin||'')))return;
-      settled=true;cleanup();resolve(d);
+    hidden('data',JSON.stringify(submissionPayload));
+    function cleanup(){window.clearTimeout(timer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
+    function fail(error){if(settled)return;settled=true;cleanup();reject(error)}
+    async function confirmAfterLoad(){
+      if(settled)return;
+      const remaining=deadline-Date.now();
+      if(remaining<=350)return fail(Object.assign(new Error('Receiver confirmation budget expired'),{code:'SUBMISSION_UNCONFIRMED'}));
+      try{
+        const status=await receiverStatusJsonpFinal_(submissionPayload.submission_id,Math.min(6000,Math.max(500,remaining-150)));
+        if(status&&status.ok===true&&status.received===true&&status.result){
+          settled=true;cleanup();return resolve({
+            ok:true,
+            duplicate:false,
+            submission_id:submissionPayload.submission_id,
+            sheet:status.result.sheet||'',
+            row:status.result.row||'',
+            logical_record_key:status.result.logical_record_key||'',
+            receiver_version:status.receiver_version||'',
+            receiver_contract:status.receiver_contract||''
+          });
+        }
+        fail(Object.assign(new Error('Receiver status did not confirm submission'),{code:'SUBMISSION_UNCONFIRMED'}));
+      }catch(error){error.code='SUBMISSION_UNCONFIRMED';fail(error)}
     }
-    const timer=window.setTimeout(function(){finishError(Object.assign(new Error('Receiver single-POST receipt timed out'),{code:'SUBMISSION_UNCONFIRMED'}))},Math.max(1000,Number(timeoutMs)||10000));
-    window.addEventListener('message',onMessage);document.body.append(iframe,form);
-    try{form.submit()}catch(error){finishError(error)}
+    iframe.addEventListener('load',function(){
+      if(phase==='initial'){
+        phase='posted';
+        try{form.submit()}catch(error){fail(error)}
+        return;
+      }
+      if(phase==='posted'){
+        phase='confirming';
+        confirmAfterLoad();
+      }
+    });
+    const timer=window.setTimeout(function(){fail(Object.assign(new Error('Receiver confirmation timed out'),{code:'SUBMISSION_UNCONFIRMED'}))},totalBudget);
+    document.body.append(iframe,form);
   })
 }
 function receiverStatusJsonpFinal_(submissionId,timeoutMs){
@@ -1142,11 +1167,39 @@ async function confirmSubmissionFinal_(submissionId,startedAt){
   return{confirmed:false,status:lastStatus,error:lastError,confirmation_timed_out:true,elapsed_ms:Date.now()-start}
 }
 
+function safeSubmissionFileToken_(value){return String(value||'').trim().replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'unknown'}
+function submissionIdentityToken_(p){
+  const phone=String(p.contact_phone_normalized||p.contact_phone||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
+  return safeSubmissionFileToken_(p.p_id||p.s_id||(phone.length===8?phone:'')||p.participant_id||String(p.submission_id||'').slice(0,8)||'unknown')
+}
+function localSubmissionTimestamp_(date){
+  const d=date||new Date(),pad=n=>String(n).padStart(2,'0');
+  return String(d.getFullYear())+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())
+}
+function submissionBackupFileName_(p){
+  const workflow=safeSubmissionFileToken_(p.form_type||ST.flow||'apathy');
+  const identity=submissionIdentityToken_(p);
+  const visit=p.form_type==='mri'?'_visit'+String(Number(p.visit_number||1)):'';
+  const shortId=safeSubmissionFileToken_(String(p.submission_id||'').slice(0,8));
+  return workflow+'_'+identity+visit+'_'+localSubmissionTimestamp_(new Date())+'_'+shortId+'.json'
+}
+function autoBackupStorageKey_(submissionId){return 'apathy-auto-submit-json-'+String(submissionId||'')}
+function autoDownloadSubmissionSnapshot_(snapshot){
+  const key=autoBackupStorageKey_(snapshot.submission_id);
+  if(localStorage.getItem(key))return{downloaded:false,reason:'already_downloaded'};
+  const output={metadata:{workflow:ST.flow,download_reason:'automatic_before_submit',downloaded_at:new Date().toISOString(),question_bank_version:B.version,app_build:APP_BUILD,submission_id:snapshot.submission_id},headers:Object.keys(snapshot),data:snapshot};
+  const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download=submissionBackupFileName_(snapshot);document.body.appendChild(anchor);anchor.click();anchor.remove();
+  window.setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  localStorage.setItem(key,JSON.stringify({downloaded_at:new Date().toISOString(),file_name:anchor.download,frontend_release:snapshot.frontend_release}));
+  return{downloaded:true,file_name:anchor.download}
+}
 async function submitPayload(form,event,status){
   if(ST.submitting)return;
 
   const submissionStartedAt=Date.now();
   const p=payload(form,event,status);
+  delete p.payload_json;
   if(!p.submission_id){
     ST.submission=ST.submission||uuid();
     p.submission_id=ST.submission;
@@ -1154,6 +1207,8 @@ async function submitPayload(form,event,status){
 
   const submissionId=String(p.submission_id);
   ST.submission=submissionId;
+  const submissionSnapshot=JSON.parse(JSON.stringify(p));
+  const backupResult=autoDownloadSubmissionSnapshot_(submissionSnapshot);
   saveDraft();
   ST.submitting=true;
 
@@ -1162,7 +1217,8 @@ async function submitPayload(form,event,status){
   const title=el('h2','','正在提交資料……');
   const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並確認寫入；整個等待不會超過10秒。');
   const timer=el('div','status','已等待0秒');
-  box.append(title,msg,timer);
+  const backupNote=el('p','hint',backupResult.downloaded?'已自动下载提交JSON：'+backupResult.file_name:'此Submission ID的提交JSON此前已自动下载，本次不会重复下载。');
+  box.append(title,msg,backupNote,timer);
   modal.append(box);
   document.body.append(modal);
 
@@ -1173,7 +1229,7 @@ async function submitPayload(form,event,status){
   },1000);
 
   try{
-    const receipt=await receiverPostIframeReceiptFinal_(p,10000);
+    const receipt=await receiverPostLoadThenStatusFinal_(submissionSnapshot,10000);
     if(!receipt||receipt.ok!==true){
       const error=new Error(String(receipt&&receipt.message||'Receiver未确认写入。'));
       error.code=String(receipt&&receipt.error_code||'SUBMISSION_UNCONFIRMED');

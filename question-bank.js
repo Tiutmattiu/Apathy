@@ -1,9 +1,9 @@
 // @ts-nocheck
 'use strict';
-const QUIP_DOMAIN_B_FULL_LABEL = '性行爲';
+const QUIP_DOMAIN_B_FULL_LABEL = '性行為';
 const QUIP_DOMAIN_B_DESCRIPTION = '對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情';
 window.APATHY_QUESTION_BANK = Object.freeze({
-  "version": "11.0.0-fe-clean",
+  "version": "11.0.1-fe-clean-label-fix",
   "language": "zh-Hant",
   "displayPolicy": {
     "formalGridAllowed": true,
@@ -36,8 +36,8 @@ window.APATHY_QUESTION_BANK = Object.freeze({
       {
         "item": 1,
         "name": "hads01_score",
-        "fullLael": "我感到神經緊張：",
-        "ackfillLael": "01 緊張",
+        "fullLabel": "我感到神經緊張：",
+        "backfillLabel": "01 緊張",
         "domain": "Anxiety",
         "options": [
           {
@@ -1074,27 +1074,27 @@ window.APATHY_QUESTION_BANK = Object.freeze({
       {
         "index": 1,
         "shortLabel": "相關行為問題",
-        "fullText": "您自己或別人是否認為您存在賭博、B相關行為、購物或進食方面的行為問題？"
+        "fullText": "您自己或別人是否認為您存在賭博、性相關行為、購物或進食方面的行為問題？"
       },
       {
         "index": 2,
         "shortLabel": "經常想到",
-        "fullText": "您是否經常想要賭博、B相關行為、購物或者進食（比如不能控制自己的想法，或者對自己的想法和相關行為產生罪惡感）？"
+        "fullText": "您是否經常想要賭博、性相關行為、購物或者進食（比如不能控制自己的想法，或者對自己的想法和相關行為產生罪惡感）？"
       },
       {
         "index": 3,
         "shortLabel": "衝動／困擾",
-        "fullText": "您是否有衝動或者渴望賭博、B相關行為、購物或者吃東西，而您或者別人都認為這些行為是過度的，或者導致您痛苦（如不能參與這些活動時變得不安或者容易衝動）？"
+        "fullText": "您是否有衝動或者渴望賭博、性相關行為、購物或者吃東西，而您或者別人都認為這些行為是過度的，或者導致您痛苦（如不能參與這些活動時變得不安或者容易衝動）？"
       },
       {
         "index": 4,
         "shortLabel": "控制困難",
-        "fullText": "您是否對賭博、B相關行為、購物或者過度進食等行為有控制困難（比如延長行為時間，或者不能減少或停止這些行為）？"
+        "fullText": "您是否對賭博、性相關行為、購物或者過度進食等行為有控制困難（比如延長行為時間，或者不能減少或停止這些行為）？"
       },
       {
         "index": 5,
         "shortLabel": "設法繼續",
-        "fullText": "您是否會設法讓自己能繼續賭博、B相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？"
+        "fullText": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？"
       }
     ],
     "matrixCells": [
@@ -1102,7 +1102,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_a1_yes",
         "stemIndex": 1,
         "domain": "A",
-        "fullStem": "您自己或別人是否認為您存在賭博、B相關行為、購物或進食方面的行為問題？",
+        "fullStem": "您自己或別人是否認為您存在賭博、性相關行為、購物或進食方面的行為問題？",
         "fullDomainLabel": "賭博",
         "backfillLabel": "Q1 相關行為問題｜A",
         "defaultValueOnGroupCompletion": 0,
@@ -1112,7 +1112,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_b1_yes",
         "stemIndex": 1,
         "domain": "B",
-        "fullStem": "您自己或別人是否認為您存在賭博、姓相關行為、購物或進食方面的行為問題？",
+        "fullStem": "您自己或別人是否認為您存在賭博、性相關行為、購物或進食方面的行為問題？",
         "fullDomainLabel": "性行為",
         "backfillLabel": "Q1 相關行為問題｜B",
         "defaultValueOnGroupCompletion": 0,
@@ -1122,7 +1122,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_c1_yes",
         "stemIndex": 1,
         "domain": "C",
-        "fullStem": "您自己或別人是否認為您存在賭博、B相關行為、購物或進食方面的行為問題？",
+        "fullStem": "您自己或別人是否認為您存在賭博、性相關行為、購物或進食方面的行為問題？",
         "fullDomainLabel": "購物行為",
         "backfillLabel": "Q1 相關行為問題｜C",
         "defaultValueOnGroupCompletion": 0,
@@ -1132,7 +1132,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_d1_yes",
         "stemIndex": 1,
         "domain": "D",
-        "fullStem": "您自己或別人是否認為您存在賭博、B相關行為、購物或進食方面的行為問題？",
+        "fullStem": "您自己或別人是否認為您存在賭博、性相關行為、購物或進食方面的行為問題？",
         "fullDomainLabel": "進食行為",
         "backfillLabel": "Q1 相關行為問題｜D",
         "defaultValueOnGroupCompletion": 0,
@@ -1142,7 +1142,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "name": "quip_a2_yes",
         "stemIndex": 2,
         "domain": "A",
-        "fullStem": "您是否經常想要賭博、B相關行為、購物或者進食（比如不能控制自己的想法，或者對自己的想法和相關行為產生罪惡感）？",
+        "fullStem": "您是否經常想要賭博、性相關行為、購物或者進食（比如不能控制自己的想法，或者對自己的想法和相關行為產生罪惡感）？",
         "fullDomainLabel": "賭博",
         "backfillLabel": "Q2 經常想到｜A",
         "defaultValueOnGroupCompletion": 0,
@@ -1198,7 +1198,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "backfillLabel": "Q3 衝動／困擾｜B",
         "defaultValueOnGroupCompletion": 0,
         "selectedValue": 1,
-        "domainDescription": "【请在这里粘贴已批准的B类中文说明】"
+        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情"
       },
       {
         "name": "quip_c3_yes",
@@ -1235,11 +1235,11 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 4,
         "domain": "B",
         "fullStem": "您是否對賭博、性相關行為、購物或者過度進食等行為有控制困難（比如延長行為時間，或者不能減少或停止這些行為）？",
-        "fullDomainLabel": "【请在这里粘贴已批准的B类完整中文标题】",
+        "fullDomainLabel": "性行為",
         "backfillLabel": "Q4 控制困難｜B",
         "defaultValueOnGroupCompletion": 0,
         "selectedValue": 1,
-        "domainDescription": "【请在这里粘贴已批准的B类中文说明】"
+        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情"
       },
       {
         "name": "quip_c4_yes",
@@ -1276,11 +1276,11 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 5,
         "domain": "B",
         "fullStem": "您是否會設法讓自己能繼續賭博、性相關行為、購物或者進食行為（比如隱瞞或者說謊、向別人借錢、債務增加、變賣資產、做違法事情、私藏或囤積食物）？",
-        "fullDomainLabel": "【请在这里粘贴已批准的B类完整中文标题】",
+        "fullDomainLabel": "性行為",
         "backfillLabel": "Q5 設法繼續｜B",
         "defaultValueOnGroupCompletion": 0,
         "selectedValue": 1,
-        "domainDescription": "【请在这里粘贴已批准的B类中文说明】"
+        "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情"
       },
       {
         "name": "quip_c5_yes",
@@ -1808,7 +1808,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 2,
         "domain": "B",
         "fullStem": "您有多經常對以下行為出現過度的衝動或渴望，並認為這些衝動過度或造成困擾，例如不能參與時變得焦躁不安或容易激惹？",
-        "fullDomainLabel": "性行为",
+        "fullDomainLabel": "性行為",
         "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情",
         "backfillLabel": "2 衝動／困擾｜B",
         "options": [
@@ -2032,7 +2032,7 @@ window.APATHY_QUESTION_BANK = Object.freeze({
         "stemIndex": 3,
         "domain": "B",
         "fullStem": "您有多經常難以控制以下行為，例如行為不斷增加，或難以減少或停止？",
-        "fullDomainLabel": "性行为",
+        "fullDomainLabel": "性行為",
         "domainDescription": "對他人提出性要求，濫交、賣淫、改變性取向、自慰、互聯網或電話性活動、或色情",
         "backfillLabel": "3 控制困難｜B",
         "options": [

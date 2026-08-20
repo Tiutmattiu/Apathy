@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.5-DRAFT-RESUME-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.6-SCREENING-ENTRY-HOTFIX';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -56,11 +56,18 @@ function identityStrip(){return el('div','identity-strip',`目前Participant：$
 function playerPages(){return ST.flow==='stage2'?stage2Pages():screeningPages()}
 
 function scaleQuestionLabel_(item,section,index){
-  const candidates=[item&&item.fullLabel,item&&item.combinedFormalLabel,item&&item.question,item&&item.questionText,item&&item.prompt,item&&item.text,item&&item.title,item&&item.label];
-  const label=candidates.find(function(value){return value!==null&&value!==undefined&&String(value).trim()!=='';});
+  const candidates=[
+    item&&item.fullLabel,item&&item.combinedFormalLabel,item&&item.question,
+    item&&item.questionText,item&&item.question_text,item&&item.prompt,
+    item&&item.stem,item&&item.fullText,item&&item.full_text,
+    item&&item.text,item&&item.title,item&&item.label,
+    item&&item.backfillLabel,item&&item.backfill_label
+  ];
+  const label=candidates.find(function(value){return value!==null&&value!==undefined&&String(value).trim()!==''&&String(value).trim().toLowerCase()!=='undefined';});
   if(label)return String(label).trim();
   const code=String(item&&item.name||item&&item.responseName||'').trim();
-  throw new Error('QUESTION_LABEL_MISSING:'+String(section||'')+':'+String(index+1)+':'+code);
+  console.error('QUESTION_LABEL_MISSING',section,index+1,code,item);
+  return String(section||'問卷')+' 第'+String(index+1)+'題';
 }
 function addScalePages(arr,section,items){items.forEach((x,n)=>arr.push({section,kind:'scale',label:scaleQuestionLabel_(x,section,n),key:x.name||x.responseName,options:x.options||x.responseOptions,item:n+1,total:items.length,instruction:x.instructions||''}))}
 
@@ -214,7 +221,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.5-DRAFT-RESUME-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.6-SCREENING-ENTRY-HOTFIX';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',

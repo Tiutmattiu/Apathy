@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.10-LOAD-STATUS-AUTOBACKUP-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-21-R8.11-15S-BOUNDED-CONFIRM-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -251,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.10-LOAD-STATUS-AUTOBACKUP-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-21-R8.11-15S-BOUNDED-CONFIRM-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -1093,53 +1093,80 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-20-iframe-load-status-autobackup-v5';
+const SUBMISSION_TRANSPORT_BUILD='2026-08-21-15s-bounded-confirm-v6';
 
 function receiverPostLoadThenStatusFinal_(submissionPayload,timeoutMs){
   return new Promise(function(resolve,reject){
     const iframe=document.createElement('iframe'),form=document.createElement('form');
     const frameName='apathy_submit_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const totalBudget=Math.max(1000,Number(timeoutMs)||10000),deadline=Date.now()+totalBudget;
-    let settled=false,phase='initial';
+    const totalBudget=Math.max(3000,Number(timeoutMs)||15000),deadline=Date.now()+totalBudget;
+    const retryDelays=[0,500,900,1600,2400,3000];
+    let settled=false,postStarted=false,confirmationStarted=false,loadCount=0,fallbackTimer=null;
     iframe.name=frameName;iframe.src='about:blank';iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
     form.method='POST';form.action=C.receiverUrl;form.target=frameName;form.style.display='none';
     function hidden(name,value){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input)}
     hidden('data',JSON.stringify(submissionPayload));
-    function cleanup(){window.clearTimeout(timer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
+    function cleanup(){window.clearTimeout(hardTimer);window.clearTimeout(fallbackTimer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
     function fail(error){if(settled)return;settled=true;cleanup();reject(error)}
-    async function confirmAfterLoad(){
+    function succeed(status,attempt){
       if(settled)return;
-      const remaining=deadline-Date.now();
-      if(remaining<=350)return fail(Object.assign(new Error('Receiver confirmation budget expired'),{code:'SUBMISSION_UNCONFIRMED'}));
-      try{
-        const status=await receiverStatusJsonpFinal_(submissionPayload.submission_id,Math.min(6000,Math.max(500,remaining-150)));
-        if(status&&status.ok===true&&status.received===true&&status.result){
-          settled=true;cleanup();return resolve({
-            ok:true,
-            duplicate:false,
-            submission_id:submissionPayload.submission_id,
-            sheet:status.result.sheet||'',
-            row:status.result.row||'',
-            logical_record_key:status.result.logical_record_key||'',
-            receiver_version:status.receiver_version||'',
-            receiver_contract:status.receiver_contract||''
-          });
+      settled=true;cleanup();
+      resolve({
+        ok:true,
+        duplicate:false,
+        submission_id:submissionPayload.submission_id,
+        sheet:status&&status.result?status.result.sheet||'':'',
+        row:status&&status.result?status.result.row||'':'',
+        logical_record_key:status&&status.result?status.result.logical_record_key||'':'',
+        receiver_version:status?status.receiver_version||'':'',
+        receiver_contract:status?status.receiver_contract||'':'',
+        confirmation_attempt:attempt
+      });
+    }
+    async function runConfirmationLoop(){
+      if(confirmationStarted||settled)return;
+      confirmationStarted=true;
+      let lastError=null,lastStatus=null;
+      for(let attempt=0;attempt<retryDelays.length;attempt++){
+        const delay=retryDelays[attempt];
+        if(delay>0)await receiverWaitFinal_(delay);
+        if(settled)return;
+        const remaining=deadline-Date.now();
+        if(remaining<=350)break;
+        try{
+          lastStatus=await receiverStatusJsonpFinal_(
+            submissionPayload.submission_id,
+            Math.min(2500,Math.max(500,remaining-150))
+          );
+          if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true){
+            return succeed(lastStatus,attempt+1);
+          }
+        }catch(error){
+          lastError=error;
+          console.warn('Receiver bounded status attempt failed',attempt+1,error);
         }
-        fail(Object.assign(new Error('Receiver status did not confirm submission'),{code:'SUBMISSION_UNCONFIRMED'}));
-      }catch(error){error.code='SUBMISSION_UNCONFIRMED';fail(error)}
+      }
+      const error=Object.assign(
+        new Error(lastError&&lastError.message?lastError.message:'Receiver status did not confirm submission'),
+        {code:'SUBMISSION_UNCONFIRMED',last_status:lastStatus}
+      );
+      fail(error);
     }
     iframe.addEventListener('load',function(){
-      if(phase==='initial'){
-        phase='posted';
-        try{form.submit()}catch(error){fail(error)}
+      loadCount+=1;
+      if(!postStarted){
+        postStarted=true;
+        try{
+          form.submit();
+          fallbackTimer=window.setTimeout(runConfirmationLoop,3500);
+        }catch(error){fail(error)}
         return;
       }
-      if(phase==='posted'){
-        phase='confirming';
-        confirmAfterLoad();
-      }
+      if(loadCount>=2)runConfirmationLoop();
     });
-    const timer=window.setTimeout(function(){fail(Object.assign(new Error('Receiver confirmation timed out'),{code:'SUBMISSION_UNCONFIRMED'}))},totalBudget);
+    const hardTimer=window.setTimeout(function(){
+      fail(Object.assign(new Error('Receiver confirmation timed out'),{code:'SUBMISSION_UNCONFIRMED'}));
+    },totalBudget);
     document.body.append(iframe,form);
   })
 }
@@ -1215,7 +1242,7 @@ async function submitPayload(form,event,status){
   const modal=el('div','modal');
   const box=el('div','modal-box submit-wait');
   const title=el('h2','','正在提交資料……');
-  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並確認寫入；整個等待不會超過10秒。');
+  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並確認寫入；正常目標為10秒內完成；最長確認時間為15秒。');
   const timer=el('div','status','已等待0秒');
   const backupNote=el('p','hint',backupResult.downloaded?'已自动下载提交JSON：'+backupResult.file_name:'此Submission ID的提交JSON此前已自动下载，本次不会重复下载。');
   box.append(title,msg,backupNote,timer);
@@ -1225,11 +1252,11 @@ async function submitPayload(form,event,status){
   let seconds=0;
   const tick=window.setInterval(function(){
     seconds++;
-    timer.textContent='已等待'+seconds+'秒'+(seconds>=8?'；即將完成10秒確認預算。':'');
+    timer.textContent='已等待'+seconds+'秒'+(seconds>=10?'；Receiver確認較平常稍長，系統會在15秒內結束確認。':'');
   },1000);
 
   try{
-    const receipt=await receiverPostLoadThenStatusFinal_(submissionSnapshot,10000);
+    const receipt=await receiverPostLoadThenStatusFinal_(submissionSnapshot,15000);
     if(!receipt||receipt.ok!==true){
       const error=new Error(String(receipt&&receipt.message||'Receiver未确认写入。'));
       error.code=String(receipt&&receipt.error_code||'SUBMISSION_UNCONFIRMED');

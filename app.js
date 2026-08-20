@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-19-R8.3-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.5-DRAFT-RESUME-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -35,7 +35,7 @@ function toolbar(title,homeButton=true){const b=el('header','toolbar');b.append(
 
 function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
 
-function start(flow){ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening') return player();if(flow==='backfill')return backfill();if(flow==='mri_visit'){resetFlow();return identityGate('MRI到訪記錄')}if(flow==='clinical'){resetFlow();return identityGate('PD臨床資料')}}
+function start(flow){ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
 
 function staffGate(flow,title){if(ST.staffUnlocked)return start(flow);const m=appShell();m.append(toolbar('工作人員登入'));const s=el('section','staff-password');s.append(el('h2','',title),el('p','hint','請輸入工作人員密碼。'));const i=el('input','text');i.type='password';i.inputMode='numeric';i.placeholder='工作人員密碼';const e=el('div','error');const go=()=>{if(i.value===String(C.staffPassword||'080')){ST.staffUnlocked=true;start(flow)}else e.textContent='密碼不正確。'};i.onkeydown=x=>{if(x.key==='Enter')go()};s.append(i,e,btn('進入',go,'primary'));m.append(s);setTimeout(()=>i.focus(),20)}
 
@@ -55,7 +55,14 @@ function identityStrip(){return el('div','identity-strip',`目前Participant：$
 
 function playerPages(){return ST.flow==='stage2'?stage2Pages():screeningPages()}
 
-function addScalePages(arr,section,items){items.forEach((x,n)=>arr.push({section,kind:'scale',label:x.fullLabel||x.combinedFormalLabel,key:x.name||x.responseName,options:x.options||x.responseOptions,item:n+1,total:items.length,instruction:x.instructions||''}))}
+function scaleQuestionLabel_(item,section,index){
+  const candidates=[item&&item.fullLabel,item&&item.combinedFormalLabel,item&&item.question,item&&item.questionText,item&&item.prompt,item&&item.text,item&&item.title,item&&item.label];
+  const label=candidates.find(function(value){return value!==null&&value!==undefined&&String(value).trim()!=='';});
+  if(label)return String(label).trim();
+  const code=String(item&&item.name||item&&item.responseName||'').trim();
+  throw new Error('QUESTION_LABEL_MISSING:'+String(section||'')+':'+String(index+1)+':'+code);
+}
+function addScalePages(arr,section,items){items.forEach((x,n)=>arr.push({section,kind:'scale',label:scaleQuestionLabel_(x,section,n),key:x.name||x.responseName,options:x.options||x.responseOptions,item:n+1,total:items.length,instruction:x.instructions||''}))}
 
 function choicePage(section,label,key,options){return{section,kind:'choice',label,key,options}}
 
@@ -207,7 +214,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-19-R8.3-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.5-DRAFT-RESUME-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -393,13 +400,18 @@ function downloadCurrent(){
   const event=ST.flow==='backfill'?'historical_paper_reentry':ST.flow==='clinical'?'clinical_supplement':ST.flow==='mri_visit'?'mri_scan':ST.flow==='stage2'?'stage_2_questionnaires':'screening_core',p=payload('',event,'draft'),headers=Object.keys(p),data={};headers.forEach(k=>data[k]=p[k]===undefined?null:p[k]);downloadObj({metadata:{workflow:ST.flow,downloaded_at:new Date().toISOString(),question_bank_version:B.version,app_build:APP_BUILD,header_count:headers.length},headers,data},`${ST.flow||'apathy'}_${val('p_id')||'draft'}`)
 }
 
+function currentFlowDraftKeys_(flow){
+  return ['apathy-fe-clean-v2-'+flow,'apathy-fe-clean-v1-'+flow,'apathy-v7-'+flow];
+}
 function confirmClear(){
+  const flow=ST.flow;
+  const label={screening:'首次篩查',stage2:'第二階段問卷',mri_visit:'MRI到訪',clinical:'PD臨床資料',backfill:'歷史資料補錄'}[flow]||flow;
   const m=el('div','modal'),b=el('div','modal-box');
-  b.append(el('h2','','清除此裝置全部資料？'),el('p','',
-    '此操作會清除此瀏覽器內所有入口、所有Participant的本機草稿、目前位置及暫存Submission ID；不會影響後端已提交資料或已下載JSON。'));
+  b.append(el('h2','','只清除此入口的本機資料？'),el('p','',
+    '此操作只會清除「'+label+'」入口在此瀏覽器的草稿、目前位置及暫存Submission ID；不會清除其他入口，也不會影響後端已提交資料或已下載JSON。'));
   const a=el('div','submitbar');
-  a.append(btn('取消',()=>m.remove(),'linkbtn'),btn('確定全部清除',()=>{
-    Object.keys(localStorage).forEach(k=>{if(/^apathy-(?:v\d+-)?/.test(k))localStorage.removeItem(k)});
+  a.append(btn('取消',()=>m.remove(),'linkbtn'),btn('確定清除此入口',()=>{
+    currentFlowDraftKeys_(flow).forEach(k=>localStorage.removeItem(k));
     resetFlow();ST.submission=uuid();m.remove();home();
   },'primary'));
   b.append(a);m.append(b);document.body.append(m)
@@ -849,17 +861,30 @@ function clinicalIdentityGateBatch1_(){
   ST.flow='clinical';
   const m=appShell();m.append(toolbar('PD臨床資料'));
   const s=el('section','identity'),error=el('div','error');
-  s.append(el('h2','','建立本次Clinical記錄'),el('p','hint','本入口只建立新的PD Clinical事件，不搜尋或載入已提交的Clinical。P_ID及S_ID尚未取得時可留空。'));
-  s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));
-  s.append(fieldIdDigits('P_ID（可稍後補）','p_id',val('participant_series')==='Y'?'Y':'P','例：167'));
-  s.append(fieldIdDigits('S_ID（可稍後補）','s_id','S','例：108'),error);
+  const hasDraft=Object.keys(ST.answers||{}).some(function(k){return !['contact_phone','p_id','s_id'].includes(k)&&present(k)})||(ST.meds||[]).length>0;
+  s.append(el('h2','',hasDraft?'繼續未完成的Clinical記錄':'建立本次Clinical記錄'));
+  s.append(el('p','hint',hasDraft?'已載入此入口保存在本機的Clinical草稿。重新輸入或核對身份不會清除已填內容。':'P_ID、S_ID或8位電話至少一項。資料会持续自动保存在此入口的本机草稿。'));
+  if(hasDraft){
+    s.append(resultBox('已恢复本机草稿',[
+      '已填写字段：'+Object.keys(ST.answers||{}).filter(function(k){return present(k)}).length,
+      '药物记录：'+(ST.meds||[]).length+'项',
+      'Submission ID：'+String(ST.submission||'')
+    ],'good'));
+    s.append(btn('直接继续填写Clinical',()=>renderClinical(),'primary'));
+  }
+  s.append(fieldText('联络电话','contact_phone','例：9123 4567'));
+  s.append(fieldIdDigits('P_ID（可稍后补）','p_id',val('participant_series')==='Y'?'Y':'P','例：167'));
+  s.append(fieldIdDigits('S_ID（可稍后补）','s_id','S','例：108'),error);
   const open=()=>{
     const phone=clinicalNormalizedPhonePhase3_(),pd=numericIdValue(val('p_id')),sd=numericIdValue(val('s_id'));
-    if(phone.length<8){error.textContent='請填寫有效聯絡電話。P_ID及S_ID可稍後補。';return}
-    set('contact_phone',phone);set('p_id',pd?canonicalParticipantId(pd):null);set('s_id',sd?canonicalScanId(sd):null);set('pd_hc_status','PD');
+    if(!pd&&!sd&&phone.length!==8){error.textContent='请填写P_ID、S_ID或有效8位联络电话其中一项。';return}
+    if(phone.length===8)set('contact_phone',phone);
+    if(pd)set('p_id',canonicalParticipantId(pd));
+    if(sd)set('s_id',canonicalScanId(sd));
+    if(!present('pd_hc_status'))set('pd_hc_status','PD');
     setDerived('clinical_identity_status',pd?'pid_known':sd?'sid_known':'phone_pending_pid');safeSave();renderClinical();
   };
-  s.append(btn('開始本次Clinical記錄',open,'primary'));m.append(s)
+  s.append(btn(hasDraft?'核对身份并继续':'开始本次Clinical记录',open,'primary'));m.append(s)
 }
 
 function identityGate(title){if(ST.flow==='mri_visit')return mriIdentityGatePhase2_();if(ST.flow==='clinical')return clinicalIdentityGateBatch1_();home()}
@@ -1025,95 +1050,36 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-17-no-cors-status-v1';
+const SUBMISSION_TRANSPORT_BUILD='2026-08-20-10-second-total-budget-v2';
 
 function receiverStatusJsonpFinal_(submissionId,timeoutMs){
   return new Promise(function(resolve,reject){
-    const callbackName='__apathy_status_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const script=document.createElement('script');
-    const url=new URL(C.receiverUrl);
-    let settled=false;
-    let retired=false;
+    const callbackName='__apathy_status_'+Date.now()+'_'+Math.random().toString(36).slice(2),script=document.createElement('script'),url=new URL(C.receiverUrl);
+    let settled=false,retired=false;
     function removeScript(){if(script.parentNode)script.parentNode.removeChild(script)}
-    function retireCallback(){
-      if(retired)return;
-      retired=true;
-      window[callbackName]=function(){};
-      window.setTimeout(function(){
-        try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}
-      },120000);
-    }
-    const timer=window.setTimeout(function(){
-      if(settled)return;
-      settled=true;
-      removeScript();
-      retireCallback();
-      reject(new Error('Receiver status verification timed out'));
-    },timeoutMs||45000);
-    window[callbackName]=function(result){
-      if(settled)return;
-      settled=true;
-      window.clearTimeout(timer);
-      removeScript();
-      retireCallback();
-      resolve(result);
-    };
-    script.onerror=function(){
-      if(settled)return;
-      settled=true;
-      window.clearTimeout(timer);
-      removeScript();
-      retireCallback();
-      reject(new Error('Receiver status endpoint could not be loaded'));
-    };
-    url.searchParams.set('action','status');
-    url.searchParams.set('submission_id',String(submissionId||''));
-    url.searchParams.set('callback',callbackName);
-    url.searchParams.set('_ts',String(Date.now()));
-    script.src=url.toString();
-    script.async=true;
-    document.head.appendChild(script);
-  });
+    function retireCallback(){if(retired)return;retired=true;window[callbackName]=function(){};window.setTimeout(function(){try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}},30000)}
+    const timer=window.setTimeout(function(){if(settled)return;settled=true;removeScript();retireCallback();reject(new Error('Receiver status verification timed out'))},Math.max(250,Number(timeoutMs)||1600));
+    window[callbackName]=function(result){if(settled)return;settled=true;window.clearTimeout(timer);removeScript();retireCallback();resolve(result)};
+    script.onerror=function(){if(settled)return;settled=true;window.clearTimeout(timer);removeScript();retireCallback();reject(new Error('Receiver status endpoint could not be loaded'))};
+    url.searchParams.set('action','status');url.searchParams.set('submission_id',String(submissionId||''));url.searchParams.set('callback',callbackName);url.searchParams.set('_ts',String(Date.now()));script.src=url.toString();script.async=true;document.head.appendChild(script)
+  })
 }
-
-async function receiverPostNoCorsFinal_(submissionPayload){
-  await fetch(C.receiverUrl,{
-    method:'POST',
-    mode:'no-cors',
-    cache:'no-store',
-    redirect:'follow',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(submissionPayload)
-  });
-  return{transport_ok:true,submission_id:submissionPayload.submission_id};
-}
-
-function receiverWaitFinal_(milliseconds){
-  return new Promise(function(resolve){window.setTimeout(resolve,milliseconds)});
-}
-
-async function confirmSubmissionFinal_(submissionId){
-  let lastStatus=null;
-  let lastError=null;
-  const waits=[800,1600,3000,5000];
+async function receiverPostNoCorsFinal_(submissionPayload){await fetch(C.receiverUrl,{method:'POST',mode:'no-cors',cache:'no-store',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(submissionPayload)});return{transport_ok:true,submission_id:submissionPayload.submission_id}}
+function receiverWaitFinal_(milliseconds){return new Promise(function(resolve){window.setTimeout(resolve,milliseconds)})}
+async function confirmSubmissionFinal_(submissionId,startedAt){
+  const start=Number(startedAt)||Date.now(),deadline=start+10000,waits=[250,500,850,1300,1800];let lastStatus=null,lastError=null;
   for(let attempt=0;attempt<waits.length;attempt++){
-    await receiverWaitFinal_(waits[attempt]);
-    try{
-      lastStatus=await receiverStatusJsonpFinal_(submissionId,45000);
-      if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true){
-        return{confirmed:true,status:lastStatus,attempt:attempt+1};
-      }
-    }catch(error){
-      lastError=error;
-      console.warn('Receiver status verification failed',attempt+1,error);
-    }
+    let remaining=deadline-Date.now();if(remaining<=250)break;await receiverWaitFinal_(Math.min(waits[attempt],Math.max(0,remaining-200)));remaining=deadline-Date.now();if(remaining<=250)break;
+    try{lastStatus=await receiverStatusJsonpFinal_(submissionId,Math.min(1600,Math.max(250,remaining-100)));if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true)return{confirmed:true,status:lastStatus,attempt:attempt+1}}
+    catch(error){lastError=error;console.warn('Receiver status verification failed',attempt+1,error)}
   }
-  return{confirmed:false,status:lastStatus,error:lastError,confirmation_timed_out:Boolean(lastError)};
+  return{confirmed:false,status:lastStatus,error:lastError,confirmation_timed_out:true,elapsed_ms:Date.now()-start}
 }
 
 async function submitPayload(form,event,status){
   if(ST.submitting)return;
 
+  const submissionStartedAt=Date.now();
   const p=payload(form,event,status);
   if(!p.submission_id){
     ST.submission=ST.submission||uuid();
@@ -1128,7 +1094,7 @@ async function submitPayload(form,event,status){
   const modal=el('div','modal');
   const box=el('div','modal-box submit-wait');
   const title=el('h2','','正在提交資料……');
-  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並以Submission ID確認寫入。');
+  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並確認寫入；整個等待不會超過10秒。');
   const timer=el('div','status','已等待0秒');
   box.append(title,msg,timer);
   modal.append(box);
@@ -1137,12 +1103,12 @@ async function submitPayload(form,event,status){
   let seconds=0;
   const tick=window.setInterval(function(){
     seconds++;
-    timer.textContent='已等待'+seconds+'秒'+(seconds>15?'；仍在確認Receiver写入，请不要重复提交。':'');
+    timer.textContent='已等待'+seconds+'秒'+(seconds>=8?'；即將完成10秒確認預算。':'');
   },1000);
 
   try{
     await receiverPostNoCorsFinal_(p);
-    const verification=await confirmSubmissionFinal_(submissionId);
+    const verification=await confirmSubmissionFinal_(submissionId,submissionStartedAt);
 
     if(!verification.confirmed){
       const error=new Error('资料已发送，但Receiver暂时没有确认写入。');
@@ -1296,7 +1262,7 @@ function handleGlobalKeydown(e){
   if(!/^\d$/.test(e.key))return;const n=Number(e.key);
   if(pg.kind==='scale'||pg.kind==='cdarsScale'){
     const opts=pg.options||[];let hit=null,position=null;
-    if(ST.flow==='stage2'&&opts.length===4&&n>=1&&n<=4){hit=opts[n-1];position=n}else{hit=opts.find(o=>Number(o.value)===n)||((opts.length===4&&n>=1&&n<=4)?opts[n-1]:null);position=hit?opts.indexOf(hit)+1:null}
+    if(opts.length===4&&n>=1&&n<=4){hit=opts[n-1];position=n}else{hit=opts.find(o=>Number(o.value)===n)||null;position=hit?opts.indexOf(hit)+1:null}
     if(hit){e.preventDefault();set(pg.key,hit.value);ST.error='';const selector=`[data-answer-key="${pg.key}"][data-answer-position="${position}"]`,button=q(selector);if(button){button.classList.add('selected');button.style.backgroundColor='#145a96';button.style.borderColor='#145a96';button.style.color='#ffffff'}return ST.flow==='screening'?setTimeout(autoNext,220):player()}
   }
   if(ST.flow==='stage2'&&pg.kind==='iorScenario'&&n>=1&&n<=5){const id=String(pg.scenario).padStart(2,'0'),missing=['frequency','conviction','distress'].find(k=>!present(`ior${id}_${k}`))||'distress';e.preventDefault();set(`ior${id}_${missing}`,n);ST.error='';return player()}

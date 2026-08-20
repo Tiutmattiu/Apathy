@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.8-FAST-CONFIRM-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.9-SINGLE-POST-RECEIPT-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -251,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.8-FAST-CONFIRM-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.9-SINGLE-POST-RECEIPT-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -1093,8 +1093,31 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-20-parallel-post-status-v3';
+const SUBMISSION_TRANSPORT_BUILD='2026-08-20-single-post-iframe-receipt-v4';
 
+function receiverPostIframeReceiptFinal_(submissionPayload,timeoutMs){
+  return new Promise(function(resolve,reject){
+    const nonce=uuid(),iframe=document.createElement('iframe'),form=document.createElement('form');
+    const frameName='apathy_receipt_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    let settled=false;
+    iframe.name=frameName;iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
+    form.method='POST';form.action=C.receiverUrl;form.target=frameName;form.style.display='none';
+    function hidden(name,value){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input)}
+    hidden('data',JSON.stringify(submissionPayload));hidden('receipt_mode','iframe');hidden('receipt_nonce',nonce);hidden('parent_origin',location.origin);
+    function cleanup(){window.removeEventListener('message',onMessage);window.clearTimeout(timer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
+    function finishError(error){if(settled)return;settled=true;cleanup();reject(error)}
+    function onMessage(event){
+      const d=event&&event.data;
+      if(!d||d.type!=='APATHY_SUBMISSION_RECEIPT'||d.receipt_nonce!==nonce)return;
+      if(String(d.submission_id||'')!==String(submissionPayload.submission_id||''))return;
+      if(!/^(https:\/\/script\.google\.com|https:\/\/script\.googleusercontent\.com)$/.test(String(event.origin||'')))return;
+      settled=true;cleanup();resolve(d);
+    }
+    const timer=window.setTimeout(function(){finishError(Object.assign(new Error('Receiver single-POST receipt timed out'),{code:'SUBMISSION_UNCONFIRMED'}))},Math.max(1000,Number(timeoutMs)||10000));
+    window.addEventListener('message',onMessage);document.body.append(iframe,form);
+    try{form.submit()}catch(error){finishError(error)}
+  })
+}
 function receiverStatusJsonpFinal_(submissionId,timeoutMs){
   return new Promise(function(resolve,reject){
     const callbackName='__apathy_status_'+Date.now()+'_'+Math.random().toString(36).slice(2),script=document.createElement('script'),url=new URL(C.receiverUrl);
@@ -1150,27 +1173,19 @@ async function submitPayload(form,event,status){
   },1000);
 
   try{
-    let postError=null;
-    const postPromise=receiverPostNoCorsFinal_(p).catch(function(error){postError=error;return null});
-    const verification=await confirmSubmissionFinal_(submissionId,submissionStartedAt);
-
-    if(!verification.confirmed){
-      const error=new Error(postError?'资料传送未完成，Receiver亦未确认写入。':'资料已发送，但Receiver暂时没有确认写入。');
-      error.code=postError?'SUBMISSION_TRANSPORT_ERROR':'SUBMISSION_UNCONFIRMED';
+    const receipt=await receiverPostIframeReceiptFinal_(p,10000);
+    if(!receipt||receipt.ok!==true){
+      const error=new Error(String(receipt&&receipt.message||'Receiver未确认写入。'));
+      error.code=String(receipt&&receipt.error_code||'SUBMISSION_UNCONFIRMED');
       error.submission_id=submissionId;
-      error.last_status=verification.status;
-      error.cause=postError||verification.error;
       throw error;
     }
-    postPromise.catch(function(){});
-
     window.clearInterval(tick);
     box.innerHTML='';
-    const found=verification.status&&verification.status.result;
     box.append(
       el('h2','','提交成功'),
       el('p','',`Submission ID：${submissionId}`),
-      el('p','hint',found&&found.sheet?`Receiver已确认写入：${found.sheet} #${found.row}`:'Receiver已确认收到资料。'),
+      el('p','hint',receipt.sheet?`Receiver已确认写入：${receipt.sheet} #${receipt.row}${receipt.duplicate?'（已存在，同ID未重复写入）':''}`:'Receiver已确认收到资料。'),
       btn('返回',function(){
         modal.remove();
         ST.submission=uuid();

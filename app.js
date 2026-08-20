@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.6-SCREENING-ENTRY-HOTFIX';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.7-SCREENING-UX-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -119,8 +119,32 @@ function renderRBMain(a){
   },'choice'+(val('rbdsq_section_confirmed')===1?' selected':'')));
 }
 
-function renderScreenResult(a){calculateAllDerived();const s=screenScores();a.append(resultBox('首次篩查臨時計分',[s.moca,`HADS：焦慮 ${s.hadsA}/21（Review >6），抑鬱 ${s.hadsD}/21（Review >9）`,`SAS：${s.sas}`,`QUIP-RS：${s.quiprs}`,`RBDSQ：${s.rb}`,`MRI安全：${s.mri}`,'以上為前端臨時預覽，正式結果以後端Result Core為準。'],s.blockers.length?'warn':'good'));a.append(resultBox('臨時分類提示',[`系統提示：${s.suggestion}`,...(s.reasons.length?s.reasons:['目前沒有額外提示。']),'此提示不等於正式Group或Decision。'],s.blockers.length?'warn':'good'));const g=el('div','direct');C.finalDecisions.forEach(x=>g.append(btn(x[1],()=>{set('final_screening_decision',x[0]);player()},'choice'+(sameValue(val('final_screening_decision'),x[0])?' selected':''))));a.append(el('h3','','工作人員最終決定'),g);renderMRIAdminFields(a);if(['OTHER_EXCLUDE','PENDING'].includes(val('final_screening_decision'))){const t=el('textarea');t.placeholder='請說明最終決定原因';t.value=val('final_screening_reason')||'';t.oninput=()=>set('final_screening_reason',t.value);a.append(t)}}
-
+function renderScaleIntro(pg,a){
+  a.append(el('div','plain-block'),el('p','instruction',pg.introText||''));
+  const note=el('div','result good');
+  note.append(el('strong','',pg.introTitle||pg.section),el('p','',pg.introText||''));
+  a.innerHTML='';a.append(note);
+}
+function renderScreenResult(a){
+  calculateAllDerived();
+  const s=screenScores(),lines=[];
+  lines.push(s.moca);
+  lines.push(`HADS A：${s.hadsComplete?s.hadsA+'/21':'未完成'}｜門檻 >6｜${s.hadsComplete?(s.hadsA>6?'需要情緒覆核':'不需情緒覆核'):'暫不判定'}`);
+  lines.push(`HADS D：${s.hadsComplete?s.hadsD+'/21':'未完成'}｜門檻 >9｜${s.hadsComplete?(s.hadsD>9?'需要情緒覆核':'不需情緒覆核'):'暫不判定'}`);
+  lines.push(`SAS：${s.sasComplete?s.sas+'/42｜門檻 ≥14｜'+(s.sas>=14?'達門檻':'未達門檻'):'未完成｜暫不計分'}`);
+  lines.push(`QUIP-RS：${s.quiprs}`);
+  lines.push(`RBDSQ：${s.rb}`);
+  lines.push(`MRI安全：${s.mri}`);
+  lines.push(`臨時流程提示：${s.reasons.length?s.reasons.join('；'):'目前沒有額外覆核提示。'}`);
+  lines.push('以上只供工作人員即場核對；正式結果、Group及Decision以後端Result Core為準。');
+  a.append(resultBox('首次篩查臨時結果',lines,s.blockers.length?'warn':'good'));
+  a.append(el('h3','','工作人員最終決定'),el('p','hint','請根據完整篩查資料作出本次流程決定。前端提示不會自動代替工作人員決定。'));
+  const g=el('div','direct');
+  C.finalDecisions.forEach(x=>g.append(btn(x[1],()=>{set('final_screening_decision',x[0]);player()},'choice'+(sameValue(val('final_screening_decision'),x[0])?' selected':''))));
+  a.append(g);
+  renderMRIAdminFields(a);
+  if(['OTHER_EXCLUDE','PENDING'].includes(val('final_screening_decision'))){const t=el('textarea');t.placeholder='請說明最終決定原因';t.value=val('final_screening_reason')||'';t.oninput=()=>set('final_screening_reason',t.value);a.append(t)}
+}
 function labelledScale(title,key,labels,parent,onDone){const w=el('div','plain-block');w.append(el('strong','',title));const g=el('div','scale-buttons');labels.forEach((lab,n)=>{const value=n+1,b=btn('',()=>{set(key,value);if(onDone)onDone()},val(key)===value?'selected':'');b.append(el('strong','',String(value)),document.createTextNode(lab));g.append(b)});w.append(g);parent.append(w)}
 
 function renderPDIYes(pg,a){a.append(el('p','instruction','未選代表「沒有」；如有此情況，直接點選下方題幹。'));const g=el('div','direct');g.append(btn('有此情況',()=>{set(pg.pdi.yesField,val(pg.pdi.yesField)===1?0:1);if(val(pg.pdi.yesField)===1)autoNext();else player()},val(pg.pdi.yesField)===1?'selected':''));a.append(g)}
@@ -139,29 +163,35 @@ function sum(arr){return arr.reduce((s,k)=>s+(Number(val(k))||0),0)}
 
 function screenScores(){
   const raw=val('moca_1_raw_total'),cut=val('moca_1_16th_cutoff');
-  const hA=sum([1,3,5,7,9,11,13].map(n=>`hads${String(n).padStart(2,'0')}_score`));
-  const hD=sum([2,4,6,8,10,12,14].map(n=>`hads${String(n).padStart(2,'0')}_score`));
-  const sas=sum(Array.from({length:14},(_,i)=>`sas${String(i+1).padStart(2,'0')}_score`));
-  const qr=scoreQuipRS(),rb=scoreRB(),mriSel=C.mriSafety.filter(x=>val(x[0])===1);
+  const hAKeys=[1,3,5,7,9,11,13].map(n=>`hads${String(n).padStart(2,'0')}_score`),hDKeys=[2,4,6,8,10,12,14].map(n=>`hads${String(n).padStart(2,'0')}_score`);
+  const hadsComplete=complete(hAKeys.concat(hDKeys)),hA=hadsComplete?sum(hAKeys):null,hD=hadsComplete?sum(hDKeys):null;
+  const sasKeys=Array.from({length:14},(_,i)=>`sas${String(i+1).padStart(2,'0')}_score`),sasComplete=complete(sasKeys),sas=sasComplete?sum(sasKeys):null;
+  const qr=scoreQuipRS(),rb=scoreRB(),rbComplete=Number(val('rbdsq_complete'))===1,mriSel=C.mriSafety.filter(x=>val(x[0])===1),mriNone=val('mri_safety_none_confirmed')===1;
   const reasons=[],blockers=[];
   const identity=val('pd_hc_status'),selfPd=val('pd_status_self_report');
-  if(identity==='HC'&&Number(selfPd)===1){reasons.push('身份衝突：已確認身份為HC，但Participant自述有PD');blockers.push('IDENTITY_CONFLICT')}
-  if(hA>6||hD>9){reasons.push(`情緒排除：HADS A=${hA}（>6）、D=${hD}（>9）`);blockers.push('EMOTION_EXCLUDE')}
-  if(cut!==null&&raw!==null&&raw<=cut){reasons.push('認知排除候選：MoCA低於或等於第16百分位');blockers.push('COGNITIVE_EXCLUDE')}
+  if(identity==='HC'&&Number(selfPd)===1){reasons.push('身份待核實');blockers.push('IDENTITY_CONFLICT')}
+  if(hadsComplete&&(hA>6||hD>9)){reasons.push(`情緒覆核：HADS A=${hA}、D=${hD}`);blockers.push('EMOTION_EXCLUDE')}
+  if(cut!==null&&raw!==null&&raw<=cut){reasons.push('認知覆核：MoCA低於或等於第16百分位');blockers.push('COGNITIVE_EXCLUDE')}
   if(mriSel.length){reasons.push('MRI安全待核實：'+mriSel.map(x=>x[1]).join('、'));blockers.push('MRI_SAFETY_EXCLUDE')}
-  if(identity==='HC'&&qr.hit.length)reasons.push('QUIP-RS達PD適用Cutoff（HC不作ICD排除）：'+qr.hit.join('、'));
+  if(identity==='HC'&&qr.hit.length)reasons.push('QUIP-RS達PD適用Cutoff（HC只作覆核）：'+qr.hit.join('、'));
   let suggestion='待決定',code='PENDING';
-  if(blockers.includes('EMOTION_EXCLUDE')){suggestion='情緒排除／覆核候選';code='EMOTION_EXCLUDE'}
-  else if(blockers.includes('COGNITIVE_EXCLUDE')){suggestion='認知排除候選';code='COGNITIVE_EXCLUDE'}
-  else if(blockers.includes('MRI_SAFETY_EXCLUDE')){suggestion='MRI安全排除／覆核候選';code='MRI_SAFETY_EXCLUDE'}
+  if(blockers.includes('EMOTION_EXCLUDE')){suggestion='情緒覆核候選';code='EMOTION_EXCLUDE'}
+  else if(blockers.includes('COGNITIVE_EXCLUDE')){suggestion='認知覆核候選';code='COGNITIVE_EXCLUDE'}
+  else if(blockers.includes('MRI_SAFETY_EXCLUDE')){suggestion='MRI安全覆核候選';code='MRI_SAFETY_EXCLUDE'}
   else if(blockers.includes('IDENTITY_CONFLICT')){suggestion='身份待核實';code='PENDING'}
   else if(identity==='HC'){suggestion='健康對照（HC）';code='HC'}
-  else if(qr.hit.length){suggestion='ICD排除';code='ICD_EXCLUDE';reasons.push('QUIP-RS達到Cutoff：'+qr.hit.join('、'))}
-  else if(sas>=14){suggestion='冷漠組（Apathy）';code='Apathy'}
-  else if(complete(Array.from({length:14},(_,i)=>`sas${String(i+1).padStart(2,'0')}_score`))){suggestion='非冷漠PD組（Pure PD）';code='Pure_PD'}
-  return{moca:raw===null?'MoCA未完成':`MoCA ${raw}/30；${cut===null?'需覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}`,hadsA:hA,hadsD:hD,sas:`${sas}/42${sas>=14?'，達Cutoff':'，未達Cutoff'}`,quiprs:qr.complete?`${qr.hit.length?'達Cutoff：'+qr.hit.join('、'):'未達排除Cutoff'}`:'未完成',rb:`${rb.total}/13，${rb.note}`,mri:mriSel.length?`待核實：${mriSel.map(x=>x[1]).join('、')}`:'未申報風險',suggestion,code,reasons,blockers}
+  else if(qr.complete&&qr.hit.length){suggestion='ICD排除';code='ICD_EXCLUDE';reasons.push('QUIP-RS達到Cutoff：'+qr.hit.join('、'))}
+  else if(sasComplete&&sas>=14){suggestion='冷漠組（Apathy）';code='Apathy'}
+  else if(sasComplete){suggestion='非冷漠PD組（Pure PD）';code='Pure_PD'}
+  return{
+    moca:raw===null?'MoCA：未完成':`MoCA：${raw}/30｜${cut===null?'需覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}`,
+    hadsA:hA,hadsD:hD,hadsComplete,sas,sasComplete,
+    quiprs:qr.complete?(qr.hit.length?'達Cutoff：'+qr.hit.join('、'):'完整｜未達排除Cutoff'):'未完成｜暫不計分',
+    rb:rbComplete?`${rb.total}/13｜${rb.note}`:'未完成｜暫不計分',
+    mri:mriSel.length?`待核實：${mriSel.map(x=>x[1]).join('、')}`:mriNone?'已確認以上項目全部沒有':'尚未完成確認',
+    suggestion,code,reasons,blockers
+  }
 }
-
 function scoreQuipRS(){const domains=['a','b','c','d','e1','e2','f'],tot={};domains.forEach(d=>tot[d]=sum([1,2,3,4].map(n=>`quiprs_${d}_${n}_score`)));const completeAll=domains.every(d=>complete([1,2,3,4].map(n=>`quiprs_${d}_${n}_score`))),E=tot.e1+tot.e2,AD=tot.a+tot.b+tot.c+tot.d,hit=[];if(completeAll){if(tot.a>=6)hit.push('賭博');if(tot.b>=8)hit.push(B.quip.domains.find(d=>d.key==='b')?.fullLabel||QUIP_DOMAIN_B_FULL_LABEL);if(tot.c>=8)hit.push('購物');if(tot.d>=7)hit.push('進食');if(E>=7)hit.push('任務／重複活動');if(AD>=10)hit.push('AD')}return{complete:completeAll,hit,tot,E,AD,AF:AD+E+tot.f}}
 
 function scoreRB(){const keys=B.rbdsq.items.map(x=>x.name),base=sum(keys),q10=B.rbdsq.diseaseItems.some(x=>val(x.name)===1)?1:0,total=base+q10,id=val('pd_hc_status'),cut=id==='PD'?6:id==='HC'?5:null;return{total,note:cut===null?'Cutoff待身份':`${total>=cut?'達到':'未達'}Cutoff ${cut}`}}
@@ -221,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.6-SCREENING-ENTRY-HOTFIX';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.7-SCREENING-UX-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -579,7 +609,7 @@ function addDirectLedd(parent,label,key){const f=el('div','field'),i=el('input',
 
 function renderLeddPanel(s){const m=calculateManualLeddHV_();setDerived('medication_coefficient_version','hospital-v1.0');setDerived('ledd_system_levodopa',m.levodopa);setDerived('ledd_system_da',m.da);setDerived('ledd_system_other',m.other);setDerived('ledd_system_total',m.complete?m.total:null);setDerived('medication_manual_review_json',JSON.stringify(m));s.append(resultBox('系統計算LEDD',[`Levodopa：${m.levodopa} mg`,`DA：${m.da} mg`,`Other：${m.other} mg`,`Total：${m.total} mg`,m.pending?`仍有 ${m.pending} 款需要核驗；正式System Total保持不可用。`:'所有已加入藥物均已處理。'],m.complete?'good':'warn'));const h=el('div','plain-block');h.append(el('h3','','醫院提供結果（如有）'),el('p','hint','醫院沒有提供時可留空。系統計算不會覆蓋醫院值。'));addDirectLedd(h,'Levodopa LEDD','ledd_hospital_levodopa');addDirectLedd(h,'DA LEDD','ledd_hospital_da');addDirectLedd(h,'Other LEDD（如有）','ledd_hospital_other');addDirectLedd(h,'Total LEDD','ledd_hospital_total');s.append(h);const hosp={levodopa:medHVNum_(val('ledd_hospital_levodopa')),da:medHVNum_(val('ledd_hospital_da')),other:medHVNum_(val('ledd_hospital_other')),total:medHVNum_(val('ledd_hospital_total'))};const hasHosp=hosp.total!==null;const src=hasHosp?'hospital_supplied':m.complete?'system_calculated':'pending';setDerived('ledd_final_source',src);setDerived('ledd_final_levodopa',hasHosp?hosp.levodopa:m.complete?m.levodopa:null);setDerived('ledd_final_da',hasHosp?hosp.da:m.complete?m.da:null);setDerived('ledd_final_other',hasHosp?hosp.other:m.complete?m.other:null);setDerived('ledd_final_total',hasHosp?hosp.total:m.complete?m.total:null);setDerived('levodopa_ledd_mg',val('ledd_final_levodopa'));setDerived('da_ledd_mg',val('ledd_final_da'));setDerived('total_ledd_mg',val('ledd_final_total'));s.append(resultBox('提交前核驗',[`Final來源：${src}`,`Hospital：${hasHosp?hosp.total:'—'} mg`,`System：${m.complete?m.total:'—'} mg`,`Final：${val('ledd_final_total')??'—'} mg`],hasHosp||m.complete?'good':'warn'));}
 
-function screeningPages(){const p=[];p.push(choicePage('身分及基本資料','Participant類型','participant_series',C.participantTypes));p.push(inputPage('身分及基本資料','姓名','participant_name','例：CHAN TAI MAN 陳大文'));p.push({section:'身分及基本資料',kind:'dob',label:'出生日期'});p.push(choicePage('身分及基本資料','性別','gender',[['M','M'],['F','F']]));p.push({section:'身分及基本資料',kind:'pdIdentity',label:'已確認研究身份'});p.push(inputPage('身分及基本資料','聯絡電話','contact_phone','例：9123 4567'));p.push(choicePage('身分及基本資料','招募來源','recruitment_source_code',C.recruitment));p.push({section:'身分及基本資料',kind:'educationVerified',label:'教育程度及實際受教育年數'});p.push({section:'MoCA',kind:'moca',label:'MoCA原始總分'});addScalePages(p,'HADS',B.hads.items);p.push({section:'HADS',kind:'scaleResult',scale:'HADS',label:'HADS結果'});p.push({section:'QUIP',kind:'quipGroup',group:0,label:'QUIP第1／3組：相關行為'});p.push({section:'QUIP',kind:'quipGroup',group:1,label:'QUIP第2／3組：柏金遜症藥物使用'});p.push({section:'QUIP',kind:'quipGroup',group:2,label:'QUIP第3／3組：其他重複或過度行為'});p.push({section:'QUIP',kind:'scaleResult',scale:'QUIP',label:'QUIP結果'});p.push({section:'QUIP-RS',kind:'quipRsMatrix',label:'QUIP-RS'});p.push({section:'QUIP-RS',kind:'scaleResult',scale:'QUIP-RS',label:'QUIP-RS結果'});addScalePages(p,'SAS',B.sas.items.map((x,n)=>({name:x.name,fullLabel:x.fullLabel,options:x.responseOptions.map((o,j)=>({label:o.label,value:B.sas.scoring.displayOrderByItem[n+1][j]}))})));p.push({section:'SAS',kind:'scaleResult',scale:'SAS',label:'SAS結果'});p.push({section:'RBDSQ',kind:'rbMain',label:'RBDSQ主問卷'});p.push({section:'RBDSQ',kind:'rbQ10',label:B.rbdsq.diseaseQuestion});p.push({section:'RBDSQ',kind:'scaleResult',scale:'RBDSQ',label:'RBDSQ結果'});p.push({section:'MRI安全',kind:'mriSafety',label:'MRI安全'});p.push({section:'篩查結果',kind:'screenResult',label:'首次篩查結果及最終決定'});return p}
+function screeningPages(){const p=[];p.push(choicePage('身分及基本資料','Participant類型','participant_series',C.participantTypes));p.push(inputPage('身分及基本資料','姓名','participant_name','例：CHAN TAI MAN 陳大文'));p.push({section:'身分及基本資料',kind:'dob',label:'出生日期'});p.push(choicePage('身分及基本資料','性別','gender',[['M','M'],['F','F']]));p.push({section:'身分及基本資料',kind:'pdIdentity',label:'已確認研究身份'});p.push(inputPage('身分及基本資料','聯絡電話','contact_phone','例：9123 4567'));p.push(choicePage('身分及基本資料','招募來源','recruitment_source_code',C.recruitment));p.push({section:'身分及基本資料',kind:'educationVerified',label:'教育程度及實際受教育年數'});p.push({section:'MoCA',kind:'moca',label:'MoCA原始總分'});p.push({section:'HADS',kind:'scaleIntro',label:'HADS作答說明',introTitle:'HADS情緒問卷',introText:'請回想過去一星期的感受。每題只選擇一個最符合實際情況的答案；沒有正確或錯誤答案。'});addScalePages(p,'HADS',B.hads.items);p.push({section:'HADS',kind:'scaleResult',scale:'HADS',label:'HADS結果'});p.push({section:'QUIP',kind:'quipGroup',group:0,label:'QUIP第1／3組：相關行為'});p.push({section:'QUIP',kind:'quipGroup',group:1,label:'QUIP第2／3組：柏金遜症藥物使用'});p.push({section:'QUIP',kind:'quipGroup',group:2,label:'QUIP第3／3組：其他重複或過度行為'});p.push({section:'QUIP',kind:'scaleResult',scale:'QUIP',label:'QUIP結果'});p.push({section:'QUIP-RS',kind:'quipRsMatrix',label:'QUIP-RS'});p.push({section:'QUIP-RS',kind:'scaleResult',scale:'QUIP-RS',label:'QUIP-RS結果'});addScalePages(p,'SAS',B.sas.items.map((x,n)=>({name:x.name,fullLabel:x.fullLabel,options:x.responseOptions.map((o,j)=>({label:o.label,value:B.sas.scoring.displayOrderByItem[n+1][j]}))})));p.push({section:'SAS',kind:'scaleResult',scale:'SAS',label:'SAS結果'});p.push({section:'RBDSQ',kind:'rbMain',label:'RBDSQ主問卷'});p.push({section:'RBDSQ',kind:'rbQ10',label:B.rbdsq.diseaseQuestion});p.push({section:'RBDSQ',kind:'scaleResult',scale:'RBDSQ',label:'RBDSQ結果'});p.push({section:'MRI安全',kind:'mriSafety',label:'MRI安全'});p.push({section:'篩查結果',kind:'screenResult',label:'首次篩查結果及最終決定'});return p}
 
 function renderDOB(a){const row=el('div','date-row'),names=[['dob_d','DD',2],['dob_m','MM',2],['dob_y','YYYY',4]],ageBox=el('div');function commit(go){const d=+val('dob_d'),m=+val('dob_m'),y=+val('dob_y'),dt=new Date(y,m-1,d);if(!d||!m||!y||dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d||dt>new Date())return false;set('date_of_birth',`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);const age=calcAge();set('age_years',age);ageBox.className='result good';ageBox.textContent=`年齡：${age}歲（自動計算）`;if(go)autoNext();return true}names.forEach((x,n)=>{const i=el('input','digits');i.inputMode='numeric';i.maxLength=x[2];i.placeholder=x[1];i.value=val(x[0])||'';i.oninput=()=>{i.value=i.value.replace(/\D/g,'').slice(0,x[2]);set(x[0],i.value);if(i.value.length===x[2]&&n<2)qa('input',row)[n+1].focus();if(n===2&&i.value.length===4)commit(false)};i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit(true)}else if(e.key==='Backspace'&&!i.value&&n>0)qa('input',row)[n-1].focus()};row.append(i)});a.append(row,ageBox);if(calcAge()!==null){ageBox.className='result good';ageBox.textContent=`年齡：${calcAge()}歲（自動計算）`}}
 
@@ -625,7 +655,7 @@ function player(){
   h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
   const qbox=el('section','question');if(pg.context)qbox.append(el('div','context',pg.context));qbox.append(el('h3','',pg.label));renderPage(pg,qbox);if(ST.error)qbox.append(el('div','error',ST.error));m.append(qbox);
   const nav=el('div','nav');nav.append(btn('返回上一個',()=>{if(ST.step>0){ST.step--;ST.error='';saveDraft();player()}},'secondary'));
-  const needsExplicit=['cdarsExamples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','iorScenario'];
+  const needsExplicit=['cdarsExamples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','iorScenario','scaleIntro'];
   if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'))}
   m.append(nav);setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30);
 }
@@ -677,8 +707,14 @@ function renderQuipGroup(pg,a){
 
 function renderMRISafety(a){a.append(el('p','instruction','請選擇參加者存在的情況。若全部沒有，必須按「以上項目全部沒有」。'));const keys=C.mriSafety.map(x=>x[0]),g=el('div','toggle-grid');C.mriSafety.forEach(x=>g.append(btn(x[1],()=>{set(x[0],val(x[0])===1?0:1);if(val(x[0])===1)set('mri_safety_none_confirmed',0);player()},'toggle'+(val(x[0])===1?' selected':''))));a.append(g);const selected=C.mriSafety.filter(x=>val(x[0])===1);if(selected.length){const r=el('div','result bad');r.append(el('strong','',`已選MRI安全／一般項目：${selected.map(x=>x[1]).join('、')}`));const t=el('textarea');t.placeholder='補充資料／待核實內容';t.value=val('mri_safety_detail')||'';t.oninput=()=>set('mri_safety_detail',t.value);r.append(t);a.append(r)}a.append(btn('以上項目全部沒有',()=>{keys.forEach(k=>set(k,0));set('mri_safety_none_confirmed',1);player()},'choice'+(val('mri_safety_none_confirmed')===1?' selected':'')))}
 
-function renderRBQ10(a){const keys=B.rbdsq.diseaseItems.map(x=>x.name),g=el('div','toggle-grid');B.rbdsq.diseaseItems.forEach(i=>{const w=el('div');w.append(btn(i.fullLabel,()=>{set(i.name,val(i.name)===1?0:1);if(val(i.name)===1)set('rbq10_none_confirmed',0);player()},'toggle'+(val(i.name)===1?' selected':'')));if(i.detailField&&val(i.name)===1){const t=el('textarea','conditional');t.placeholder='請說明其他神經系統疾病';t.value=val(i.detailField)||'';t.oninput=()=>set(i.detailField,t.value);w.append(t)}g.append(w)});a.append(g);a.append(btn('以上項目全部沒有',()=>{keys.forEach(k=>set(k,0));set('rbq10_none_confirmed',1);player()},'choice'+(val('rbq10_none_confirmed')===1?' selected':'')))}
-
+function renderRBQ10(a){
+  const keys=B.rbdsq.diseaseItems.map(x=>x.name),g=el('div','toggle-grid');
+  B.rbdsq.diseaseItems.forEach(i=>g.append(btn(i.fullLabel,()=>{set(i.name,val(i.name)===1?0:1);if(val(i.name)===1)set('rbq10_none_confirmed',0);player()},'toggle'+(val(i.name)===1?' selected':''))));
+  a.append(g);
+  const other=B.rbdsq.diseaseItems.find(i=>i.detailField&&val(i.name)===1);
+  if(other){const t=el('textarea','conditional');t.placeholder='請說明其他神經系統疾病';t.value=val(other.detailField)||'';t.oninput=()=>set(other.detailField,t.value);a.append(t)}
+  a.append(btn('以上項目全部沒有',()=>{keys.forEach(k=>set(k,0));set('rbq10_none_confirmed',1);player()},'choice'+(val('rbq10_none_confirmed')===1?' selected':'')))
+}
 function submitFormal(){
   const pages=playerPages();
   const requiredPages=pages.filter(pg=>!['stage2Summary','scaleResult'].includes(pg.kind));
@@ -1190,7 +1226,7 @@ function stage2Pages(){
 function renderPage(pg,a){
   if(pg.kind==='choice')return renderChoice(pg,a);if(pg.kind==='input')return renderInput(pg,a);if(pg.kind==='dob')return renderDOB(a);
   if(pg.kind==='pdIdentity')return renderPdIdentity(a);if(pg.kind==='educationVerified')return renderEducationVerified(a);if(pg.kind==='stage2Pd')return renderStage2Pd(a);
-  if(pg.kind==='positiveOne')return renderPositiveOne(pg,a);if(pg.kind==='scale')return renderScale(pg,a);if(pg.kind==='moca')return renderMoca(a);
+  if(pg.kind==='positiveOne')return renderPositiveOne(pg,a);if(pg.kind==='scaleIntro')return renderScaleIntro(pg,a);if(pg.kind==='scale')return renderScale(pg,a);if(pg.kind==='moca')return renderMoca(a);
   if(pg.kind==='quipShared')return renderQuipShared(pg,a);if(pg.kind==='quipExtra')return renderQuipExtra(pg,a);if(pg.kind==='quipGroup')return renderQuipGroup(pg,a);if(pg.kind==='quipRsMatrix')return renderQuipRsMatrix(a);
   if(pg.kind==='rbMain')return renderRBMain(a);if(pg.kind==='rbQ10')return renderRBQ10(a);if(pg.kind==='mriSafety')return renderMRISafety(a);if(pg.kind==='screenResult')return renderScreenResult(a);if(pg.kind==='scaleResult')return renderScaleCompletion(pg,a);
   if(pg.kind==='cdarsExamples')return renderCdarsExamples(pg,a);if(pg.kind==='cdarsScale')return renderCdarsScale(pg,a);if(pg.kind==='pdiItem')return renderPdiItem(pg,a);if(pg.kind==='iorScenario')return renderIORScenario(pg,a);if(pg.kind==='stage2Summary')return renderStage2Summary(a);
@@ -1233,7 +1269,7 @@ function pageComplete(pg){
   if(pg.kind==='rbMain')return present(B.rbdsq.sourceField)&&val('rbdsq_section_confirmed')===1&&B.rbdsq.items.every(x=>present(x.name));
   if(pg.kind==='screenResult')return present('final_screening_decision');
   if(pg.kind==='dob')return present('date_of_birth');if(pg.kind==='moca')return present('moca_1_raw_total');
-  if(['stage2Summary','scaleResult'].includes(pg.kind))return true;
+  if(['stage2Summary','scaleResult','scaleIntro'].includes(pg.kind))return true;
   return pg.key?present(pg.key):true;
 }
 

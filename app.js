@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.7-SCREENING-UX-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-20-R8.8-FAST-CONFIRM-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -251,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-20-R8.7-SCREENING-UX-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-20-R8.8-FAST-CONFIRM-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -1093,7 +1093,7 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-20-10-second-total-budget-v2';
+const SUBMISSION_TRANSPORT_BUILD='2026-08-20-parallel-post-status-v3';
 
 function receiverStatusJsonpFinal_(submissionId,timeoutMs){
   return new Promise(function(resolve,reject){
@@ -1150,17 +1150,19 @@ async function submitPayload(form,event,status){
   },1000);
 
   try{
-    await receiverPostNoCorsFinal_(p);
+    let postError=null;
+    const postPromise=receiverPostNoCorsFinal_(p).catch(function(error){postError=error;return null});
     const verification=await confirmSubmissionFinal_(submissionId,submissionStartedAt);
 
     if(!verification.confirmed){
-      const error=new Error('资料已发送，但Receiver暂时没有确认写入。');
-      error.code='SUBMISSION_UNCONFIRMED';
+      const error=new Error(postError?'资料传送未完成，Receiver亦未确认写入。':'资料已发送，但Receiver暂时没有确认写入。');
+      error.code=postError?'SUBMISSION_TRANSPORT_ERROR':'SUBMISSION_UNCONFIRMED';
       error.submission_id=submissionId;
       error.last_status=verification.status;
-      error.cause=verification.error;
+      error.cause=postError||verification.error;
       throw error;
     }
+    postPromise.catch(function(){});
 
     window.clearInterval(tick);
     box.innerHTML='';

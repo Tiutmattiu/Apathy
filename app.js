@@ -3,7 +3,7 @@
 (function(){
 const B=window.APATHY_QUESTION_BANK,C=window.FORM_CONFIG,ROOT=document.getElementById('app');
 
-const FRONTEND_RELEASE='FE-CLEAN-2026-08-21-R8.11-15S-BOUNDED-CONFIRM-COMPLETE';
+const FRONTEND_RELEASE='FE-CLEAN-2026-08-21-R8.12-DIRECT-FETCH-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
@@ -251,7 +251,7 @@ function canonicalHeaders(){const set=new Set(['schema_version','submission_id',
 
 function downloadObj(o,name){const blob=new Blob([JSON.stringify(o,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`${name}_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();URL.revokeObjectURL(u)}
 
-const APP_BUILD='FE-CLEAN-2026-08-21-R8.11-15S-BOUNDED-CONFIRM-COMPLETE';
+const APP_BUILD='FE-CLEAN-2026-08-21-R8.12-DIRECT-FETCH-COMPLETE';
 
 const RECEIVER_FORM_BY_EVENT=Object.freeze({
   screening_core:'screening',stage_2_questionnaires:'screening',clinical_supplement:'screening',
@@ -1093,107 +1093,30 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
-const SUBMISSION_TRANSPORT_BUILD='2026-08-21-15s-bounded-confirm-v6';
-
-function receiverPostLoadThenStatusFinal_(submissionPayload,timeoutMs){
-  return new Promise(function(resolve,reject){
-    const iframe=document.createElement('iframe'),form=document.createElement('form');
-    const frameName='apathy_submit_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const totalBudget=Math.max(3000,Number(timeoutMs)||15000),deadline=Date.now()+totalBudget;
-    const retryDelays=[0,500,900,1600,2400,3000];
-    let settled=false,postStarted=false,confirmationStarted=false,loadCount=0,fallbackTimer=null;
-    iframe.name=frameName;iframe.src='about:blank';iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
-    form.method='POST';form.action=C.receiverUrl;form.target=frameName;form.style.display='none';
-    function hidden(name,value){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input)}
-    hidden('data',JSON.stringify(submissionPayload));
-    function cleanup(){window.clearTimeout(hardTimer);window.clearTimeout(fallbackTimer);window.setTimeout(function(){form.remove();iframe.remove()},0)}
-    function fail(error){if(settled)return;settled=true;cleanup();reject(error)}
-    function succeed(status,attempt){
-      if(settled)return;
-      settled=true;cleanup();
-      resolve({
-        ok:true,
-        duplicate:false,
-        submission_id:submissionPayload.submission_id,
-        sheet:status&&status.result?status.result.sheet||'':'',
-        row:status&&status.result?status.result.row||'':'',
-        logical_record_key:status&&status.result?status.result.logical_record_key||'':'',
-        receiver_version:status?status.receiver_version||'':'',
-        receiver_contract:status?status.receiver_contract||'':'',
-        confirmation_attempt:attempt
-      });
-    }
-    async function runConfirmationLoop(){
-      if(confirmationStarted||settled)return;
-      confirmationStarted=true;
-      let lastError=null,lastStatus=null;
-      for(let attempt=0;attempt<retryDelays.length;attempt++){
-        const delay=retryDelays[attempt];
-        if(delay>0)await receiverWaitFinal_(delay);
-        if(settled)return;
-        const remaining=deadline-Date.now();
-        if(remaining<=350)break;
-        try{
-          lastStatus=await receiverStatusJsonpFinal_(
-            submissionPayload.submission_id,
-            Math.min(2500,Math.max(500,remaining-150))
-          );
-          if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true){
-            return succeed(lastStatus,attempt+1);
-          }
-        }catch(error){
-          lastError=error;
-          console.warn('Receiver bounded status attempt failed',attempt+1,error);
-        }
-      }
-      const error=Object.assign(
-        new Error(lastError&&lastError.message?lastError.message:'Receiver status did not confirm submission'),
-        {code:'SUBMISSION_UNCONFIRMED',last_status:lastStatus}
-      );
-      fail(error);
-    }
-    iframe.addEventListener('load',function(){
-      loadCount+=1;
-      if(!postStarted){
-        postStarted=true;
-        try{
-          form.submit();
-          fallbackTimer=window.setTimeout(runConfirmationLoop,3500);
-        }catch(error){fail(error)}
-        return;
-      }
-      if(loadCount>=2)runConfirmationLoop();
-    });
-    const hardTimer=window.setTimeout(function(){
-      fail(Object.assign(new Error('Receiver confirmation timed out'),{code:'SUBMISSION_UNCONFIRMED'}));
-    },totalBudget);
-    document.body.append(iframe,form);
-  })
-}
-function receiverStatusJsonpFinal_(submissionId,timeoutMs){
-  return new Promise(function(resolve,reject){
-    const callbackName='__apathy_status_'+Date.now()+'_'+Math.random().toString(36).slice(2),script=document.createElement('script'),url=new URL(C.receiverUrl);
-    let settled=false,retired=false;
-    function removeScript(){if(script.parentNode)script.parentNode.removeChild(script)}
-    function retireCallback(){if(retired)return;retired=true;window[callbackName]=function(){};window.setTimeout(function(){try{delete window[callbackName]}catch(ignored){window[callbackName]=undefined}},30000)}
-    const timer=window.setTimeout(function(){if(settled)return;settled=true;removeScript();retireCallback();reject(new Error('Receiver status verification timed out'))},Math.max(250,Number(timeoutMs)||1600));
-    window[callbackName]=function(result){if(settled)return;settled=true;window.clearTimeout(timer);removeScript();retireCallback();resolve(result)};
-    script.onerror=function(){if(settled)return;settled=true;window.clearTimeout(timer);removeScript();retireCallback();reject(new Error('Receiver status endpoint could not be loaded'))};
-    url.searchParams.set('action','status');url.searchParams.set('submission_id',String(submissionId||''));url.searchParams.set('callback',callbackName);url.searchParams.set('_ts',String(Date.now()));script.src=url.toString();script.async=true;document.head.appendChild(script)
-  })
-}
-async function receiverPostNoCorsFinal_(submissionPayload){await fetch(C.receiverUrl,{method:'POST',mode:'no-cors',cache:'no-store',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(submissionPayload)});return{transport_ok:true,submission_id:submissionPayload.submission_id}}
-function receiverWaitFinal_(milliseconds){return new Promise(function(resolve){window.setTimeout(resolve,milliseconds)})}
-async function confirmSubmissionFinal_(submissionId,startedAt){
-  const start=Number(startedAt)||Date.now(),deadline=start+10000,waits=[250,500,850,1300,1800];let lastStatus=null,lastError=null;
-  for(let attempt=0;attempt<waits.length;attempt++){
-    let remaining=deadline-Date.now();if(remaining<=250)break;await receiverWaitFinal_(Math.min(waits[attempt],Math.max(0,remaining-200)));remaining=deadline-Date.now();if(remaining<=250)break;
-    try{lastStatus=await receiverStatusJsonpFinal_(submissionId,Math.min(1600,Math.max(250,remaining-100)));if(lastStatus&&lastStatus.ok===true&&lastStatus.received===true)return{confirmed:true,status:lastStatus,attempt:attempt+1}}
-    catch(error){lastError=error;console.warn('Receiver status verification failed',attempt+1,error)}
+const SUBMISSION_TRANSPORT_BUILD='2026-08-21-direct-fetch-v7';
+async function receiverPostDirectFinal_(submissionPayload){
+  const response=await fetch(C.receiverUrl,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(submissionPayload)
+  });
+  const text=await response.text();
+  let result;
+  try{
+    result=JSON.parse(text);
+  }catch(error){
+    const invalid=new Error('Receiver返回的内容不是有效JSON：'+String(text||'').slice(0,240));
+    invalid.code='INVALID_RECEIVER_RESPONSE';
+    throw invalid;
   }
-  return{confirmed:false,status:lastStatus,error:lastError,confirmation_timed_out:true,elapsed_ms:Date.now()-start}
+  if(!response.ok||!result||result.ok!==true){
+    const failure=new Error(String(result&&result.message||'Receiver未确认收到资料。'));
+    failure.code=String(result&&result.error_code||'RECEIVER_REJECTED');
+    failure.details=result||null;
+    throw failure;
+  }
+  return result;
 }
-
 function safeSubmissionFileToken_(value){return String(value||'').trim().replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'unknown'}
 function submissionIdentityToken_(p){
   const phone=String(p.contact_phone_normalized||p.contact_phone||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
@@ -1242,7 +1165,7 @@ async function submitPayload(form,event,status){
   const modal=el('div','modal');
   const box=el('div','modal-box submit-wait');
   const title=el('h2','','正在提交資料……');
-  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送並確認寫入；正常目標為10秒內完成；最長確認時間為15秒。');
+  const msg=el('p','','請不要重新整理、關閉頁面或重複按提交。系統正在傳送資料；Receiver完成寫入後会直接返回结果。');
   const timer=el('div','status','已等待0秒');
   const backupNote=el('p','hint',backupResult.downloaded?'已自动下载提交JSON：'+backupResult.file_name:'此Submission ID的提交JSON此前已自动下载，本次不会重复下载。');
   box.append(title,msg,backupNote,timer);
@@ -1252,14 +1175,14 @@ async function submitPayload(form,event,status){
   let seconds=0;
   const tick=window.setInterval(function(){
     seconds++;
-    timer.textContent='已等待'+seconds+'秒'+(seconds>=10?'；Receiver確認較平常稍長，系統會在15秒內結束確認。':'');
+    timer.textContent='已等待'+seconds+'秒'+(seconds>=15?'；Receiver回應較平常稍長，請保持頁面開啟。':'');
   },1000);
 
   try{
-    const receipt=await receiverPostLoadThenStatusFinal_(submissionSnapshot,15000);
+    const receipt=await receiverPostDirectFinal_(submissionSnapshot);
     if(!receipt||receipt.ok!==true){
       const error=new Error(String(receipt&&receipt.message||'Receiver未确认写入。'));
-      error.code=String(receipt&&receipt.error_code||'SUBMISSION_UNCONFIRMED');
+      error.code=String(receipt&&receipt.error_code||'RECEIVER_REJECTED');
       error.submission_id=submissionId;
       throw error;
     }
@@ -1279,22 +1202,11 @@ async function submitPayload(form,event,status){
   }catch(error){
     window.clearInterval(tick);
     box.innerHTML='';
-
-    if(error&&error.code==='SUBMISSION_UNCONFIRMED'){
-      box.append(
-        el('h2','','资料写入状态尚未确认'),
-        el('p','','资料已经发送，但浏览器的Receiver状态确认逾时。资料可能已经写入，请保留原Submission ID；确认Raw后如需重试，必须使用同一ID。'),
-        el('p','',`Submission ID：${submissionId}`),
-        el('p','hint','本机草稿及原Submission ID均已保留。此提示不代表写入失败，也不算浏览器已确认提交成功。')
-      );
-    }else{
-      box.append(
-        el('h2','','提交未完成'),
-        el('p','',`资料仍保存在此装置。${String(error&&error.message?error.message:error)}`),
-        el('p','hint',`Submission ID：${submissionId}`)
-      );
-    }
-
+    box.append(
+      el('h2','','提交未完成'),
+      el('p','',`資料仍保存在此裝置。${String(error&&error.message?error.message:error)}`),
+      el('p','hint',`Submission ID：${submissionId}。如需重試，必須保留並使用同一Submission ID。`)
+    );
     const actions=el('div','submitbar');
     actions.append(
       btn('下载本地JSON',downloadCurrent,'linkbtn'),

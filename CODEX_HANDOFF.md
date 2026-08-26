@@ -94,7 +94,9 @@ The first Production Output run failed on an incorrect matcher argument. The Out
 
 ## Remaining blocker
 
-No code blocker remains for this vertical slice. A new real orphan-resolution write still requires a human-authorized participant/submission match; the system must not invent that authority decision.
+No code or Production-runtime blocker remains for this vertical slice. A new real orphan-resolution write still requires a human-authorized participant/submission match; the system must not invent that authority decision.
+
+Repository delivery is locally committed, but the branch push is pending GitHub authentication on this host. No GitHub credential was present, and the agent did not create or persist a new credential without explicit action-time approval.
 
 ## Next human action
 

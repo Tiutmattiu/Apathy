@@ -2,122 +2,107 @@
 
 ## Task
 
-**Phase 5C — Narrow live-source review of Participant Phase 5B**
+**Phase 5B — Final Runtime / Rollback Acceptance**
 
-This task packet is intentionally sanitized for the public repository. Any backend source, private candidate files, workbook snapshots, participant-level fixtures, Production logs, or identifiers must be supplied to Codex privately and must not be committed here.
+This packet is intentionally sanitized for the public repository. Do not commit participant identifiers, clinical payloads, workbook contents, private backend source, logs containing sensitive data, credentials, tokens, or Production secrets.
 
-## Required context
+## Current accepted state
 
-Before doing anything, read:
+Treat these as already established and do not re-prove them unless contradictory runtime evidence appears:
 
-1. `CURRENT_STATUS.md`
-2. the current private/live `participant.gs`
-3. the private Phase 5B candidate `participant.gs`
-4. the private Phase 5B diff and simulation summary if supplied
+- Phase 5C live-source review: PASS.
+- Candidate baseline matched the current Production-aligned Participant source with no unrelated drift.
+- Candidate Full rebuild completed successfully through Event, Participant, Result/Decision, Boss/Admin, and checkpoint.
+- Offline propagation audit: `READY_FOR_FINAL_RUNTIME_CHECKS`.
+- Phase 5B Participant changes stayed within the approved 12 completion paths plus the narrow workflow-stage regression guard.
+- Scope leakage: none found.
+- Field Provenance: preserved.
+- Result propagation: limited to expected PDI confirmation changes.
+- Boss regression: none in the compared snapshot.
+- Admin false-action explosion caused by Phase 5B: none found.
+- Medication/LEDD drift caused by Phase 5B: none found.
 
-Do **not** restart the investigation or perform a broad architecture audit.
+The separate medication/LEDD authority backlog is not part of this task.
 
-## Accepted semantic contract
+## Human-first operating rule
 
-Treat the following as already established for this review:
+Prefer simple human UI actions when an existing function or sidebar can safely perform the check in seconds or a few minutes.
 
-- Raw/Event evidence remains preserved.
-- The defect is in Participant current-state winner semantics, not evidence loss.
-- The approved candidate scope is narrow completion ownership plus the proven workflow regression guard.
-- Normal owner events retain their existing owner-domain authority.
-- Backfill remains valid formal evidence.
-- Backfill completion authority is domain-specific and requires same-event source-level evidence for the corresponding domain.
-- A single qualifying source item is sufficient to establish Backfill domain evidence; do not require a complete questionnaire.
-- Rejected current-state winners must remain in provenance/history.
-- Do not introduce global `TRUE_ONCE` behavior.
-- Do not broaden into unrelated scientific/timepoint semantics.
+Do not invoke Codex merely to click an existing button or run an existing function.
 
-## Review goals
+Use Codex only if runtime behavior is ambiguous, a code change is required, a runner/integration failure needs live-source analysis, or cross-file dynamic reasoning cannot be resolved by the operator.
 
-Review Phase 5B against the **current live/private source** and current payload/path contracts.
+## Required final checks
 
-Check only concrete defects in these areas:
+### 1. Human live Trace checks
 
-1. **Event-type normalization**
-   - Confirm the actual current Participant event-type normalization.
-   - Verify that the candidate owner-event names match the normalized values used during merge.
+Use the existing Trace UI against representative Phase 5B semantic classes. The private operator may use participant-specific fixtures from the offline audit; do not commit those identifiers here.
 
-2. **Exact source-path vocabulary**
-   Confirm current source-level path vocabulary for the approved domains:
-   - HADS
-   - SAS
-   - QUIP-RS
-   - GAS
-   - AMI
-   - C-DARS
-   - R-GPTS
-   - PDI
-   - IOR
-   - UPDRS III
+Confirm at least:
 
-3. **Backfill evidence predicates**
-   For each Phase 5B predicate, look for:
-   - false negatives on legitimate source evidence;
-   - false positives on completion, total, calculated, status, review, or other derived leaves.
+- normal Stage 2 owner restored over polluted later evidence;
+- evidence-supported Backfill remains eligible;
+- unsupported Backfill/non-owner completion is rejected as current winner but remains visible in evidence history;
+- workflow does not regress from Stage 2 to Stage 1;
+- PDI page confirmation winner is correct;
+- UPDRS completion ownership behaves correctly;
+- an unchanged medication/LEDD case remains unchanged as a negative control.
 
-4. **Complexity / implementation shape**
-   - Confirm Backfill domain evidence is computed once per event and reused during leaf winner selection.
-   - Do not replace this with per-completion rescans of the same event.
+For each click, record only a sanitized PASS/FAIL summary in the public handoff. Keep participant-level details private.
 
-5. **Provenance preservation**
-   - Confirm all formal present leaves continue to append to Field Provenance even when rejected as current-state winners.
+### 2. Full / Incremental parity
 
-6. **Scope containment**
-   - Confirm paths outside the approved Phase 5B scope are behaviorally unchanged.
-   - Do not add new semantic families during this review.
+Follow the **existing runner contract**. Do not invent a new runner or new acceptance architecture.
 
-7. **Runner / interface stability**
-   - Confirm public entrypoints, Participant sheet contracts, and Full runner integration remain unchanged unless a concrete defect requires a narrow fix.
+Verify that an incremental run on an appropriate controlled change produces the same final state for affected records as the corresponding Full processing semantics require.
 
-8. **Clinical event alias check**
-   - Determine whether any extra Clinical owner alias in the candidate is actually reachable after current Participant normalization.
-   - Do not change it merely for cleanliness if it is harmless.
+If the operator does not know the exact existing function names, inspect the current helper UI/source or ask for the function dropdown; do not guess command names.
 
-## Known simulation-harness note
+### 3. Rollback / failed-run behavior
 
-The supplied offline Python simulation genuinely computes the unsupported-Backfill-winner metric.
+Verify the existing rollback/failure contract:
 
-One secondary reported overwrite metric was not independently populated in the harness; it was effectively inferred from the genuinely computed unsupported-winner result.
+- an intentionally failed or interrupted Candidate run must not replace the last known-correct published output;
+- checkpoint/run-state must remain interpretable;
+- recovery must use the existing runner/rollback mechanism rather than manual sheet surgery.
 
-Treat this as a **test-harness quality issue**, not automatically as a Participant implementation blocker.
+Do not damage or intentionally corrupt research data merely to create a failure. Use the safest existing controlled failure/rollback mechanism available in the runner contract.
 
-If useful, either:
+If no safe existing mechanism is available, stop and report `BLOCKED_RUNTIME_TEST_DESIGN` rather than improvising destructive testing.
 
-- compute the secondary metric independently, or
-- state explicitly that it is a derived assertion rather than an independent test.
+### 4. Atomic-promotion readiness
 
-## Modification rule
+Before promotion, verify:
 
-If a concrete live-source/predicate defect is found:
+- exact reviewed Phase 5B Participant candidate is the version intended for promotion;
+- no unrelated private/live source edits are bundled with it;
+- final runtime checks are all PASS;
+- a rollback path to the previous accepted Participant source is available;
+- the operator understands the one action that performs promotion under the existing contract.
 
-- modify **only `participant.gs`**;
-- keep the same narrow semantic contract;
-- make the smallest possible change;
-- report the exact defect and exact changed functions/lines;
-- rerun only the relevant candidate checks;
-- do not touch Event, Result, Output/Admin, Trace, Receiver, frontend, migration code, Raw, or workbook data.
+Do not promote during an analysis-only task. Promotion requires explicit human operator action/judgment.
 
-If no concrete blocker is found:
+## Verdicts
 
-> Declare Phase 5B ready for **Candidate Full rebuild**.
+Use one of:
 
-Do not perform Production promotion in this task.
+- `BLOCKED`
+- `READY_FOR_ATOMIC_PROMOTION`
 
-## Required output
+Do not use `PRODUCTION_READY` before all runtime/rollback checks have actually passed.
 
-Return a concise review with:
+## Required sanitized handoff
 
-1. verdict: `BLOCKED` or `READY_FOR_CANDIDATE_REBUILD`;
-2. exact concrete defects found, if any;
-3. exact candidate changes made, if any;
-4. predicate/path-vocabulary verification result;
-5. provenance/scope/runner checks;
-6. simulation-harness note disposition;
-7. the next operational step.
+Return or write a concise sanitized handoff containing:
 
-Stop after this narrow review.
+1. Trace runtime verdict;
+2. Full/Incremental parity verdict;
+3. rollback/failed-run verdict;
+4. atomic-promotion readiness;
+5. concrete blocker, if any;
+6. whether any source file changed;
+7. next human action.
+
+No participant identifiers or private workbook evidence in the public repository.
+
+Stop after final runtime/rollback acceptance. Do not broaden into medication/LEDD, frontend cleanup, Admin redesign, migration, or architecture contraction.

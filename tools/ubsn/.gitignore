@@ -1,0 +1,12 @@
+.local/
+captures/
+artifacts/
+config.local.json
+waiting-list.local.json
+.venv/
+__pycache__/
+*.pyc
+*.log
+browser-profile/
+playwright-profile/
+storage-state*.json

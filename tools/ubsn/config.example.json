@@ -1,0 +1,20 @@
+{
+  "assistant": "DISPLAY_NAME",
+  "project": "PROJECT_CODE",
+  "payment": "OPTION_VALUE",
+  "waiting_list_file": "waiting-list.local.json",
+  "profile_dir": ".local/browser-profile",
+  "audit_file": ".local/audit.jsonl",
+  "screenshot_dir": ".local/screenshots",
+  "capture_dir": "captures",
+  "port": 8765,
+  "allowed_origins": ["null", "http://127.0.0.1:8000", "http://localhost:8000"],
+  "monitor_enabled": false,
+  "monitor_days_ahead": 7,
+  "release_window_start": "08:45",
+  "release_window_end": "09:15",
+  "release_poll_interval_seconds": 15,
+  "normal_poll_interval_seconds": 180,
+  "action_expiry_minutes": 30,
+  "manual_login_timeout_seconds": 300
+}

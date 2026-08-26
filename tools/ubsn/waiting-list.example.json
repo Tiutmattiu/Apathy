@@ -1,0 +1,15 @@
+[
+  {
+    "pid": "P_EXAMPLE",
+    "mri_status": "WAITING",
+    "wait_since": "2026-05-10",
+    "earliest_date": "2026-08-01",
+    "latest_date": "2026-10-31",
+    "allowed_weekdays": [0, 2],
+    "earliest_time": "08:30",
+    "latest_time": "12:30",
+    "minimum_duration": 90,
+    "priority": 100,
+    "notes": ""
+  }
+]

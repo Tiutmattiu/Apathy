@@ -47,6 +47,7 @@ assert.match(helperSource, /if \(answer !== ui\.Button\.YES\) return;/);
 assert.match(helperSource, /traceShowCurrentBossCell/);
 assert.match(traceSource, /function traceShowParticipantSearch\(/);
 assert.match(traceSource, /function traceOpenSource\(/);
+assert.match(traceSource, /blank_fields:blanks,value_fields:values/);
 assert.match(traceSource, /apathyDiagnosisClassify_/);
 assert.doesNotMatch([diagnosisSource, outputSource, helperSource, traceSource].join('\n'), /P\d{3,}|S\d{3,}/);
 

@@ -35,7 +35,8 @@ Important privacy rule: the public repository must not contain participant-ident
 
 - Read-only Boss-cell trace is working as a useful vertical slice.
 - It can follow a Boss cell through Result/Review, Participant state, Event evidence, Raw source, and control metadata.
-- Trace is useful and accepted as a direction/product slice, but global diagnosis vocabulary and staff-action classification are unfinished.
+- Representative live Phase 5B runtime fixtures passed for owner restoration, supported Backfill, rejected non-owner evidence preservation, workflow regression prevention, PDI confirmations, UPDRS completion ownership, and an unchanged medication/LEDD negative control.
+- Trace remains a product slice rather than a finished staff tool; participant-first search, blank diagnosis, scan-mode coloring, and staff-action classification are planned in `ADMIN_TRACE_VNEXT_SPEC.md`.
 
 ### Participant Phase 5C live-source review
 
@@ -45,7 +46,7 @@ Important privacy rule: the public repository must not contain participant-ident
 - Provenance, scope, public entrypoints, sheet contracts, and runner integration were preserved.
 - No Phase 5C code blocker was found and no unrelated code was changed.
 
-### Participant Phase 5B Candidate Full + offline propagation acceptance
+### Participant Phase 5B Candidate Full + propagation acceptance
 
 - Candidate Full rebuild completed successfully through Event, Participant, Result/Decision, Boss/Admin, and checkpoint commit.
 - Offline pre/post propagation audit completed with verdict `READY_FOR_FINAL_RUNTIME_CHECKS`.
@@ -55,6 +56,7 @@ Important privacy rule: the public repository must not contain participant-ident
 - Boss 90-column output had no changed cells in the compared snapshots.
 - Admin increased only because of isolated external input changes; no Phase 5B false-action explosion was found.
 - Medication/LEDD and unrelated scientific domains showed no Phase 5B drift.
+- Representative live Trace runtime checks: PASS.
 
 ## PROVEN DEFECTS / FINDINGS
 
@@ -63,13 +65,13 @@ Important privacy rule: the public repository must not contain participant-ident
 - The generic latest-present-value merge can allow later unrelated events to overwrite valid earlier participant state.
 - High-confidence examples are workflow/completion state written by non-owner event domains.
 - This is a Participant current-state projection problem; Raw/Event history remains preserved.
-- Phase 5B is the current candidate fix and has passed code, live-contract, Candidate Full, and offline propagation acceptance; final runtime/rollback acceptance remains.
+- Phase 5B is the current candidate fix and has passed code, live-contract, Candidate Full, propagation, and representative live Trace acceptance; only controlled rollback runtime acceptance remains.
 
 ### Frontend payload pollution
 
 - Non-owner routes can emit unrelated/default completion values and other route-independent derived/default state.
 - Receiver/Event preserve those submitted values faithfully; the downstream merge must not treat every emitted leaf as equally authoritative.
-- Frontend payload hygiene remains a later mainline task after Participant correctness acceptance.
+- Frontend payload hygiene remains later work after Participant correctness acceptance.
 
 ### Backfill ownership contamination
 
@@ -84,11 +86,26 @@ Important privacy rule: the public repository must not contain participant-ident
 - These findings pre-existed Phase 5B and showed no Phase 5B propagation drift.
 - Keep this work separate from the Phase 5B promotion decision.
 
+### Incremental runner state
+
+- `runApathyCandidateIncremental()` is intentionally disabled in the active Full-only runner contract and predates Phase 5B.
+- Existing Incremental-related code is queue scaffolding only; there is no hidden runnable Incremental pipeline or equivalence harness.
+- Full-vs-Incremental parity is therefore **N/A for Phase 5B promotion** under the current supported Production contract.
+- Do not enable or implement Incremental merely to finish Phase 5B acceptance.
+
+### Rollback runtime gap
+
+- The active Full runner contains real rollback machinery for visible Boss, Admin, and Event checkpoint state.
+- Source inspection indicates Step 3 captures the previous published state before Result can write Boss; catchable Step 3/Step 4 failures should restore Boss/Admin/checkpoint and verify restoration fingerprints.
+- Natural Apps Script hard timeout is not valid proof that the catch-and-restore path executed.
+- No safe human-callable controlled rollback integration test currently exists.
+- The remaining Phase 5B acceptance blocker is therefore a **DEV-clone-only controlled rollback integration test**, not Participant semantics or Incremental parity.
+
 ## CURRENT CANDIDATE
 
 ### Participant Phase 5B — evidence-gated current-state ownership
 
-Status: **CANDIDATE — READY FOR FINAL RUNTIME / ROLLBACK CHECKS — NOT YET PRODUCTION-ACCEPTED**
+Status: **CANDIDATE — BLOCKED ONLY ON CONTROLLED DEV ROLLBACK INTEGRATION TEST — NOT YET PRODUCTION-ACCEPTED**
 
 Scope:
 
@@ -113,14 +130,17 @@ Acceptance completed so far:
 - Boss regression: PASS;
 - Admin action-explosion check: PASS;
 - medication/LEDD negative control: PASS;
-- confirmed offline blockers: none.
+- representative live Trace checks: PASS;
+- Incremental parity: N/A under the active Full-only contract;
+- rollback source inspection: PASS;
+- confirmed semantic/offline blockers: none.
 
 Still required before Production acceptance:
 
-- human live Trace checks on representative fixtures;
-- Full/Incremental parity required by the active runner contract;
-- rollback / failed-run behavior verification;
-- confirmation that a failed Candidate does not replace the last correct published output;
+- add the smallest guarded DEV-only rollback failpoint harness in `helper.gs`;
+- run controlled Step 3 and Step 4 rollback tests on a cloned workbook only;
+- verify Boss/Admin/checkpoint restoration fingerprints and interpretable failed run state;
+- verify exact reviewed Phase 5B source and rollback-to-prior-source path;
 - atomic-promotion readiness and final human operational judgment.
 
 ## NOT_DONE
@@ -129,13 +149,13 @@ Still required before Production acceptance:
 
 - Admin product is not complete.
 - Completion of manual identity resolution does **not** mean Admin is done.
-- Current/older Admin heuristics can over-generalize missingness from stage/submission presence.
-- Long-term direction: Admin should consume the same field-centric evidence/diagnosis resolver used by Trace and surface only genuine staff actions.
+- Admin should become an operations console, not only a review list.
+- First end-to-end action target: resolve an orphan/unassigned formal submission through the existing authority/control mechanism without rewriting Raw.
+- Detailed product direction is in `ADMIN_TRACE_VNEXT_SPEC.md`.
 
 ### Trace product completion
 
-- Global diagnosis vocabulary is incomplete.
-- Staff-action classification is unfinished.
+- Participant-first search, field/scale search, suspicious-blank filtering, scan-mode Boss coloring, global diagnosis vocabulary, first-break explanation, and staff-action classification are unfinished.
 - Boss blank must be explainable, but Boss blank does not automatically imply an Admin task.
 
 ### Frontend evidence hygiene
@@ -144,19 +164,23 @@ Still required before Production acceptance:
 
 ## CURRENT MAINLINE
 
-1. **Phase 5B final runtime / rollback acceptance.**
-   - Perform representative human Trace checks for owner restoration, supported Backfill, unsupported completion removal, workflow regression prevention, PDI confirmation, UPDRS completion, and an unchanged medication/LEDD negative control.
-   - Verify Full/Incremental parity according to the existing runner contract.
-   - Verify rollback / failed-run behavior and preservation of the last correct output.
-   - Verify atomic-promotion readiness.
+1. **Phase 5B controlled rollback runtime acceptance.**
+   - Do not develop Incremental.
+   - Add only a guarded DEV-clone failpoint harness in `helper.gs`.
+   - Prove Step 3 and Step 4 catchable failures restore Boss/Admin/checkpoint fingerprints and leave interpretable failed run state.
 
-2. **Atomic promotion only after the final runtime checks pass.**
+2. **Atomic promotion readiness** only after rollback integration tests pass.
 
-3. After Participant correctness is accepted:
+3. **Parallel product design/implementation preparation** may proceed without touching the live Phase 5B acceptance surface:
+   - Boss scan-mode blank diagnosis/coloring;
+   - participant-first Trace search;
+   - shared field/applicability diagnosis resolver;
+   - Admin vNext orphan-submission resolver.
+
+4. After Participant correctness is accepted:
+   - ship the first narrow Trace/Admin vNext improvements;
    - frontend payload hygiene;
    - medication/LEDD authority backlog;
-   - Trace/shared resolver maturity;
-   - Admin adoption of the shared resolver;
    - later architecture contraction and legacy cleanup.
 
 ## DO NOT REOPEN / DO NOT BROADEN
@@ -167,17 +191,18 @@ Absent contradictory evidence, do not spend agent time re-proving:
 - Phase 5C source/predicate review;
 - Candidate Full rebuild success;
 - offline Phase 5B propagation/scope/provenance/Boss/Admin acceptance;
+- representative live Trace acceptance;
 - whether Backfill is valid evidence (it is; authority is domain-specific);
 - a global true-once redesign;
-- medication/LEDD authority defects as if they were Phase 5B regressions;
-- Admin redesign before Participant correctness acceptance.
+- Incremental implementation or equivalence for this Full-only release;
+- medication/LEDD authority defects as if they were Phase 5B regressions.
 
 ## AGENT WORKFLOW
 
-- **ChatGPT / project lead reasoning:** define scope, acceptance criteria, status transitions, and hostile semantic review.
+- **ChatGPT / project lead reasoning:** define scope, acceptance criteria, status transitions, product contracts, and hostile semantic review.
 - **Copilot:** heavy offline mechanical/static work, simulations, bulk diffs, source scans, and candidate drafting.
-- **Codex:** narrow high-value live-source, integration, runtime, and Production-sensitive review only when human UI actions are insufficient.
-- **Human operator:** perform simple UI/runtime actions, Production actions, and final operational/product judgment.
+- **Codex:** narrow high-value code edits, live-source integration, runtime, and Production-sensitive review only when human UI actions are insufficient.
+- **Human operator:** perform simple UI/runtime actions, clone/test operations, Production actions, and final operational/product judgment.
 
 Operational rule: if a human can complete a task safely in seconds or a few minutes by clicking/running an existing function, prefer explicit human-readable UI instructions over spending Codex time. Use Codex for code edits, live-source integration analysis, runtime failures, or cross-file dynamic reasoning.
 

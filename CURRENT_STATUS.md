@@ -58,6 +58,17 @@ Important privacy rule: the public repository must not contain participant-ident
 - Medication/LEDD and unrelated scientific domains showed no Phase 5B drift.
 - Representative live Trace runtime checks: PASS.
 
+### Operations vNext first vertical slice
+
+- Production source reconciliation and guarded deployment completed with an immutable pre-change rollback version.
+- Shared field/applicability diagnosis now feeds Boss scan mode, Trace, and hidden Admin action classification.
+- Production Output acceptance passed against the real workbook: Boss retained the 90-column/value contract, Admin direct verification passed, and the diagnostic summary contained aggregate counts only.
+- Boss scan formatting and notes are derived, rollback-protected, and written in batches after a one-pass source index.
+- Existing selected-Boss-cell Trace remains available; participant-first P_ID/S_ID/name search, suspicious/all-blank/current-value views, and safe lineage navigation are installed.
+- Admin identity resolution now has a read-only preview and explicit confirmation before the already accepted Record_Control authority write. Production preview execution passed; no new identity authority decision was made in this work cycle.
+- Raw, Event, Participant, Result, Decision, scientific rules, Registry, Contactlist, and Incremental behavior were not changed.
+- A first Production runtime attempt exposed a matcher integration error; Output rolled back, the one-line defect was fixed with a regression guard, and subsequent Production Output runs passed.
+
 ## PROVEN DEFECTS / FINDINGS
 
 ### Participant current-state merge semantics
@@ -152,6 +163,7 @@ Still required before Production acceptance:
 - Admin should become an operations console, not only a review list.
 - First end-to-end action target: resolve an orphan/unassigned formal submission through the existing authority/control mechanism without rewriting Raw.
 - Detailed product direction is in `ADMIN_TRACE_VNEXT_SPEC.md`.
+- The first shared-diagnosis/scan/search/manual-identity slice is accepted, but broader Admin lifecycle, additional action types, and full navigation polish remain unfinished.
 
 ### Trace product completion
 

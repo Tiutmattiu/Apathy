@@ -5,10 +5,11 @@ const vm = require('vm');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..', '..');
-const diagnosisSource = fs.readFileSync(path.join(root, 'backend', 'diagnosis.js'), 'utf8');
-const outputSource = fs.readFileSync(path.join(root, 'backend', 'output.js'), 'utf8');
-const helperSource = fs.readFileSync(path.join(root, 'backend', 'helper.js'), 'utf8');
-const traceSource = fs.readFileSync(path.join(root, 'backend', 'trace.js'), 'utf8');
+const backend = path.resolve(root, process.argv[2] || 'backend');
+const diagnosisSource = fs.readFileSync(path.join(backend, 'diagnosis.js'), 'utf8');
+const outputSource = fs.readFileSync(path.join(backend, 'output.js'), 'utf8');
+const helperSource = fs.readFileSync(path.join(backend, 'helper.js'), 'utf8');
+const traceSource = fs.readFileSync(path.join(backend, 'trace.js'), 'utf8');
 const context = {};
 vm.createContext(context);
 vm.runInContext(diagnosisSource, context);
@@ -43,6 +44,7 @@ assert.doesNotMatch(applyBody, /Raw|Contactlist|Registry|delete|clearContent/);
 assert.match(helperSource, /if \(answer !== ui\.Button\.YES\) return;/);
 assert.match(helperSource, /traceShowCurrentBossCell/);
 assert.match(traceSource, /function traceShowParticipantSearch\(/);
+assert.match(traceSource, /function traceOpenSource\(/);
 assert.match(traceSource, /apathyDiagnosisClassify_/);
 assert.doesNotMatch([diagnosisSource, outputSource, helperSource, traceSource].join('\n'), /P\d{3,}|S\d{3,}/);
 

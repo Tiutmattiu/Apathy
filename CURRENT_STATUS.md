@@ -1,6 +1,6 @@
 # APATHY CURRENT STATUS
 
-Last updated: 2026-08-26
+Last updated: 2026-08-27
 
 This file is the canonical **sanitized engineering status** for agent handoff.
 
@@ -37,6 +37,25 @@ Important privacy rule: the public repository must not contain participant-ident
 - It can follow a Boss cell through Result/Review, Participant state, Event evidence, Raw source, and control metadata.
 - Trace is useful and accepted as a direction/product slice, but global diagnosis vocabulary and staff-action classification are unfinished.
 
+### Participant Phase 5C live-source review
+
+- Narrow Codex review completed with verdict `READY_FOR_CANDIDATE_REBUILD`.
+- Candidate baseline matched the current Production-aligned Participant source with no unrelated drift.
+- Event-type normalization and approved source-path predicates matched the live contracts.
+- Provenance, scope, public entrypoints, sheet contracts, and runner integration were preserved.
+- No Phase 5C code blocker was found and no unrelated code was changed.
+
+### Participant Phase 5B Candidate Full + offline propagation acceptance
+
+- Candidate Full rebuild completed successfully through Event, Participant, Result/Decision, Boss/Admin, and checkpoint commit.
+- Offline pre/post propagation audit completed with verdict `READY_FOR_FINAL_RUNTIME_CHECKS`.
+- Participant changes were confined to the 12 approved completion paths plus the narrow workflow-stage regression guard; scope leakage was zero.
+- Field Provenance was preserved exactly in the compared snapshots.
+- Result propagation was limited to expected PDI confirmation changes; Result Review did not expand.
+- Boss 90-column output had no changed cells in the compared snapshots.
+- Admin increased only because of isolated external input changes; no Phase 5B false-action explosion was found.
+- Medication/LEDD and unrelated scientific domains showed no Phase 5B drift.
+
 ## PROVEN DEFECTS / FINDINGS
 
 ### Participant current-state merge semantics
@@ -44,6 +63,7 @@ Important privacy rule: the public repository must not contain participant-ident
 - The generic latest-present-value merge can allow later unrelated events to overwrite valid earlier participant state.
 - High-confidence examples are workflow/completion state written by non-owner event domains.
 - This is a Participant current-state projection problem; Raw/Event history remains preserved.
+- Phase 5B is the current candidate fix and has passed code, live-contract, Candidate Full, and offline propagation acceptance; final runtime/rollback acceptance remains.
 
 ### Frontend payload pollution
 
@@ -56,15 +76,23 @@ Important privacy rule: the public repository must not contain participant-ident
 - A Backfill event can contain genuine evidence for one domain while also carrying unrelated derived/default completion values for other domains.
 - Therefore `historical_paper_reentry` event type alone is insufficient to grant authority over every completion domain.
 
+### Medication / LEDD authority backlog
+
+- A separate forensic audit found that many blank PD LEDD outputs are authority/review/mapping gated rather than simple source absence.
+- One reproducible cohort already carries verified legacy final values in current processing but remains pending at final-source authority selection.
+- A broader structured-evidence factor-authority asymmetry exists across multiple medications; Safinamide/Xadago is one clear fixture, not the whole problem.
+- These findings pre-existed Phase 5B and showed no Phase 5B propagation drift.
+- Keep this work separate from the Phase 5B promotion decision.
+
 ## CURRENT CANDIDATE
 
 ### Participant Phase 5B — evidence-gated current-state ownership
 
-Status: **CANDIDATE — NOT IN PRODUCTION**
+Status: **CANDIDATE — READY FOR FINAL RUNTIME / ROLLBACK CHECKS — NOT YET PRODUCTION-ACCEPTED**
 
 Scope:
 
-- implementation target is `participant.gs` only;
+- implementation target is Participant current-state winner semantics only;
 - completion winners are event-domain-owned for the approved narrow completion-field set;
 - workflow projection prevents the proven Stage 2 → Stage 1 regression case without introducing a general workflow state machine;
 - Backfill remains formal evidence;
@@ -74,23 +102,26 @@ Scope:
 - rejected current-state winners remain preserved in provenance/history;
 - scientific item scores, MoCA, MRI safety, MRI sequence values, medication/LEDD, inclusion/withdrawal, payment/receipt, identity authority, and other measurements are outside this candidate's semantic changes.
 
-Offline candidate checks currently indicate:
+Acceptance completed so far:
 
-- scope leakage outside the approved paths: none detected;
-- unsupported Backfill completion winners under the candidate: none detected;
-- provenance sequence behavior remains unchanged in the simulation;
-- accepted fixture behavior from the earlier narrow Participant correction is preserved.
+- offline implementation/simulation review: PASS;
+- narrow live-source / predicate review: PASS;
+- Candidate Full rebuild: PASS;
+- Participant propagation / scope containment: PASS;
+- provenance preservation: PASS;
+- Result/Review propagation: PASS;
+- Boss regression: PASS;
+- Admin action-explosion check: PASS;
+- medication/LEDD negative control: PASS;
+- confirmed offline blockers: none.
 
-Known non-blocking test-harness note:
+Still required before Production acceptance:
 
-- one reported overwrite metric in the Python simulation was not independently populated; it is logically implied by the genuinely computed unsupported-winner count, but Codex should either compute it independently or label it as a derived assertion.
-
-### Phase 5B acceptance state
-
-- Candidate implementation: ready for narrow Codex live-source review.
-- Production deployment: **not performed**.
-- Candidate Full rebuild: **not performed**.
-- Production acceptance: **not granted**.
+- human live Trace checks on representative fixtures;
+- Full/Incremental parity required by the active runner contract;
+- rollback / failed-run behavior verification;
+- confirmation that a failed Candidate does not replace the last correct published output;
+- atomic-promotion readiness and final human operational judgment.
 
 ## NOT_DONE
 
@@ -113,28 +144,17 @@ Known non-blocking test-harness note:
 
 ## CURRENT MAINLINE
 
-1. **Codex narrow live-source review of Participant Phase 5B.**
-   - Do not restart the investigation.
-   - Verify current live event-type normalization and exact source-path vocabulary.
-   - Check only concrete predicate/implementation defects.
-   - Do not broaden semantic scope.
+1. **Phase 5B final runtime / rollback acceptance.**
+   - Perform representative human Trace checks for owner restoration, supported Backfill, unsupported completion removal, workflow regression prevention, PDI confirmation, UPDRS completion, and an unchanged medication/LEDD negative control.
+   - Verify Full/Incremental parity according to the existing runner contract.
+   - Verify rollback / failed-run behavior and preservation of the last correct output.
+   - Verify atomic-promotion readiness.
 
-2. **Candidate Full rebuild** if Codex finds no blocker (or after only narrow concrete fixes).
+2. **Atomic promotion only after the final runtime checks pass.**
 
-3. **Regression / propagation review** after the Candidate rebuild:
-   - Participant current-state winner lineage;
-   - Result Review changes;
-   - Boss output changes;
-   - Admin action-volume / action-semantic changes;
-   - Trace regression on representative cases;
-   - blank propagation, especially whether removing false zeros creates spurious staff actions.
-
-4. **Full-run / rollback verification** and parity checks required by the active runner contract.
-
-5. **Atomic promotion only after acceptance checks pass.**
-
-6. After Participant correctness is accepted:
-   - Frontend payload hygiene;
+3. After Participant correctness is accepted:
+   - frontend payload hygiene;
+   - medication/LEDD authority backlog;
    - Trace/shared resolver maturity;
    - Admin adoption of the shared resolver;
    - later architecture contraction and legacy cleanup.
@@ -144,17 +164,21 @@ Known non-blocking test-harness note:
 Absent contradictory evidence, do not spend agent time re-proving:
 
 - accepted manual identity-resolution work;
-- broad architecture archaeology already completed for the current Participant defect;
+- Phase 5C source/predicate review;
+- Candidate Full rebuild success;
+- offline Phase 5B propagation/scope/provenance/Boss/Admin acceptance;
 - whether Backfill is valid evidence (it is; authority is domain-specific);
 - a global true-once redesign;
-- unrelated semantic families while reviewing Phase 5B;
+- medication/LEDD authority defects as if they were Phase 5B regressions;
 - Admin redesign before Participant correctness acceptance.
 
 ## AGENT WORKFLOW
 
 - **ChatGPT / project lead reasoning:** define scope, acceptance criteria, status transitions, and hostile semantic review.
 - **Copilot:** heavy offline mechanical/static work, simulations, bulk diffs, source scans, and candidate drafting.
-- **Codex:** narrow high-value live-source, integration, runtime, and Production-sensitive review.
-- **Human operator:** Production actions and final operational/product judgment.
+- **Codex:** narrow high-value live-source, integration, runtime, and Production-sensitive review only when human UI actions are insufficient.
+- **Human operator:** perform simple UI/runtime actions, Production actions, and final operational/product judgment.
+
+Operational rule: if a human can complete a task safely in seconds or a few minutes by clicking/running an existing function, prefer explicit human-readable UI instructions over spending Codex time. Use Codex for code edits, live-source integration analysis, runtime failures, or cross-file dynamic reasoning.
 
 Agents should treat this file as current status, not as historical narrative. When a newer candidate supersedes an older one, keep only the minimum historical note necessary to explain the current state.

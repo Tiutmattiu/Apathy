@@ -34,6 +34,8 @@ assert.deepStrictEqual(
 );
 
 assert.match(outputSource, /diagnosis_summary:diagnosisSummary/);
+assert.match(diagnosisSource, /traceLeafMatches_\(x,spec\.eventPatterns\)/);
+assert.doesNotMatch(diagnosisSource, /traceLeafMatches_\(x,spec\)/);
 assert.match(outputSource, /BOSS_MUST_HAVE_90_COLUMNS/);
 assert.match(outputSource, /function previewApathyAdminManualArchives\(\)\{return apathyOutputPlanManualArchives_\(\);\}/);
 const previewBody = outputSource.match(/function apathyOutputPlanManualArchives_\(\)\{([\s\S]*?)\n\}\nfunction applyApathyAdminManualArchives/)[1];

@@ -2,7 +2,7 @@
 
 Status: **PRODUCT SPEC — NOT IMPLEMENTED**
 
-Purpose: turn Trace from a cell-forensics viewer into a participant/field diagnostic tool, and turn Admin from a review list into a staff operations console.
+Purpose: turn Boss into a scan-able diagnostic map, Trace from a cell-forensics viewer into a participant/field diagnostic tool, and Admin from a review list into a staff operations console.
 
 This document is sanitized. Do not add participant names, phone numbers, IDs from Production, clinical payloads, private workbook contents, credentials, tokens, or other sensitive evidence.
 
@@ -10,16 +10,102 @@ This document is sanitized. Do not add participant names, phone numbers, IDs fro
 
 Staff should not have to manually jump between Boss, Registry, Backfill, Record_Control, Raw sheets, and technical Candidate sheets to understand or resolve routine issues.
 
-The product should answer two different questions:
+Do not make the human search for problems. The output should show where problems are, then let the human click or search only when explanation or action is needed.
 
-1. **Trace:** Why is this value present or blank?
-2. **Admin:** What, if anything, should staff do about it — and can the action be completed here?
+The product should answer three different questions:
+
+1. **Boss scan mode:** Which blanks deserve attention, and which are expected?
+2. **Trace:** Why is this value present or blank?
+3. **Admin:** What, if anything, should staff do about it — and can the action be completed here?
 
 Boss blank is not automatically missing evidence. Missing evidence is not automatically a staff task.
 
-## 1. Trace vNext — participant-first navigation
+## 1. Boss scan mode — diagnosis-aware blank coloring
 
-### Primary entry
+Keep the existing click-a-Boss-cell Trace workflow. Do not remove it.
+
+During Output generation, classify meaningful Boss blanks using the shared field/applicability diagnosis resolver and apply visual status directly to Boss. The purpose is to let staff scan the table without checking participants one by one.
+
+Suggested visual classes:
+
+- `NON_APPLICABLE / EXPECTED_BLANK` — grey
+- `NO_SOURCE / STAFF_CAN_ACT` — yellow
+- `REVIEW_OR_AUTHORITY_GATED` — orange
+- `PIPELINE_BREAK` — red
+- `IDENTITY_UNRESOLVED` — purple
+- ordinary valid populated cells — existing/default formatting
+- unknown/unclassified blanks — neutral or very light treatment; do not imply staff action
+
+Color must never be assigned from `cell is blank` alone.
+
+Required diagnosis order:
+
+```text
+Boss blank
+-> applicability
+-> source evidence
+-> Participant projection
+-> Result / Review / authority
+-> Boss publication
+-> primary diagnosis
+-> action class
+-> visual class
+```
+
+Examples:
+
+- HC LEDD blank: grey / non-applicable, not an Admin task.
+- no assigned formal source for a required field: yellow if staff can genuinely investigate the source.
+- verified evidence held by authority/review: orange, not an instruction to re-enter data.
+- valid upstream Result exists but Boss is blank: red pipeline/publication break.
+- unresolved formal submission identity: purple and potentially resolvable in Admin.
+
+### Cell notes / hover summary
+
+For colored blanks, add a concise cell note where supported:
+
+```text
+ORANGE — REVIEW_OR_AUTHORITY_GATED
+First break: <layer>
+Staff action: NO / REVIEW / YES
+Click cell -> Trace for full evidence
+```
+
+Do not put sensitive payloads or long provenance into the cell note.
+
+### Scan summary
+
+At the end of Output, expose a compact diagnostic summary such as:
+
+- Boss participants
+- expected / non-applicable blanks
+- source gaps
+- review / authority gates
+- pipeline breaks
+- identity unresolved
+- actionable staff items
+
+The exact numbers are runtime-derived; do not hardcode thresholds.
+
+### Filterability
+
+Where practical, make the visual classes filterable or expose helper filters so staff can quickly inspect:
+
+- red only
+- yellow only
+- purple only
+- all actionable
+- all suspicious
+
+The goal is QA by exception, not P001-to-P250 manual searching.
+
+## 2. Trace vNext — participant-first navigation
+
+### Existing entry remains
+
+The current Boss-cell click Trace remains a first-class forensic drill-down path. A user who sees a colored/suspicious cell should be able to click it and inspect the full lineage.
+
+### Additional primary entry
 
 Add a sidebar search entry that accepts:
 
@@ -35,7 +121,7 @@ After selecting a participant, allow a second search/filter for:
 - `Show all blanks`
 - `Show current values`
 
-The user should not have to click a Boss cell first.
+The user should not have to click a Boss cell first when they already know the participant or field they want.
 
 ### Participant overview
 
@@ -78,9 +164,9 @@ Display these human-facing fields near the top:
 
 Raw/Event/Participant/Result/Review/Record_Control evidence should remain expandable below this conclusion.
 
-## 2. Applicability layer
+## 3. Applicability layer
 
-Trace/Admin must distinguish true missingness from non-applicability.
+Boss scan mode, Trace and Admin must distinguish true missingness from non-applicability.
 
 Examples:
 
@@ -90,9 +176,9 @@ Examples:
 - optional/universally uncollected tasks should not become blanket staff actions.
 - a partial questionnaire item is not sufficient proof that a publishable total should exist.
 
-Applicability rules should be explicit and reusable by both Trace and Admin.
+Applicability rules should be explicit and reusable by Boss coloring, Trace and Admin.
 
-## 3. Admin vNext — operations console
+## 4. Admin vNext — operations console
 
 Admin items must have an action class:
 
@@ -134,7 +220,7 @@ Examples:
 
 The system cannot safely resolve the case with existing authority rules.
 
-## 4. First end-to-end Admin action: Resolve orphan submission
+## 5. First end-to-end Admin action: Resolve orphan submission
 
 This should be the first implemented action because it exercises the complete operations model without editing Raw.
 
@@ -188,7 +274,7 @@ After confirmation:
 
 Never silently edit a wrong phone number in Raw just to make identity matching succeed.
 
-## 5. Navigation shortcuts
+## 6. Navigation shortcuts
 
 Admin/Trace should eliminate manual sheet hunting.
 
@@ -205,7 +291,7 @@ The target sheet should open with the relevant row/cell highlighted.
 
 If a direct write is safe and supported, prefer an explicit confirmable action over telling the user to navigate and edit manually.
 
-## 6. Safety and authority rules
+## 7. Safety and authority rules
 
 - Raw remains append-only evidence.
 - Never rewrite Raw to repair identity.
@@ -217,7 +303,7 @@ If a direct write is safe and supported, prefer an explicit confirmable action o
 - no participant-specific hardcoding.
 - destructive or irreversible actions require explicit confirmation.
 
-## 7. Admin item lifecycle
+## 8. Admin item lifecycle
 
 Every actionable item should have a lifecycle:
 
@@ -239,9 +325,9 @@ Display:
 - resolution/control lineage
 - exact next action
 
-## 8. Trace/Admin shared resolver
+## 9. Shared field diagnosis resolver
 
-Trace and Admin should consume the same field-centric diagnosis result rather than maintain independent heuristics.
+Boss coloring, Trace and Admin should consume the same field-centric diagnosis result rather than maintain independent heuristics.
 
 Suggested resolver output contract:
 
@@ -257,6 +343,7 @@ result_status
 review_status
 first_break
 primary_diagnosis
+visual_class
 action_class
 staff_action_required
 human_explanation
@@ -264,14 +351,31 @@ suggested_action
 lineage_refs
 ```
 
+Boss consumes `visual_class` and compact explanation.
+
 Trace renders the explanation/evidence.
 
 Admin filters this shared output to actionable items and provides supported operations.
 
-## 9. Acceptance criteria — Trace vNext
+## 10. Acceptance criteria — Boss scan mode
+
+A release passes only if:
+
+- existing populated Boss values are not altered merely for formatting;
+- expected/non-applicable blanks can be visually distinguished from suspicious blanks;
+- pipeline breaks are visually distinct from source gaps and review/authority gates;
+- identity-unresolved cases are visually distinct from field-missing cases;
+- visual class is derived from the shared resolver, not a separate blank heuristic;
+- colored cells retain click-to-Trace behavior;
+- cell notes show concise diagnosis / first break / action state where supported;
+- Output provides a compact count summary by diagnosis class;
+- no new Admin task is created solely because a cell received a warning color.
+
+## 11. Acceptance criteria — Trace vNext
 
 A release passes only if staff can:
 
+- keep using click-a-Boss-cell Trace;
 - find a participant without locating a Boss cell first;
 - search a field/scale directly;
 - request suspicious blanks only;
@@ -280,7 +384,7 @@ A release passes only if staff can:
 - see whether staff action is required;
 - expand the existing evidence chain without losing current Trace capability.
 
-## 10. Acceptance criteria — orphan resolver
+## 12. Acceptance criteria — orphan resolver
 
 Use a controlled unresolved-submission fixture.
 
@@ -297,19 +401,20 @@ PASS requires:
 9. a wrong/ambiguous match can be cancelled with no data change.
 10. audit lineage explains who/what resolved the item and why.
 
-## 11. Implementation order
+## 13. Implementation order
 
 After the active Participant Phase 5B release is completed:
 
 1. shared field/applicability diagnosis contract;
-2. participant-first Trace search + suspicious-blank view;
-3. orphan submission Admin resolver end-to-end;
-4. one-click navigation/highlight to Registry, Backfill, Record_Control and Raw;
-5. expand Admin action types to genuine missing-source workflows;
-6. only then replace broader legacy Admin missingness heuristics.
+2. Boss scan-mode coloring + concise cell notes + diagnosis summary;
+3. preserve click-to-Trace and add participant-first Trace search + suspicious-blank view;
+4. orphan submission Admin resolver end-to-end;
+5. one-click navigation/highlight to Registry, Backfill, Record_Control and Raw;
+6. expand Admin action types to genuine missing-source workflows;
+7. only then replace broader legacy Admin missingness heuristics.
 
-Do not redesign all Admin rules at once. Ship one real resolvable action end-to-end first.
+Do not redesign all Admin rules at once. Ship one shared resolver, one scan mode, and one real resolvable action end-to-end first.
 
-## 12. Separate backlog
+## 14. Separate backlog
 
 Medication/LEDD authority and structured-factor asymmetry are separate scientific/authority work. Do not hide them by making Admin automatically request re-entry. They should use the same diagnosis/action framework when addressed later.

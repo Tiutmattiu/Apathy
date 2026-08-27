@@ -1,6 +1,6 @@
 # Codex handoff — Operations vNext vertical slice
 
-Timestamp: 2026-08-27 04:31 +08:00
+Timestamp: 2026-08-27 05:05 +08:00
 Branch: `codex/ops-vnext-vertical-slice`
 
 ## Commits
@@ -108,7 +108,11 @@ Classification: **SUCCESS**. It is not an explicit failure, timeout-with-rollbac
 
 No code or Production-runtime blocker remains for this vertical slice. A new real orphan-resolution write still requires a human-authorized participant/submission match; the system must not invent that authority decision.
 
-Repository delivery is locally committed, but the branch push is pending GitHub authentication on this host. No GitHub credential was present, and the agent did not create or persist a new credential without explicit action-time approval.
+Repository delivery succeeded: GitHub device authentication completed, `codex/ops-vnext-vertical-slice` was pushed with all nine original commits intact, and the remote tip matched the local tip before the later `origin/main` reconciliation.
+
+The branch was then merged with current `origin/main` using a normal merge commit. Existing Operations commits were neither rewritten nor squashed. Public contract tests were rerun before the reconciled branch push.
+
+The successful direct Production Output acceptance does not prove the staged Phase 5B Step 3/Step 4 runner rollback contract. That remains a separate release-validation boundary; it is not an unfinished part of the installed Operations vNext search/scan slice.
 
 ## Next human action
 

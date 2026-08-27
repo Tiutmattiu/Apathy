@@ -36,7 +36,7 @@ Important privacy rule: the public repository must not contain participant-ident
 - Read-only Boss-cell trace is working as a useful vertical slice.
 - It can follow a Boss cell through Result/Review, Participant state, Event evidence, Raw source, and control metadata.
 - Representative live Phase 5B runtime fixtures passed for owner restoration, supported Backfill, rejected non-owner evidence preservation, workflow regression prevention, PDI confirmations, UPDRS completion ownership, and an unchanged medication/LEDD negative control.
-- Trace remains a product slice rather than a finished staff tool; participant-first search, blank diagnosis, scan-mode coloring, and staff-action classification are planned in `ADMIN_TRACE_VNEXT_SPEC.md`.
+- The installed participant-first search, blank diagnosis, scan-mode coloring, and first staff-action classification are accepted for this vertical slice. Broader Trace/Admin product polish remains separate work described in `ADMIN_TRACE_VNEXT_SPEC.md`.
 
 ### Participant Phase 5C live-source review
 
@@ -76,7 +76,7 @@ Important privacy rule: the public repository must not contain participant-ident
 - The generic latest-present-value merge can allow later unrelated events to overwrite valid earlier participant state.
 - High-confidence examples are workflow/completion state written by non-owner event domains.
 - This is a Participant current-state projection problem; Raw/Event history remains preserved.
-- Phase 5B is the current candidate fix and has passed code, live-contract, Candidate Full, propagation, and representative live Trace acceptance; only controlled rollback runtime acceptance remains.
+- Phase 5B is the current candidate fix and has passed code, live-contract, Candidate Full, propagation, and representative live Trace acceptance. The staged Step 3/Step 4 rollback contract remains a separate unproven release property.
 
 ### Frontend payload pollution
 
@@ -109,14 +109,14 @@ Important privacy rule: the public repository must not contain participant-ident
 - The active Full runner contains real rollback machinery for visible Boss, Admin, and Event checkpoint state.
 - Source inspection indicates Step 3 captures the previous published state before Result can write Boss; catchable Step 3/Step 4 failures should restore Boss/Admin/checkpoint and verify restoration fingerprints.
 - Natural Apps Script hard timeout is not valid proof that the catch-and-restore path executed.
-- No safe human-callable controlled rollback integration test currently exists.
-- The remaining Phase 5B acceptance blocker is therefore a **DEV-clone-only controlled rollback integration test**, not Participant semantics or Incremental parity.
+- Operations vNext Production Output acceptance exercised direct `buildApathyOutput`; it did **not** exercise the staged `continueApathyCandidateFull()` Step 3/Step 4 catch-and-restore contract.
+- The staged rollback contract therefore remains unproven and must not be inferred from the successful direct Output run. No specific DEV-clone acceptance procedure is mandated by this status file.
 
 ## CURRENT CANDIDATE
 
 ### Participant Phase 5B — evidence-gated current-state ownership
 
-Status: **CANDIDATE — BLOCKED ONLY ON CONTROLLED DEV ROLLBACK INTEGRATION TEST — NOT YET PRODUCTION-ACCEPTED**
+Status: **CANDIDATE — SEMANTIC AND FULL-REBUILD ACCEPTANCE PASSED; STAGED RUNNER ROLLBACK CONTRACT NOT YET PROVEN**
 
 Scope:
 
@@ -146,13 +146,11 @@ Acceptance completed so far:
 - rollback source inspection: PASS;
 - confirmed semantic/offline blockers: none.
 
-Still required before Production acceptance:
+Separate release validation still unproven:
 
-- add the smallest guarded DEV-only rollback failpoint harness in `helper.gs`;
-- run controlled Step 3 and Step 4 rollback tests on a cloned workbook only;
-- verify Boss/Admin/checkpoint restoration fingerprints and interpretable failed run state;
-- verify exact reviewed Phase 5B source and rollback-to-prior-source path;
-- atomic-promotion readiness and final human operational judgment.
+- prove that a controlled, catchable staged Step 3 or Step 4 failure restores Boss/Admin/checkpoint fingerprints and leaves interpretable failed-run state;
+- verify the exact reviewed Phase 5B source and rollback-to-prior-source path before any Phase 5B promotion decision;
+- retain final human operational judgment for atomic promotion.
 
 ## NOT_DONE
 
@@ -167,7 +165,8 @@ Still required before Production acceptance:
 
 ### Trace product completion
 
-- Participant-first search, field/scale search, suspicious-blank filtering, scan-mode Boss coloring, global diagnosis vocabulary, first-break explanation, and staff-action classification are unfinished.
+- Participant-first P_ID/S_ID/name search, suspicious/all-blank/current-value views, safe lineage navigation, scan-mode Boss coloring, the shared diagnosis vocabulary, first-break explanation, and the first staff-action classification are installed and accepted for the Operations vNext vertical slice.
+- Any future field/scale search expansion, broader action domains, and full UI polish remain product backlog rather than defects in the installed slice.
 - Boss blank must be explainable, but Boss blank does not automatically imply an Admin task.
 
 ### Frontend evidence hygiene
@@ -176,24 +175,16 @@ Still required before Production acceptance:
 
 ## CURRENT MAINLINE
 
-1. **Phase 5B controlled rollback runtime acceptance.**
-   - Do not develop Incremental.
-   - Add only a guarded DEV-clone failpoint harness in `helper.gs`.
-   - Prove Step 3 and Step 4 catchable failures restore Boss/Admin/checkpoint fingerprints and leave interpretable failed run state.
+1. **Operations vNext staff adoption and concrete feedback.**
+   - Treat the installed search/scan/diagnosis slice as accepted.
+   - Address only evidence-backed usability defects; do not reopen scientific or Phase 5B semantics.
 
-2. **Atomic promotion readiness** only after rollback integration tests pass.
+2. **Phase 5B staged rollback proof remains a separate release gate.**
+   - Do not infer it from direct Production Output acceptance.
+   - Do not develop Incremental to satisfy it.
+   - Use a separately reviewed, reversible controlled-failure plan before any Phase 5B promotion decision; this status file does not prescribe a DEV clone.
 
-3. **Parallel product design/implementation preparation** may proceed without touching the live Phase 5B acceptance surface:
-   - Boss scan-mode blank diagnosis/coloring;
-   - participant-first Trace search;
-   - shared field/applicability diagnosis resolver;
-   - Admin vNext orphan-submission resolver.
-
-4. After Participant correctness is accepted:
-   - ship the first narrow Trace/Admin vNext improvements;
-   - frontend payload hygiene;
-   - medication/LEDD authority backlog;
-   - later architecture contraction and legacy cleanup.
+3. **Later backlog:** frontend payload hygiene, medication/LEDD authority, broader Admin/Trace product work, and architecture contraction/legacy cleanup.
 
 ## DO NOT REOPEN / DO NOT BROADEN
 

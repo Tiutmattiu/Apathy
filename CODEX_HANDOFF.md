@@ -1,6 +1,6 @@
 # Codex handoff — Operations vNext vertical slice
 
-Timestamp: 2026-08-27 04:16 +08:00
+Timestamp: 2026-08-27 04:31 +08:00
 Branch: `codex/ops-vnext-vertical-slice`
 
 ## Commits
@@ -72,11 +72,23 @@ All other live Apps Script files were staged from a fresh pull and remained byte
 
 The first Production Output run failed on an incorrect matcher argument. The Output rollback wrapper ran, the defect was reduced to one call, a regression assertion was added, and later Production runs completed successfully.
 
+## Authoritative execution reconciliation
+
+- The Apps Script Executions page classifies the latest corrected `buildApathyOutput` execution as **Completed**, not timed out.
+- Start: 2026-08-27 04:14:53 +08:00; duration: 48.55 seconds.
+- The immediately preceding post-fix execution also completed; the earlier matcher-defect execution is recorded as Failed.
+- The successful result verified the published Boss/Admin pair and returned only aggregate counts: Boss 132 rows, Admin 50 rows.
+- The earlier failed execution returned the rollback-wrapper error only after both visible output snapshots had been restored. No blind rerun was performed during this reconciliation.
+- This was a direct Output acceptance call, not a staged `continueApathyCandidateFull('OUTPUT_CORE')` call. It therefore does not advance or commit the staged-run checkpoint/state; no checkpoint mutation was expected from this acceptance run.
+
+Classification: **SUCCESS**. It is not an explicit failure, timeout-with-rollback, or unknown run.
+
 ## Performance
 
 - Technical source sheets are read once into in-memory indexes per Output scan; there is no Boss-cells-times-full-history rescan.
 - Boss backgrounds and notes are written as two matrix operations, not one Sheets call per cell.
 - The accepted real-workbook run completed within the normal Apps Script execution window.
+- The 48.55-second authoritative execution confirms that the indexed scan plus batched background/note writes resolved the runtime-cost risk. The public regression contract rejects a return to per-cell formatting writes.
 
 ## Phase 5B rollback-harness compatibility
 

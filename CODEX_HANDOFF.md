@@ -1,6 +1,6 @@
 # Codex handoff — Operations vNext vertical slice
 
-Timestamp: 2026-08-27 05:05 +08:00
+Timestamp: 2026-08-27 17:40 +08:00
 Branch: `codex/ops-vnext-vertical-slice`
 
 ## Commits
@@ -121,3 +121,51 @@ Reload the Production spreadsheet, confirm the refreshed menu, inspect several c
 ## Next Codex task
 
 After staff acceptance, address only concrete usability defects from the real scan/search flow. Do not reopen scientific logic or Phase 5B semantics. If expanding Admin, add one evidence-backed action class at a time through the shared diagnosis resolver.
+
+## Exact-field diagnosis reconciliation
+
+The current live source was freshly pulled before each write and reconciled against the reviewed package. Unrelated live manifest state was preserved. Immutable rollback versions 51, 52, and 53 cover the bounded corrective iterations. Final post-run remote hashes match the reviewed package.
+
+Private Apps Script changes remained limited to `trace.gs`, `diagnosis.gs`, and `output.gs`:
+
+- `traceFieldSpec_()` now maps each supported Boss field to exact Result, Medication, Decision, Participant, and formal payload aliases. PD-only applicability is explicit, and absent PD-clinical evidence remains non-actionable for applicable PD rows.
+- `traceLeafMatches_()` accepts only exact/wildcard mapped formal, present Event leaves; unrelated fields in the same domain no longer count.
+- `traceAuthorityFields_()` and `traceDiagnose_()` use exact field authority. Generic MoCA review status is not age authority, formal-source absence cannot be hidden by a generic review, and an exact Result value can still expose a Boss publication break.
+- `apathyDiagnosisScanBoss_()` reuses the shared exact-field diagnosis in one indexed pass and writes background/note matrices only for Boss data rows 2:N.
+- `apathyOutputRestoreBossHeaderStyle_()` restores the dedicated dark-blue, white, bold Boss header after Output and rollback. Boss headers and scientific values are unchanged.
+
+Public hostile regression coverage now proves:
+
+- exact medication/final-source authority is evaluated independently of unrelated medication fields;
+- a missing formal Screening age source breaks at `FORMAL_SOURCE`;
+- HC rows treat PD-only duration, stage, medication, motor, and apathy fields as non-applicable;
+- numeric zero is resolved, not blank;
+- exact Result evidence can expose a publication break while unrelated domain evidence cannot;
+- generic review status cannot replace exact source or authority evidence;
+- Boss scanning remains indexed/batched, data-row-only, and preserves the 90-column/value contract.
+
+### Production acceptance
+
+The final authoritative `buildApathyOutput` execution completed in 40.194 seconds. Output and post-write verification both passed:
+
+- Boss: 132 rows, exactly 90 columns, expected row count, legal and unique PID checks all PASS.
+- Admin: 49 rows, headers, expected row count, and human-action checks all PASS.
+- Boss header style was visually verified after Output.
+- The built-in Boss value-preservation guard passed; no scientific value was changed by diagnosis/Admin generation.
+- Real-workbook spot checks passed for the medication-authority case, missing-Screening age case, HC PD-only case, and a numeric-zero value.
+
+Aggregate diagnosis counts (no participant identifiers):
+
+| Classification | Before exact-field patch | Rejected first patch | Final accepted |
+| --- | ---: | ---: | ---: |
+| `REVIEW_OR_AUTHORITY_GATED` | 113 | 199 | 176 |
+| `UNKNOWN` | 2056 | 3057 | 3123 |
+| `RESULT_EXISTS_BOSS_PUBLICATION_BREAK` | 308 | 184 | 202 |
+| `NO_FORMAL_SOURCE` | 136 | 236 | 175 |
+| `SOURCE_EXISTS_PARTICIPANT_BREAK` | 894 | 23 | 23 |
+| `NON_APPLICABLE` | 404 | 322 | 322 |
+| `PARTICIPANT_EXISTS_RESULT_GATE` | 111 | 1 | 1 |
+
+The rejected patch increased `NO_FORMAL_SOURCE` by 100 and was not accepted. The final correction reduced that to 175: +39 cells, under 1% of the 4,022 classified Boss cells, while Admin decreased from 50 to 49 rows. There was no `NO_FORMAL_SOURCE` or staff-action explosion.
+
+No offline reclassifier totals were used as expected Production labels. No Raw, identity, Participant, Result, Decision, Receiver, scientific, or 90-column Boss-value logic changed. Remaining unsupported semantics stay `UNKNOWN` and create no speculative staff action.

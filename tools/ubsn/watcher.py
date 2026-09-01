@@ -6,8 +6,12 @@ import threading
 import time as clock
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from core import Change, Slot, diff_slots, load_participants, make_action, match, parse_reservations_response
+
+
+CALENDAR_TZ = ZoneInfo("Asia/Hong_Kong")
 
 
 class Watcher:
@@ -33,6 +37,30 @@ class Watcher:
     def _slot_json(slot: Slot) -> dict:
         return {"start": slot.start.isoformat(), "end": slot.end.isoformat(), "minutes": slot.minutes}
 
+    @staticmethod
+    def _calendar_window(start: datetime, end: datetime) -> tuple[datetime, datetime]:
+        """Translate arbitrary caller timestamps into the whole-day HK window accepted by UBSN.
+
+        The live FullCalendar endpoint accepted the captured midnight-to-midnight +08:00
+        requests but rejected background queries containing the current clock time with
+        HTTP 422. UBSN is a Hong Kong facility, so all monitoring is intentionally
+        expressed as Hong Kong calendar days regardless of the caller's timezone.
+        """
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=CALENDAR_TZ)
+        else:
+            start = start.astimezone(CALENDAR_TZ)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=CALENDAR_TZ)
+        else:
+            end = end.astimezone(CALENDAR_TZ)
+
+        window_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        window_end = end.replace(hour=0, minute=0, second=0, microsecond=0)
+        if window_end <= window_start:
+            window_end = window_start + timedelta(days=1)
+        return window_start, window_end
+
     def status(self) -> dict:
         return {
             "connected": True,
@@ -43,6 +71,8 @@ class Watcher:
 
     def check(self, start: datetime, end: datetime, trigger="MANUAL") -> list[dict]:
         with self.lock:
+            requested_start, requested_end = start, end
+            start, end = self._calendar_window(start, end)
             raw = self.client.request_calendar(start, end)
             current = parse_reservations_response(raw, start, end)
             participants = load_participants(self.config["waiting_list_file"])
@@ -81,6 +111,7 @@ class Watcher:
             self.last_check = {
                 "checked_at": datetime.now(timezone.utc).isoformat(),
                 "trigger": trigger,
+                "requested_window": {"start": requested_start.isoformat(), "end": requested_end.isoformat()},
                 "window": {"start": start.isoformat(), "end": end.isoformat()},
                 "free_interval_count": len(current),
                 "free_intervals": [self._slot_json(x) for x in sorted(current)],
@@ -135,11 +166,12 @@ class Watcher:
 
     def watch_forever(self):
         while True:
-            now = datetime.now().astimezone()
-            end = now + timedelta(days=self.config.get("monitor_days_ahead", 7))
+            now = datetime.now(CALENDAR_TZ)
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=self.config.get("monitor_days_ahead", 7))
             try:
                 self.check(
-                    now,
+                    start,
                     end,
                     "RELEASE_WINDOW"
                     if self.poll_interval(now) == self.config["release_poll_interval_seconds"]
@@ -148,4 +180,4 @@ class Watcher:
             except Exception as exc:
                 logging.warning("Monitor check failed; keeping last successful state: %s", exc)
                 self.audit("MONITOR_ERROR", error_type=type(exc).__name__)
-            clock.sleep(self.poll_interval(datetime.now().astimezone()))
+            clock.sleep(self.poll_interval(datetime.now(CALENDAR_TZ)))

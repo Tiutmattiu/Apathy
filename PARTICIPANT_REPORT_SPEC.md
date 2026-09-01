@@ -12,7 +12,7 @@ Earlier work produced:
 
 - an editable APATHY participant-report template based on the older report;
 - a three-page PDF visual prototype that was rendered and visually checked;
-- a later single-page participant-report prototype in both DOCX and PDF form.
+- a later **single-page A4** participant-report prototype in both DOCX and PDF form.
 
 Those artifacts are private/user files and are not committed to this public repository.
 
@@ -59,20 +59,41 @@ Keep the three CGT-derived participant-facing dimensions:
 
 The final mapping must use the accepted current CGT outputs and directionality. Do not assume that a numerically larger raw value always means better performance.
 
-## 3. Presentation model already chosen in prior work
+## 3. Final participant-facing presentation model
 
-The report redesign moved away from simply printing raw scores.
+The **single-page A4 prototype is the current visual target**.
 
-Preserve these decisions:
+For each metric, participant-facing output contains exactly:
 
-- use **dynamic percentile / relative cohort position** rather than a fixed decorative bar;
-- show the relevant **cohort N** so the participant can see the comparison base;
-- use plain-language interpretation rather than technical research labels;
-- include a **data/report version** so a generated report can be traced to the cohort/reference state used;
-- use a visual bar where a longer bar represents better relative performance after directionality has been normalized;
-- allow statuses such as `良好`, `一般`, or `待確認` in participant-readable wording, but derive them from the agreed report interpretation contract rather than arbitrary frontend thresholds.
+1. metric name;
+2. one very short plain-language explanation;
+3. horizontal comparative bar + simple category label.
 
-The later single-page prototype grouped all nine outputs into three compact sections: `認知表現`, `動機與情緒`, `決策表現`.
+The bar uses an internal cohort-relative normalized 0–100 position, but the participant-facing page must **not display**:
+
+- percentile numbers;
+- `第 XX 百分位`;
+- cohort N;
+- technical scoring-direction explanations;
+- internal conversion rules.
+
+The visual direction is always intuitive:
+
+> **longer bar = better relative performance**
+
+Therefore reverse-direction metrics are normalized internally before rendering. GAS/apathy dimensions and CGT speed require direction-aware conversion. CGT risk-adjustment direction must remain explicit `TBD` until the accepted current project direction is confirmed; do not guess.
+
+Participant-readable category labels such as `良好`, `一般`, or `待確認` are secondary to the bar and must come from the agreed report interpretation contract rather than arbitrary frontend thresholds.
+
+The one-page layout groups all nine outputs into:
+
+- `認知表現`
+- `動機與情緒`
+- `決策表現`
+
+Footer wording may remain:
+
+`柱越長，代表在該項目中的相對表現越好。`
 
 ## 4. What is NOT the participant report
 
@@ -97,30 +118,30 @@ The report must be generated from **final accepted backend data**, not from inco
 Preferred architecture:
 
 ```text
-accepted current Participant/Result/Boss-equivalent outputs
-+ report cohort/reference distribution
+accepted current participant outputs
++ report reference distributions / version
 -> read-only participant-report payload
--> one report renderer
--> screen / print / browser PDF
+-> one reusable report renderer
+-> single report OR batch print view
 ```
 
 Do not build a second scientific scoring engine in the report UI.
 
 Do not read arbitrary Boss cells and infer the report directly from presentation columns if a canonical accepted field exists upstream.
 
-## 6. Percentile/reference contract
+## 6. Internal normalization/reference contract
 
-For each of the nine participant-facing outputs, the report needs:
+For each of the nine participant-facing outputs, the internal report payload needs enough information to derive the bar safely, for example:
 
 ```text
 metric_code
 participant_label
 plain_language_explanation
-raw_or_accepted_value
+accepted_value
 normalized_direction
 reference_group_definition
-reference_n
-percentile_or_relative_position
+reference_n_internal
+relative_position_0_100
 interpretation_label
 reference_data_version
 ```
@@ -128,30 +149,65 @@ reference_data_version
 Rules:
 
 - reference group must be explicit, not silently mixed;
-- `N` is dynamic and belongs to the reference distribution actually used;
+- reference N and version remain internal/metadata unless staff need them for QA;
 - missing/unavailable values remain unavailable, never zero;
-- a percentile is only shown when the reference distribution is valid for that metric;
-- reverse-direction metrics must be normalized before drawing a "longer = better" bar;
-- `待確認` is preferable to a misleading percentile when the current data/reference contract is insufficient.
+- reverse-direction metrics must be normalized before drawing the bar;
+- `待確認` is preferable to a misleading bar when the current data/reference contract is insufficient.
 
-## 7. v1 implementation target
+## 7. Delivery model — staff batch first
 
-Build the report into the existing APATHY staff frontend as a **staff-triggered read-only participant report view**.
+The primary v1 delivery model is **staff-controlled generation**, not participant self-service links.
+
+The same renderer must support both:
+
+### Single participant
+
+- staff opens one finalized participant;
+- preview the one-page report;
+- print / save as PDF.
+
+### Batch generation
+
+- staff selects multiple finalized participants, or a defined eligible/completed set;
+- frontend requests report payloads in one batch;
+- render **one A4 report page per participant** in one print document;
+- CSS uses page breaks so each participant starts on a separate A4 page;
+- one browser `列印／儲存PDF` action can therefore produce a multi-page PDF containing many participants.
+
+This is the preferred first implementation because it avoids introducing participant authentication, expiring-token links, email delivery and access-control complexity just to distribute a one-page result sheet.
+
+### Optional later self-service
+
+Participant self-download links are **not required for v1**.
+
+If added later, they must use a dedicated read-only report endpoint and a participant-specific expiring/unpredictable token or equivalent approved access-control mechanism. Do not expose a report through a guessable `?pid=P123` URL.
+
+## 8. v1 implementation target
+
+Build the report into the existing APATHY staff frontend as a **staff-triggered read-only report view with single + batch mode**.
 
 Minimum v1:
 
-1. staff selects/loads an eligible participant;
-2. frontend fetches a dedicated read-only report payload from current accepted backend state;
-3. renderer displays the recovered single-page structure;
-4. printable A4 CSS hides navigation/actions;
-5. `列印／儲存PDF` uses the browser print dialog (`window.print()` is sufficient for v1);
-6. the report shows participant display ID, assessment/report date, cohort N/reference metadata, and report data version;
-7. unavailable metrics render as `待確認`/unavailable without fabricating a percentile.
+1. staff can choose one or many eligible/finalized participants;
+2. frontend fetches dedicated read-only report payload(s) from current accepted backend state;
+3. renderer reproduces the recovered single-page A4 structure;
+4. batch mode renders one `.participant-report-page` per participant;
+5. print CSS hides staff navigation/actions and inserts page breaks;
+6. `列印／儲存PDF` uses the browser print dialog (`window.print()` is sufficient for v1);
+7. unavailable metrics render as `待確認`/unavailable without fabricating a bar position;
+8. participant-facing output shows participant display ID and assessment/report date but not internal reference N/percentile values.
 
-No server-side PDF stack is required for v1.
+No server-side PDF stack and no participant login/download portal are required for v1.
 
-## 8. Acceptance boundary
+## 9. Acceptance boundary
 
-Participant-report v1 is complete when a staff member can open a real finalized participant, obtain the same nine-domain participant-facing report structure as the prior prototype, and print/save it without exposing staff-only or technical fields.
+Participant-report v1 is complete when staff can:
 
-Do not broaden v1 into a general research dashboard, SPSS export, or every-scale clinical report.
+- open and print a real finalized participant's one-page report;
+- select multiple finalized participants and produce a correctly paginated batch PDF/print document;
+- reproduce the prior nine-metric single-page participant-facing design;
+- avoid exposing staff-only/technical fields;
+- avoid displaying percentile numbers/cohort N to participants;
+- preserve `longer bar = better relative performance` through correct internal direction normalization.
+
+Do not broaden v1 into a general research dashboard, SPSS export, every-scale clinical report, or participant authentication portal.

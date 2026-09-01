@@ -60,15 +60,14 @@ def serve(watcher, host="127.0.0.1", port=8765, monitor=False):
                 self.send_json(200, list(watcher.actions.values()))
             elif path == "/waiting-list":
                 snapshot = load_waiting_snapshot(watcher.config)
+                # Preserve the original array response shape for the existing
+                # APATHY frontend. The selected authority is exposed via /status.
                 self.send_json(
                     200,
-                    {
-                        "source": snapshot.source,
-                        "participants": [
-                            {"pid": x.pid, "mri_status": x.mri_status, "wait_since": x.wait_since}
-                            for x in snapshot.participants
-                        ],
-                    },
+                    [
+                        {"pid": x.pid, "mri_status": x.mri_status, "wait_since": x.wait_since}
+                        for x in snapshot.participants
+                    ],
                 )
             else:
                 self.send_json(404, {"error": "not found"})

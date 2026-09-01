@@ -63,6 +63,50 @@ class Change:
     slot: Slot
 
 
+def _shape(value: Any, depth: int = 0) -> dict[str, Any]:
+    """Return JSON structure only; never include scalar values from a real capture."""
+    if isinstance(value, dict):
+        out: dict[str, Any] = {"type": "object", "keys": sorted(str(k) for k in value.keys())}
+        if depth < 3:
+            out["children"] = {str(k): _shape(v, depth + 1) for k, v in value.items()}
+        return out
+    if isinstance(value, list):
+        out = {"type": "array", "length": len(value)}
+        if value and depth < 3:
+            out["item_shape"] = _shape(value[0], depth + 1)
+        return out
+    if value is None:
+        return {"type": "null"}
+    if isinstance(value, bool):
+        return {"type": "boolean"}
+    if isinstance(value, (int, float)):
+        return {"type": "number"}
+    if isinstance(value, str):
+        return {"type": "string"}
+    return {"type": type(value).__name__}
+
+
+def summarize_capture_schema(raw_text: str) -> dict[str, Any]:
+    """Privacy-safe schema probe for a saved real reservations.js body.
+
+    The result intentionally exposes only JSON structure, field names, collection
+    lengths, and scalar *types*. It never echoes scalar values from the capture.
+    """
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {
+            "format": "non_json_text",
+            "text_length": len(raw_text),
+            "next_step": "inspect parser envelope without sharing raw capture values",
+        }
+    return {
+        "format": "json",
+        "text_length": len(raw_text),
+        "shape": _shape(payload),
+    }
+
+
 def parse_reservations_response(raw_text: str) -> set[Slot]:
     """Parse only the labeled development fixture until a real body is captured."""
     try:

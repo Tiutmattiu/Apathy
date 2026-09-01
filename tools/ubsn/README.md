@@ -13,7 +13,7 @@ Confirmed live response shape:
 - Admin Hold rows use the same Human MRI blocking semantics;
 - rows with `className: "unavailable"` block non-bookable calendar regions;
 - cancelled Human MRI reservation rows do not block;
-- usable time is the complement of the merged blocking intervals inside the exact requested calendar window.
+- usable time is the complement of the merged blocking intervals inside the requested calendar window.
 
 The real capture itself is private and must not be committed because reservation rows may contain staff/account information.
 
@@ -50,6 +50,14 @@ With `--monitor`, the helper also performs background checks using the configure
 
 If URFMS itself expires the server-side session later, one new SAML authentication may still be required, but normal repeated checks during the running helper session should not restart login every time.
 
+### Live 422 finding
+
+The first persistent live run authenticated correctly but the background calendar call returned HTTP 422 when the monitor sent a moving `now -> now+7d` timestamp window containing the current clock time.
+
+The already successful capture/manual request used Hong Kong midnight-to-midnight calendar bounds. The watcher therefore now normalizes every manual/background request to **Asia/Hong_Kong whole calendar days** before calling `reservations.js`.
+
+Example: a browser request sent as `2026-09-01T04:05:00Z -> 2026-09-08T04:05:00Z` is queried upstream as `2026-09-01T00:00:00+08:00 -> 2026-09-08T00:00:00+08:00`. This also makes the frontend's UTC `toISOString()` timestamps safe for the local helper.
+
 ## One-shot diagnostics
 
 A manual `check` now prints both newly created actions and a `status.last_check` summary:
@@ -77,7 +85,7 @@ The persistent helper exposes the same information through `GET /status`, and `P
 
 Calendar free intervals are often wider than the participant's usable time window. Matching therefore uses **overlap**, not the old rule that the entire calendar gap had to fit inside participant availability.
 
-For each waiting participant the helper now finds the earliest interval inside:
+For each waiting participant the helper finds the earliest interval inside:
 
 - participant earliest/latest date;
 - allowed weekday;
@@ -107,12 +115,12 @@ It reports field names/structure and scalar types without echoing scalar values.
 
 ## Real parser behavior
 
-`Watcher.check(start, end)` passes the exact requested bounds into `parse_reservations_response()`.
+`Watcher.check(start, end)` first converts caller timestamps to a whole-day Hong Kong calendar window, then uses that same normalized window for both the live request and parser complement calculation.
 
 The parser:
 
 1. collects confirmed blocking rows;
-2. clips them to the requested window;
+2. clips them to the normalized HK calendar window;
 3. merges overlapping/adjacent blocks;
 4. returns every remaining free interval;
 5. lets participant matching intersect those intervals with participant date/weekday/time/duration constraints.
@@ -136,9 +144,9 @@ Replaced: browser/login per monitor cycle, availability probing by clicking conf
 
 ## Remaining live-dependent work
 
-- confirm the persistent `serve --monitor` workflow removes repeated login friction during a normal work session;
-- use the new `status.last_check` output to confirm real free/matchable intervals over several live checks;
-- confirm timezone/date behavior over several manual checks;
+- rerun `serve --monitor` after the HK whole-day normalization and confirm the HTTP 422 is gone;
+- confirm the persistent helper removes repeated login friction during a normal work session;
+- use `status.last_check` to inspect real free/matchable intervals over several live checks;
 - confirm assistant-selection row text and session-expiry recovery;
 - confirm booking field IDs/options and `#confirm_reservation` against the current live page during one dry preparation;
 - replace the example waiting-list JSON with the intended APATHY staff data source once that source contract is explicit;

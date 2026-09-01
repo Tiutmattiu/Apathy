@@ -51,11 +51,12 @@ Public-repo privacy rule: never commit participant names/identifiers, phone numb
 - Successful items clear; failed/unprocessed items remain available for retry.
 - Incremental does not silently fall back to Full.
 - Full remains appropriate for true global schema/scoring/authority changes.
-- **Known issue:** single-participant runtime has been much slower than desired; performance optimization is still required.
+- A recent 38-participant historical repair batch completed 38/38 successfully in 4m53s.
+- **Known issue:** participant-scoped runtime is still slower than desired; performance optimization remains required.
 
 ### Admin precision redesign
 
-- Admin now uses **one row per participant**, aggregating relevant problems rather than one row per issue.
+- Admin uses **one row per participant**, aggregating relevant problems rather than one row per issue.
 - Missingness can be derived from assigned Event Values, canonical field mappings, and Field Provenance down to exact missing/invalid item paths.
 - Whole-source absence, partial item-level absence, and downstream/system-only breaks are distinguished.
 - Complete Raw/evidence with missing downstream output is not turned into a re-entry request.
@@ -66,29 +67,60 @@ Public-repo privacy rule: never commit participant names/identifiers, phone numb
 
 ### Historical Boss migration repair
 
-A private forensic comparison of historical Boss data against the current evidence/provenance chain established:
+A private forensic comparison of historical Boss data against the current evidence/provenance chain established that most apparent historical-value loss was authority/promotion/publication rather than broad source loss.
 
-- historical participant identity coverage is complete at row level;
-- most apparent historical-value loss is not broad source loss: evidence is still present but blocked by authority, Event-to-Provenance promotion, downstream calculation/mapping, or publication;
-- a smaller set of old derived/completeness values should **not** be blindly resurrected because current scoring/completeness semantics differ;
-- a very small set of genuine historical source gaps requires explicit historical Backfill evidence rather than copying values directly into Boss.
+Generic repairs were deployed for the diagnosed classes, including historical/manual LEDD authority fallback, field-wise formal Backfill promotion, canonical MID/PD publication paths, GAS derived publication, and CGT completion derivation.
 
-Generic repairs have been deployed for the diagnosed classes, including historical/manual LEDD authority fallback, field-wise formal Backfill promotion, canonical MID/PD publication paths, GAS derived publication, and CGT completion derivation.
+The six explicitly identified historical source gaps were then written as formal historical Backfill evidence with historical provenance; HADS remained summary-only with no fabricated items.
 
-Final cohort refresh + old-vs-new Boss verification is still pending for this work cycle. Do not mark historical migration closed until the final diff is clean and the explicit historical Backfill gaps are confirmed.
+Runtime result:
+
+- affected Incremental batch: 38 succeeded, 0 failed;
+- elapsed: 4m53s;
+- Output-only publication completed successfully;
+- Boss remained 90 columns and Admin refreshed;
+- five of the six historical values published;
+- one historical MRI date still has upstream evidence but remains blank downstream and requires a narrow mapping/publication diagnosis.
+
+**Newly observed post-repair issue:** current Boss diagnosis coloring/notes and Admin prompts are not fully aligned with the repaired evidence/publication state. This is now a concrete shared-diagnosis/output usability defect; fix it narrowly rather than reopening the entire Operations architecture.
+
+Do not mark historical migration closed until the remaining MRI publication break and post-repair diagnosis/Admin reconciliation are fixed, then run the final historical Boss diff.
+
+### Participant-facing report v1
+
+Production Apps Script report support has now been deployed.
+
+Installed scope:
+
+- staff menu entry for participant reports;
+- dedicated report backend payload path;
+- single and batch PID input;
+- one shared renderer;
+- one A4 page per participant;
+- browser `列印／儲存PDF` workflow;
+- no Full rebuild and no scientific scoring rewrite.
+
+The nine current bindings use final Boss-facing fields for Digit Span forward/backward, MoCA, three GAS dimensions, and three CGT metrics. GAS dimensions and CGT decision speed are internally direction-normalized. CGT risk-adjustment remains `待確認` until a formal direction contract is available.
+
+Participant-facing output does not expose percentile numbers, cohort N, technical direction rules, staff workflow decisions, Admin/Trace, or provenance.
+
+Still verify the deployed UI against a real participant and one small batch before calling report v1 accepted.
 
 ## NOT_DONE
 
-### Admin human readability and broader operations
+### Admin human readability and post-repair diagnosis reconciliation
 
-The structural/precision redesign is a major improvement, but Admin is not finished.
+Admin is not finished.
 
-Remaining product work includes:
+Immediate concrete work:
 
-- compressing an entirely absent workflow/scale into a concise whole-source message instead of listing every item as missing;
-- expanding exact item lists only for partially completed sources;
-- preserving clear `system handling / no re-entry` wording for downstream defects;
-- broader lifecycle/action/navigation polish from `ADMIN_TRACE_VNEXT_SPEC.md` where real staff use proves it useful.
+- reconcile Boss colors/notes and Admin prompts with the newly repaired accepted evidence state;
+- resolved/published fields must not remain marked as missing/actionable;
+- accepted evidence with a downstream publication break must be technical/system handling, not staff re-entry;
+- preserve one-row-per-participant aggregation and exact item precision;
+- compress an entirely absent workflow/scale into a concise whole-source message rather than listing every item as missing;
+- expand exact item lists only for partially completed sources;
+- preserve clear `system handling / no re-entry` wording for downstream defects.
 
 Do not reopen accepted identity semantics or redesign all Admin logic at once.
 
@@ -98,28 +130,6 @@ Do not reopen accepted identity semantics or redesign all Admin logic at once.
 - Current public frontend code must be audited against that baseline before claiming individual P0/P1 features are missing or complete.
 - A proven remaining defect is payload/evidence hygiene: routes can emit unrelated/default completion values that must not masquerade as authoritative evidence.
 
-### Participant-facing report — prior work recovered; implementation still unfinished
-
-This is the **report handed to the participant**, not an SPSS/R report and not the staff screening summary.
-
-Prior work already exists and should be continued rather than redesigned from scratch:
-
-- an editable participant-report template was produced from the older report design;
-- a three-page PDF visual prototype was produced and visually checked;
-- a later **single-page A4** participant-report prototype exists in DOCX/PDF form;
-- the report keeps exactly nine participant-facing metrics: Digit Span forward/backward, HK-MoCA, three apathy dimensions, and three CGT metrics;
-- participant-facing output does **not** show percentile numbers, cohort N, technical direction rules, or staff-only workflow text;
-- each metric shows a short Traditional-Chinese explanation, an internally normalized comparative bar, and a simple label such as `良好`, `一般`, or `待確認`;
-- longer bar always means better relative performance after internal direction normalization;
-- GAS dimensions and CGT speed require internal direction handling; CGT risk-adjustment direction must not be guessed;
-- the single-page version groups metrics into `認知表現`, `動機與情緒`, and `決策表現`.
-
-The current public frontend does **not** yet contain the dedicated participant-report renderer/print path. Existing `renderScreenResult()` is staff-facing interim screening output and must not be mistaken for the participant report.
-
-Current v1 delivery decision: **staff-controlled single or batch generation**, one participant per A4 page, with one browser print/save-PDF action. Participant self-service links are not required for v1.
-
-See `PARTICIPANT_REPORT_SPEC.md`.
-
 ### UBSN Human MRI booking assistant
 
 A real local helper exists under `tools/ubsn/`, and the frontend contains a staff UBSN route that talks to the local bridge.
@@ -127,24 +137,30 @@ A real local helper exists under `tools/ubsn/`, and the frontend contains a staf
 Current checkpoint:
 
 - persistent visible Playwright session exists;
-- calendar response capture exists;
-- slot matching/ranking, watcher, local service endpoints, and booking-form prefill path exist;
-- CAPTCHA and final booking confirmation remain human;
-- a real Human MRI `reservations.js` capture has now been observed;
-- the live response is a JSON event array containing Human MRI reservation/admin-hold blocks plus `className=unavailable` calendar blocks;
-- the working-branch parser now derives usable intervals as the complement of merged blocking intervals inside the exact requested window;
-- cancelled Human MRI reservation rows are ignored as blockers;
-- parsing fails closed on empty/unrecognized live responses rather than treating the whole calendar as free;
-- interval diff is coverage-aware so a newly added reservation that merely shrinks an existing free interval does not generate a false `NEW_SLOT` alert;
-- the private real capture is not committed.
+- a real Human MRI `reservations.js` capture has been observed and the real parser is implemented;
+- live response is a JSON event array containing Human MRI reservation/admin-hold blocks plus `className=unavailable` calendar blocks;
+- usable intervals are derived as the complement of merged blocking intervals inside the exact requested window;
+- cancelled Human MRI reservation rows do not block;
+- parsing fails closed on empty/unrecognized live responses;
+- interval diff is coverage-aware, avoiding false `NEW_SLOT` alerts when free time merely shrinks/splits;
+- local suite currently passes 13 tests against the integrated parser/diff behavior;
+- a one-shot live `check` completed and returned no matching staff action for the current local waiting-list input.
 
-Remaining UBSN work is now **live verification/integration**, not response-schema discovery:
+**Login UX finding:** repeated `run.py check` invocations restart and then close the Playwright process, so they can force repeated SAML login despite the persistent profile. The intended daily workflow is now persistent helper mode:
 
-- run the parser against the newly captured live response locally and verify the expected free intervals in the staff UI;
+```text
+run.py serve --monitor
+```
+
+This authenticates once, keeps the terminal/browser alive, reuses the same browser session for APATHY `check now`, and optionally runs background polling. URFMS server-side session expiry can still require a later re-authentication.
+
+Remaining UBSN work:
+
+- confirm persistent `serve --monitor` removes repeated-login friction during a normal work session;
 - confirm timezone/date semantics over repeated checks;
-- confirm session-expiry recovery and assistant-selection selectors;
 - confirm booking-form selectors during one dry preparation;
-- replace example waiting-list JSON with the intended APATHY staff data source after that source contract is explicit.
+- replace example waiting-list JSON with the intended APATHY staff data source once that source contract is explicit;
+- keep CAPTCHA and final submission human.
 
 ### Incremental performance
 
@@ -162,9 +178,9 @@ The old Phase 5B controlled Step 3/4 rollback proof remains a valid release-vali
 
 ## CURRENT MAINLINE
 
-1. Finish the current historical-migration repair cycle and final historical Boss diff.
-2. In parallel, implement the existing **participant-facing report** as staff-controlled single/batch one-A4-per-participant output.
-3. In parallel, finish **UBSN live verification/integration** using the now-confirmed real parser.
+1. Fix the remaining historical MRI publication break and reconcile post-repair Boss diagnosis coloring/Admin prompts; then run the final historical Boss diff.
+2. Verify the deployed participant-report UI with one real participant and one small batch.
+3. Finish UBSN persistent-session live verification, then wire the real waiting-list source.
 4. Audit the current frontend implementation against `FRONTEND_REQUIREMENTS_LATEST.md`, then fix only proven gaps; payload hygiene is already proven work.
 5. Optimize participant-scoped Incremental performance without changing scientific semantics.
 6. Continue Admin readability/operations refinements only from concrete staff use.

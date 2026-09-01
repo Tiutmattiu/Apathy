@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Iterable
@@ -250,27 +250,58 @@ def diff_slots(previous: set[Slot], current: set[Slot], seen_keys: set[str]) -> 
     return changes
 
 
+def candidate_booking_slot(slot: Slot, participant: Participant) -> Slot | None:
+    """Return the earliest bookable interval for one participant inside a free slot.
+
+    Calendar free intervals can be much wider than a participant's allowed daily
+    window. Matching therefore uses overlap, not the old requirement that the
+    *entire* free interval fit inside participant availability. The returned slot
+    is clipped to the participant's date/weekday/time constraints and, when a
+    positive minimum duration is supplied, uses exactly that duration so booking
+    preparation never fills an unnecessarily large free interval.
+    """
+    if participant.mri_status != "WAITING" or slot.end <= slot.start:
+        return None
+
+    day = max(slot.start.date(), participant.earliest_date)
+    last_day = min(slot.end.date(), participant.latest_date)
+    tz = slot.start.tzinfo
+
+    while day <= last_day:
+        if day.weekday() in participant.allowed_weekdays:
+            allowed_start = datetime.combine(day, participant.earliest_time, tzinfo=tz)
+            allowed_end = datetime.combine(day, participant.latest_time, tzinfo=tz)
+            start = max(slot.start, allowed_start)
+            end = min(slot.end, allowed_end)
+            if end > start:
+                if participant.minimum_duration > 0:
+                    candidate_end = start + timedelta(minutes=participant.minimum_duration)
+                    if candidate_end <= end:
+                        return Slot(start, candidate_end, slot.source)
+                else:
+                    return Slot(start, end, slot.source)
+        day += timedelta(days=1)
+    return None
+
+
 def match(slot: Slot, participants: Iterable[Participant]) -> list[Participant]:
-    rows = [
-        p
-        for p in participants
-        if p.mri_status == "WAITING"
-        and p.earliest_date <= slot.start.date() <= p.latest_date
-        and slot.start.weekday() in p.allowed_weekdays
-        and slot.start.time() >= p.earliest_time
-        and slot.end.time() <= p.latest_time
-        and slot.minutes >= p.minimum_duration
-    ]
+    rows = [p for p in participants if candidate_booking_slot(slot, p) is not None]
     return sorted(rows, key=lambda p: (p.priority, p.wait_since, p.pid))
 
 
 def make_action(change: Change, matches: list[Participant]) -> dict[str, Any]:
-    key = sha256(f"{change.kind}|{change.slot.key}".encode()).hexdigest()[:16]
+    if not matches:
+        raise ValueError("make_action requires at least one participant match")
+    booking_slot = candidate_booking_slot(change.slot, matches[0])
+    if booking_slot is None:
+        raise ValueError("recommended participant no longer fits the free interval")
+    key = sha256(f"{change.kind}|{booking_slot.key}|{matches[0].pid}".encode()).hexdigest()[:16]
     return {
         "action_id": key,
         "detected_at": datetime.now(timezone.utc).isoformat(),
         "change": change.kind,
-        "slot": {"start": change.slot.start.isoformat(), "end": change.slot.end.isoformat()},
+        "slot": {"start": booking_slot.start.isoformat(), "end": booking_slot.end.isoformat()},
+        "free_interval": {"start": change.slot.start.isoformat(), "end": change.slot.end.isoformat()},
         "matching_pids": [x.pid for x in matches],
         "recommended_pid": matches[0].pid,
         "reason": f"{matches[0].pid} matches date, weekday, time and duration constraints",

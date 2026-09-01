@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -58,11 +57,14 @@ def main():
             logging.info("UBSN authenticated for this helper session.")
             watcher = Watcher(client, config)
             if config.get("monitor_enabled", False):
-                logging.info("Background monitoring enabled.")
-                threading.Thread(target=watcher.watch_forever, daemon=True).start()
+                logging.info("Background monitoring enabled; browser operations remain serialized on the helper thread.")
             else:
                 logging.info("Background monitoring disabled; APATHY 'check now' still reuses this session.")
-            serve(watcher, port=config.get("port", 8765))
+            serve(
+                watcher,
+                port=config.get("port", 8765),
+                monitor=config.get("monitor_enabled", False),
+            )
     except Exception:
         client.debug_screenshot()
         raise

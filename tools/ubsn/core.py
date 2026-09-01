@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -9,6 +9,7 @@ from typing import Any, Iterable
 
 
 NEEDS_REAL_CAPTURE = "NEEDS_REAL_CAPTURE"
+REAL_CALENDAR_SOURCE = "reservations.js"
 
 
 @dataclass(frozen=True, order=True)
@@ -87,11 +88,7 @@ def _shape(value: Any, depth: int = 0) -> dict[str, Any]:
 
 
 def summarize_capture_schema(raw_text: str) -> dict[str, Any]:
-    """Privacy-safe schema probe for a saved real reservations.js body.
-
-    The result intentionally exposes only JSON structure, field names, collection
-    lengths, and scalar *types*. It never echoes scalar values from the capture.
-    """
+    """Privacy-safe schema probe for a saved real reservations.js body."""
     try:
         payload = json.loads(raw_text)
     except json.JSONDecodeError:
@@ -107,36 +104,161 @@ def summarize_capture_schema(raw_text: str) -> dict[str, Any]:
     }
 
 
-def parse_reservations_response(raw_text: str) -> set[Slot]:
-    """Parse only the labeled development fixture until a real body is captured."""
+def _parse_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _is_blocking_calendar_row(row: dict[str, Any]) -> bool:
+    """Narrow mapping from the confirmed Human MRI reservations.js capture.
+
+    Confirmed blocking rows are either calendar-unavailable regions or non-cancelled
+    Human MRI reservation/admin-hold rows. Unknown row types are ignored rather
+    than guessed into blocking semantics.
+    """
+    if row.get("is_canceled") is True:
+        return False
+    if str(row.get("className") or "").strip().lower() == "unavailable":
+        return True
+    return str(row.get("product") or "").strip().lower() == "human mri"
+
+
+def _merge_intervals(intervals: Iterable[tuple[datetime, datetime]]) -> list[tuple[datetime, datetime]]:
+    merged: list[list[datetime]] = []
+    for start, end in sorted(intervals, key=lambda x: (x[0], x[1])):
+        if end <= start:
+            continue
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        elif end > merged[-1][1]:
+            merged[-1][1] = end
+    return [(start, end) for start, end in merged]
+
+
+def _real_calendar_free_slots(
+    payload: list[Any], window_start: datetime, window_end: datetime
+) -> set[Slot]:
+    if window_end <= window_start:
+        raise ValueError("calendar window_end must be after window_start")
+
+    blocked: list[tuple[datetime, datetime]] = []
+    recognized = 0
+    for value in payload:
+        if not isinstance(value, dict) or not _is_blocking_calendar_row(value):
+            continue
+        start = _parse_datetime(value.get("start"))
+        end = _parse_datetime(value.get("end"))
+        if start is None or end is None or end <= start:
+            continue
+        recognized += 1
+        clipped_start = max(start, window_start)
+        clipped_end = min(end, window_end)
+        if clipped_end > clipped_start:
+            blocked.append((clipped_start, clipped_end))
+
+    if payload and recognized == 0:
+        raise ValueError(
+            f"{NEEDS_REAL_CAPTURE}: reservations.js JSON array contained no confirmed Human MRI blocking rows"
+        )
+
+    merged = _merge_intervals(blocked)
+    free: set[Slot] = set()
+    cursor = window_start
+    for start, end in merged:
+        if start > cursor:
+            free.add(Slot(cursor, start, REAL_CALENDAR_SOURCE))
+        if end > cursor:
+            cursor = end
+    if cursor < window_end:
+        free.add(Slot(cursor, window_end, REAL_CALENDAR_SOURCE))
+    return free
+
+
+def parse_reservations_response(
+    raw_text: str,
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+) -> set[Slot]:
+    """Return usable intervals from a fixture or confirmed live reservations.js body.
+
+    Fixture payloads already contain usable intervals. The confirmed real endpoint
+    returns blocking calendar events, so real parsing requires the exact requested
+    start/end bounds and returns the complement of all non-cancelled Human MRI
+    reservations/admin holds plus `className=unavailable` regions.
+    """
     try:
         payload = json.loads(raw_text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{NEEDS_REAL_CAPTURE}: response is not JSON") from exc
-    if not isinstance(payload, dict) or payload.get("fixture_schema") != "ubsn-usable-intervals-v1":
-        raise ValueError(f"{NEEDS_REAL_CAPTURE}: exact reservations.js response schema is not confirmed")
-    slots = set()
-    for row in payload.get("usable_intervals", []):
-        slots.add(Slot(datetime.fromisoformat(row["start"]), datetime.fromisoformat(row["end"]), row.get("source", "fixture")))
-    return slots
+
+    if isinstance(payload, dict) and payload.get("fixture_schema") == "ubsn-usable-intervals-v1":
+        slots = set()
+        for row in payload.get("usable_intervals", []):
+            slots.add(
+                Slot(
+                    datetime.fromisoformat(row["start"]),
+                    datetime.fromisoformat(row["end"]),
+                    row.get("source", "fixture"),
+                )
+            )
+        return slots
+
+    if isinstance(payload, list):
+        if window_start is None or window_end is None:
+            raise ValueError("real reservations.js parsing requires window_start and window_end")
+        return _real_calendar_free_slots(payload, window_start, window_end)
+
+    raise ValueError(f"{NEEDS_REAL_CAPTURE}: unrecognized reservations.js response envelope")
+
+
+def _covered_by(slot: Slot, candidates: Iterable[Slot]) -> bool:
+    """True when the whole slot was already free in the candidate set."""
+    cursor = slot.start
+    for other in sorted(candidates, key=lambda x: (x.start, x.end)):
+        if other.end <= cursor:
+            continue
+        if other.start > cursor:
+            return False
+        if other.end > cursor:
+            cursor = other.end
+        if cursor >= slot.end:
+            return True
+    return cursor >= slot.end
 
 
 def diff_slots(previous: set[Slot], current: set[Slot], seen_keys: set[str]) -> list[Change]:
-    old = {x.key: x for x in previous}; now = {x.key: x for x in current}; changes = []
-    for key in sorted(now.keys() - old.keys()):
-        changes.append(Change("REOPENED_SLOT" if key in seen_keys else "NEW_SLOT", now[key]))
-    for key in sorted(old.keys() - now.keys()):
-        changes.append(Change("DISAPPEARED", old[key]))
+    """Detect genuinely new free time, not mere interval reshaping.
+
+    A current free interval wholly covered by the previous free intervals is not
+    new availability. This prevents a newly-added reservation that *shrinks* a
+    free interval from creating a false NEW_SLOT alert merely because its exact
+    start/end key changed.
+    """
+    changes: list[Change] = []
+    for slot in sorted(current):
+        if not _covered_by(slot, previous):
+            changes.append(Change("REOPENED_SLOT" if slot.key in seen_keys else "NEW_SLOT", slot))
+    for slot in sorted(previous):
+        if not _covered_by(slot, current):
+            changes.append(Change("DISAPPEARED", slot))
     return changes
 
 
 def match(slot: Slot, participants: Iterable[Participant]) -> list[Participant]:
-    rows = [p for p in participants if p.mri_status == "WAITING"
-            and p.earliest_date <= slot.start.date() <= p.latest_date
-            and slot.start.weekday() in p.allowed_weekdays
-            and slot.start.time() >= p.earliest_time
-            and slot.end.time() <= p.latest_time
-            and slot.minutes >= p.minimum_duration]
+    rows = [
+        p
+        for p in participants
+        if p.mri_status == "WAITING"
+        and p.earliest_date <= slot.start.date() <= p.latest_date
+        and slot.start.weekday() in p.allowed_weekdays
+        and slot.start.time() >= p.earliest_time
+        and slot.end.time() <= p.latest_time
+        and slot.minutes >= p.minimum_duration
+    ]
     return sorted(rows, key=lambda p: (p.priority, p.wait_since, p.pid))
 
 

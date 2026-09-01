@@ -7,7 +7,8 @@ import time as clock
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
-from core import Change, Slot, diff_slots, load_participants, make_action, match, parse_reservations_response
+from core import Change, Slot, diff_slots, make_action, match, parse_reservations_response
+from waiting_source import load_waiting_snapshot
 
 
 # Hong Kong has used UTC+08:00 continuously since 1979. Use a fixed offset here
@@ -23,6 +24,7 @@ class Watcher:
         self.seen = set()
         self.actions = {}
         self.last_check = None
+        self.last_waiting_source = None
         self.lock = threading.Lock()
         self.audit_path = Path(config.get("audit_file", ".local/audit.jsonl"))
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,13 +43,7 @@ class Watcher:
 
     @staticmethod
     def _calendar_window(start: datetime, end: datetime) -> tuple[datetime, datetime]:
-        """Translate arbitrary caller timestamps into the whole-day HK window accepted by UBSN.
-
-        The live FullCalendar endpoint accepted the captured midnight-to-midnight +08:00
-        requests but rejected background queries containing the current clock time with
-        HTTP 422. UBSN is a Hong Kong facility, so all monitoring is intentionally
-        expressed as Hong Kong calendar days regardless of the caller's timezone.
-        """
+        """Translate arbitrary caller timestamps into the whole-day HK window accepted by UBSN."""
         if start.tzinfo is None:
             start = start.replace(tzinfo=CALENDAR_TZ)
         else:
@@ -68,6 +64,7 @@ class Watcher:
             "connected": True,
             "actions": len(self.actions),
             "ready_actions": sum(1 for x in self.actions.values() if x.get("status") in ("NEW", "READY")),
+            "waiting_source": self.last_waiting_source,
             "last_check": self.last_check,
         }
 
@@ -77,7 +74,10 @@ class Watcher:
             start, end = self._calendar_window(start, end)
             raw = self.client.request_calendar(start, end)
             current = parse_reservations_response(raw, start, end)
-            participants = load_participants(self.config["waiting_list_file"])
+
+            waiting = load_waiting_snapshot(self.config)
+            participants = waiting.participants
+            self.last_waiting_source = waiting.source
 
             matchable = []
             matched_pids = set()
@@ -115,6 +115,7 @@ class Watcher:
                 "trigger": trigger,
                 "requested_window": {"start": requested_start.isoformat(), "end": requested_end.isoformat()},
                 "window": {"start": start.isoformat(), "end": end.isoformat()},
+                "waiting_source": waiting.source,
                 "free_interval_count": len(current),
                 "free_intervals": [self._slot_json(x) for x in sorted(current)],
                 "waiting_participant_count": sum(1 for x in participants if x.mri_status == "WAITING"),
@@ -127,6 +128,7 @@ class Watcher:
             self.audit(
                 "CHECK_COMPLETE",
                 trigger=trigger,
+                waiting_source=waiting.source,
                 free_intervals=len(current),
                 matchable_intervals=len(matchable),
                 created_actions=len(created),

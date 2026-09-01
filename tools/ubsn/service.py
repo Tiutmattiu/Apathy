@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import logging
+import time as clock
+from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 from core import load_participants
 
 
-def serve(watcher, host="127.0.0.1", port=8765):
+def serve(watcher, host="127.0.0.1", port=8765, monitor=False):
+    """Serve the local bridge and optional polling on one thread.
+
+    Playwright's sync API is thread-affine. The browser is created by `run.py` on
+    this same main thread, so HTTP-triggered checks/preparation and background
+    polling are deliberately serialized here instead of using ThreadingHTTPServer
+    or a separate monitor thread.
+    """
+
     class Handler(BaseHTTPRequestHandler):
         def allowed_origin(self):
             origin = self.headers.get("Origin")
@@ -87,4 +97,25 @@ def serve(watcher, host="127.0.0.1", port=8765):
         def log_message(self, *_):
             pass
 
-    ThreadingHTTPServer((host, port), Handler).serve_forever()
+    server = HTTPServer((host, port), Handler)
+    server.timeout = 1.0
+    next_monitor_at = clock.monotonic() if monitor else None
+
+    while True:
+        server.handle_request()
+        if next_monitor_at is None or clock.monotonic() < next_monitor_at:
+            continue
+
+        now = datetime.now().astimezone()
+        end = now + timedelta(days=watcher.config.get("monitor_days_ahead", 7))
+        trigger = (
+            "RELEASE_WINDOW"
+            if watcher.poll_interval(now) == watcher.config["release_poll_interval_seconds"]
+            else "BACKGROUND"
+        )
+        try:
+            watcher.check(now, end, trigger)
+        except Exception as exc:
+            logging.warning("Monitor check failed; keeping last successful state: %s", exc)
+            watcher.audit("MONITOR_ERROR", error_type=type(exc).__name__)
+        next_monitor_at = clock.monotonic() + watcher.poll_interval(datetime.now().astimezone())

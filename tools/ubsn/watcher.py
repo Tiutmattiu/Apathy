@@ -23,7 +23,8 @@ class Watcher:
 
     def check(self, start: datetime, end: datetime, trigger="MANUAL") -> list[dict]:
         with self.lock:
-            current = parse_reservations_response(self.client.request_calendar(start, end))
+            raw = self.client.request_calendar(start, end)
+            current = parse_reservations_response(raw, start, end)
             changes = diff_slots(self.previous, current, self.seen); self.previous = current; self.seen.update(x.key for x in current)
             participants = load_participants(self.config["waiting_list_file"]); created = []
             for change in changes:

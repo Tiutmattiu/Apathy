@@ -4,13 +4,13 @@ Last updated: 2026-09-01
 
 This file is the canonical **sanitized engineering/product status** for agent handoff.
 
-Public-repo privacy rule: never commit participant names/identifiers, phone numbers, clinical payloads, private workbook rows, credentials, tokens, Script/Spreadsheet IDs, or other private Production evidence. Private Production facts may be summarized here only at aggregate/product level.
+Public-repo privacy rule: never commit participant names/identifiers, phone numbers, clinical payloads, private workbook rows, credentials, tokens, Script/Spreadsheet IDs, reservation captures containing staff/account data, or other private Production evidence. Private Production facts may be summarized here only at aggregate/product level.
 
 ## Status labels
 
 - `DONE`: complete for the stated scope.
 - `ACCEPTED`: validated and safe to rely on, but not necessarily the finished product.
-- `DEPLOYED_PENDING_VERIFY`: code is live but the final human/runtime verification for the current change is still pending.
+- `DEPLOYED_PENDING_VERIFY`: code is live but final human/runtime verification for the current change is still pending.
 - `PROVEN`: defect/fact established by code or real runtime evidence.
 - `NOT_DONE`: explicitly unfinished.
 - `DEFERRED`: valid backlog, not a current blocker.
@@ -45,9 +45,9 @@ Public-repo privacy rule: never commit participant names/identifiers, phone numb
 
 ### Incremental runner — supersedes the old 2026-08-27 Full-only status
 
-- A real participant-scoped Incremental pipeline is now implemented and deployed.
+- A real participant-scoped Incremental pipeline is implemented and deployed.
 - Reusable entrypoint processes one or many affected PIDs and reuses the existing Event/Participant/Result/Decision/Boss/Admin logic rather than creating a second scientific engine.
-- Admin has a real checkbox queue and a human menu action for checked items.
+- Admin has a checkbox queue and human menu action for checked items.
 - Successful items clear; failed/unprocessed items remain available for retry.
 - Incremental does not silently fall back to Full.
 - Full remains appropriate for true global schema/scoring/authority changes.
@@ -55,7 +55,7 @@ Public-repo privacy rule: never commit participant names/identifiers, phone numb
 
 ### Admin precision redesign
 
-- Admin now uses **one row per participant**, aggregating the participant's relevant problems rather than one row per issue.
+- Admin now uses **one row per participant**, aggregating relevant problems rather than one row per issue.
 - Missingness can be derived from assigned Event Values, canonical field mappings, and Field Provenance down to exact missing/invalid item paths.
 - Whole-source absence, partial item-level absence, and downstream/system-only breaks are distinguished.
 - Complete Raw/evidence with missing downstream output is not turned into a re-entry request.
@@ -73,15 +73,9 @@ A private forensic comparison of historical Boss data against the current eviden
 - a smaller set of old derived/completeness values should **not** be blindly resurrected because current scoring/completeness semantics differ;
 - a very small set of genuine historical source gaps requires explicit historical Backfill evidence rather than copying values directly into Boss.
 
-Generic repairs have been deployed for the diagnosed classes, including:
+Generic repairs have been deployed for the diagnosed classes, including historical/manual LEDD authority fallback, field-wise formal Backfill promotion, canonical MID/PD publication paths, GAS derived publication, and CGT completion derivation.
 
-- historical/manual LEDD final-source authority fallback when no stronger source supersedes it;
-- field-wise formal Backfill promotion that respects stronger formal sources;
-- canonical MID/PD evidence publication paths;
-- GAS derived publication with resolved PD/HC applicability;
-- CGT completion derived from the three accepted substantive metrics.
-
-Final cohort Incremental refresh + old-vs-new Boss verification is still pending for this work cycle. Do not mark historical migration closed until that final diff is clean and the explicit historical Backfill gaps are confirmed.
+Final cohort refresh + old-vs-new Boss verification is still pending for this work cycle. Do not mark historical migration closed until the final diff is clean and the explicit historical Backfill gaps are confirmed.
 
 ## NOT_DONE
 
@@ -112,22 +106,23 @@ Prior work already exists and should be continued rather than redesigned from sc
 
 - an editable participant-report template was produced from the older report design;
 - a three-page PDF visual prototype was produced and visually checked;
-- a later single-page participant-report prototype also exists;
-- the report intentionally keeps the original participant-facing domains:
-  - Digit Span forward / backward;
-  - MoCA overall cognition;
-  - the three apathy dimensions;
-  - the three CGT metrics;
-- the redesign replaced static/raw presentation with dynamic percentile positioning, cohort `N`, plain-language interpretation, and data/version metadata;
-- the single-page version groups these into `認知表現`, `動機與情緒`, and `決策表現`, using participant-readable labels and relative-performance bars.
+- a later **single-page A4** participant-report prototype exists in DOCX/PDF form;
+- the report keeps exactly nine participant-facing metrics: Digit Span forward/backward, HK-MoCA, three apathy dimensions, and three CGT metrics;
+- participant-facing output does **not** show percentile numbers, cohort N, technical direction rules, or staff-only workflow text;
+- each metric shows a short Traditional-Chinese explanation, an internally normalized comparative bar, and a simple label such as `良好`, `一般`, or `待確認`;
+- longer bar always means better relative performance after internal direction normalization;
+- GAS dimensions and CGT speed require internal direction handling; CGT risk-adjustment direction must not be guessed;
+- the single-page version groups metrics into `認知表現`, `動機與情緒`, and `決策表現`.
 
-The current public frontend does **not** yet contain a dedicated participant-report renderer/print path. Existing `renderScreenResult()` is staff-facing interim screening output and must not be mistaken for the participant report.
+The current public frontend does **not** yet contain the dedicated participant-report renderer/print path. Existing `renderScreenResult()` is staff-facing interim screening output and must not be mistaken for the participant report.
 
-See `PARTICIPANT_REPORT_SPEC.md`; it records the recovered report contract instead of inventing a new report scope.
+Current v1 delivery decision: **staff-controlled single or batch generation**, one participant per A4 page, with one browser print/save-PDF action. Participant self-service links are not required for v1.
+
+See `PARTICIPANT_REPORT_SPEC.md`.
 
 ### UBSN Human MRI booking assistant
 
-A real local helper already exists under `tools/ubsn/`, and the frontend contains a staff UBSN route that talks to the local bridge.
+A real local helper exists under `tools/ubsn/`, and the frontend contains a staff UBSN route that talks to the local bridge.
 
 Current checkpoint:
 
@@ -135,11 +130,21 @@ Current checkpoint:
 - calendar response capture exists;
 - slot matching/ranking, watcher, local service endpoints, and booking-form prefill path exist;
 - CAPTCHA and final booking confirmation remain human;
-- the exact live `reservations.js` response schema has not yet been confirmed, so production parsing intentionally stops at `NEEDS_REAL_CAPTURE`;
-- live field selectors/session-expiry/calendar semantics still need confirmation against the real site;
-- a privacy-safe offline `inspect-capture` command is now available on the working branch so a real capture can be structurally inspected without echoing scalar booking values.
+- a real Human MRI `reservations.js` capture has now been observed;
+- the live response is a JSON event array containing Human MRI reservation/admin-hold blocks plus `className=unavailable` calendar blocks;
+- the working-branch parser now derives usable intervals as the complement of merged blocking intervals inside the exact requested window;
+- cancelled Human MRI reservation rows are ignored as blockers;
+- parsing fails closed on empty/unrecognized live responses rather than treating the whole calendar as free;
+- interval diff is coverage-aware so a newly added reservation that merely shrinks an existing free interval does not generate a false `NEW_SLOT` alert;
+- the private real capture is not committed.
 
-Next milestone is real-capture schema reconciliation, not a rewrite of the UBSN tool.
+Remaining UBSN work is now **live verification/integration**, not response-schema discovery:
+
+- run the parser against the newly captured live response locally and verify the expected free intervals in the staff UI;
+- confirm timezone/date semantics over repeated checks;
+- confirm session-expiry recovery and assistant-selection selectors;
+- confirm booking-form selectors during one dry preparation;
+- replace example waiting-list JSON with the intended APATHY staff data source after that source contract is explicit.
 
 ### Incremental performance
 
@@ -157,9 +162,9 @@ The old Phase 5B controlled Step 3/4 rollback proof remains a valid release-vali
 
 ## CURRENT MAINLINE
 
-1. Finish the current historical-migration repair cycle: run the affected Incremental batch and perform the final historical Boss diff.
-2. In parallel, implement the **existing participant-facing report design** from its recovered template/spec; do not replace it with a new generic report.
-3. In parallel, advance **UBSN** from `NEEDS_REAL_CAPTURE` to confirmed live-schema parsing and safe booking preparation.
+1. Finish the current historical-migration repair cycle and final historical Boss diff.
+2. In parallel, implement the existing **participant-facing report** as staff-controlled single/batch one-A4-per-participant output.
+3. In parallel, finish **UBSN live verification/integration** using the now-confirmed real parser.
 4. Audit the current frontend implementation against `FRONTEND_REQUIREMENTS_LATEST.md`, then fix only proven gaps; payload hygiene is already proven work.
 5. Optimize participant-scoped Incremental performance without changing scientific semantics.
 6. Continue Admin readability/operations refinements only from concrete staff use.

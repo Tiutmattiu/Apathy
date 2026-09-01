@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
-from core import load_participants
+from waiting_source import load_waiting_snapshot
 
 
 def serve(watcher, host="127.0.0.1", port=8765, monitor=False):
@@ -59,12 +59,16 @@ def serve(watcher, host="127.0.0.1", port=8765, monitor=False):
             elif path == "/actions":
                 self.send_json(200, list(watcher.actions.values()))
             elif path == "/waiting-list":
+                snapshot = load_waiting_snapshot(watcher.config)
                 self.send_json(
                     200,
-                    [
-                        {"pid": x.pid, "mri_status": x.mri_status, "wait_since": x.wait_since}
-                        for x in load_participants(watcher.config["waiting_list_file"])
-                    ],
+                    {
+                        "source": snapshot.source,
+                        "participants": [
+                            {"pid": x.pid, "mri_status": x.mri_status, "wait_since": x.wait_since}
+                            for x in snapshot.participants
+                        ],
+                    },
                 )
             else:
                 self.send_json(404, {"error": "not found"})

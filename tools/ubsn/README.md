@@ -52,15 +52,15 @@ If URFMS itself expires the server-side session later, one new SAML authenticati
 
 ### Live 422 finding
 
-The first persistent live run authenticated correctly but the background calendar call returned HTTP 422 when the monitor sent a moving `now -> now+7d` timestamp window containing the current clock time.
+The persistent helper authenticated correctly, but the first calendar requests returned HTTP 422. Normalizing the request window to whole Hong Kong calendar days was necessary for consistent parser semantics but did **not** by itself remove the 422.
 
-The already successful capture/manual request used Hong Kong midnight-to-midnight calendar bounds. The watcher therefore now normalizes every manual/background request to **Asia/Hong_Kong whole calendar days** before calling `reservations.js`.
+The calendar request now executes through same-origin `fetch()` inside the authenticated booking page instead of through Playwright's separate API request client. This mirrors the live browser/XHR context more closely (same page session, origin/referrer and XHR-style headers).
 
-Example: a browser request sent as `2026-09-01T04:05:00Z -> 2026-09-08T04:05:00Z` is queried upstream as `2026-09-01T00:00:00+08:00 -> 2026-09-08T00:00:00+08:00`. This also makes the frontend's UTC `toISOString()` timestamps safe for the local helper.
+The helper first sends the confirmed ISO Hong Kong bounds. If Production explicitly rejects that request with HTTP 422, it retries once with the same calendar bounds as date-only `YYYY-MM-DD` values, which is a common FullCalendar request format. Response bodies remain local and are not logged.
 
 ## One-shot diagnostics
 
-A manual `check` now prints both newly created actions and a `status.last_check` summary:
+A manual `check` prints both newly created actions and a `status.last_check` summary:
 
 ```powershell
 .\.venv\Scripts\python.exe run.py check `
@@ -144,7 +144,7 @@ Replaced: browser/login per monitor cycle, availability probing by clicking conf
 
 ## Remaining live-dependent work
 
-- rerun `serve --monitor` after the HK whole-day normalization and confirm the HTTP 422 is gone;
+- rerun `serve --monitor` with the browser-context calendar request and confirm whether ISO or date-only bounds are accepted;
 - confirm the persistent helper removes repeated login friction during a normal work session;
 - use `status.last_check` to inspect real free/matchable intervals over several live checks;
 - confirm assistant-selection row text and session-expiry recovery;

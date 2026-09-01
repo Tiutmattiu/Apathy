@@ -34,6 +34,22 @@ Copy-Item waiting-list.example.json waiting-list.local.json
 
 Edit only the local JSON copies. Do not put credentials in them. Optional credentials use `URFMS_NET_ID` and `URFMS_PASSWORD` environment variables; otherwise complete SAML in the visible browser.
 
+## Daily workflow: log in once, keep the helper running
+
+Do **not** use `run.py check` as the normal repeated workflow. `check` is a one-shot diagnostic command: it launches the browser, performs one check, and then closes the browser process. A later `check` therefore may require SAML again even though the Playwright profile is persistent.
+
+Start the persistent helper once instead:
+
+```powershell
+.\.venv\Scripts\python.exe run.py serve --monitor
+```
+
+At startup it opens the visible browser and establishes UBSN authentication once. Keep that PowerShell window and browser open. The APATHY staff website's `立即檢查UBSN` action then calls the existing local `/check-now` endpoint and reuses the same authenticated browser session rather than starting another login.
+
+With `--monitor`, the helper also performs background checks using the configured release-window and normal polling intervals. Without `--monitor`, manual checks from the APATHY website still reuse the same browser session.
+
+If URFMS itself expires the server-side session later, one new SAML authentication may still be required, but normal repeated checks during the running helper session should not restart login every time.
+
 ## Capture / inspect a response when live behavior changes
 
 ```powershell
@@ -68,7 +84,7 @@ The interval diff is coverage-aware. If a new reservation merely shrinks/splits 
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe run.py serve
+.\.venv\Scripts\python.exe run.py serve --monitor
 ```
 
 The local bridge listens on `127.0.0.1:8765`: `GET /health`, `GET /status`, `GET /actions`, `GET /waiting-list`, `POST /check-now`, `POST /actions/{id}/prepare`, and `POST /actions/{id}/outcome`.
@@ -81,7 +97,7 @@ Replaced: browser/login per monitor cycle, availability probing by clicking conf
 
 ## Remaining live-dependent work
 
-- run the real parser locally against the newly captured response and confirm the expected free intervals in the staff UI;
+- confirm the persistent `serve --monitor` workflow removes repeated login friction during a normal work session;
 - confirm timezone/date behavior over several manual checks;
 - confirm assistant-selection row text and session-expiry recovery;
 - confirm booking field IDs/options and `#confirm_reservation` against the current live page during one dry preparation;

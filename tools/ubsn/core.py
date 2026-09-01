@@ -160,9 +160,11 @@ def _real_calendar_free_slots(
         if clipped_end > clipped_start:
             blocked.append((clipped_start, clipped_end))
 
-    if payload and recognized == 0:
+    # Fail closed. An empty/unrecognized response must never be interpreted as
+    # "the entire MRI calendar is free".
+    if recognized == 0:
         raise ValueError(
-            f"{NEEDS_REAL_CAPTURE}: reservations.js JSON array contained no confirmed Human MRI blocking rows"
+            f"{NEEDS_REAL_CAPTURE}: reservations.js contained no confirmed Human MRI blocking rows"
         )
 
     merged = _merge_intervals(blocked)

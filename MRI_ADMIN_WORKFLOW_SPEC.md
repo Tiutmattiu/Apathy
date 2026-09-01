@@ -1,151 +1,130 @@
 # APATHY MRI Admin / Scheduling Workflow
 
 Date: 2026-09-01
-Status: product contract / implementation target
+Status: corrected product contract / implementation target
 
-Purpose: turn MRI preferences collected during Screening into a visible staff scheduling workflow, connect that workflow to the existing `MRI Time` sheet and Contactlist, and make UBSN consume the same source of truth. This is an operations feature, not a new scientific scoring domain.
+Purpose: finish the MRIadmin workflow that already begins in Screening. Screening MRIadmin is the upstream source. Staff should receive an Admin scheduling task automatically, UBSN should match the participant's stored preferences to live facility availability, and a confirmed booking should be written to `MRI Time` automatically.
 
 Privacy: this public specification must not contain participant names, phone numbers, private workbook values, credentials, or Production-only identifiers.
 
 ## 1. Problem
 
-MRI preference / assistance information is collected during Screening, but staff primarily work from Admin, Contactlist, and `MRI Time`. Today those preferences can therefore exist in accepted participant evidence without becoming an operational task. The result is a broken handoff: data is collected but nobody is explicitly told that a participant needs MRI scheduling.
+MRI preference / assistance information is already collected during Screening, but that information has historically been swallowed by the unfinished MRIadmin workflow. Staff therefore compensated manually by maintaining MRI-related notes in Contactlist and manually maintaining MRI booking lists / `MRI Time`.
 
-The current `MRI Time` sheet is already an operational booking ledger with columns equivalent to:
+Those manual tables are workarounds, not authorities for the new feature.
 
-- MRI Date
-- MRI Time (from)
-- MRI Time (To)
-- Subject No.
-- admin
-- remark
+The finished workflow must remove the need to copy Screening MRI information into Contactlist or a separate manual MRI waiting list.
 
-Contactlist also carries operational MRI fields including MRI contact, MRI time/date, re-MRI-needed state, inclusion state, and free-text remarks.
+## 2. Authority model
 
-MRIadmin is not complete until these surfaces form one closed loop.
+### Screening MRIadmin
 
-## 2. Ownership model
+Screening is the authoritative upstream source for participant MRI scheduling information collected during Screening, including preferred months, weekday/daypart availability, transport/access needs, companion information, and MRI administrative remarks.
 
-### Screening MRIadmin / accepted Participant state
-
-Owns participant-provided MRI scheduling preferences and assistance needs. Examples include preferred months, weekday/daypart availability, transport/access needs, companion information, and MRI administrative remarks.
-
-This is evidence about **when/how the participant can attend**. It is not the booking ledger.
+The backend must preserve this information after identity resolution so it can be used operationally.
 
 ### Admin
 
-Owns **what staff must do next**. MRI scheduling problems should appear here as one participant-level task, consistent with the existing one-PID-per-row Admin model.
+Admin tells staff what needs to happen next.
 
-### MRI Time
-
-Owns the **actual booked MRI resource slot**. It should be read as the operational appointment ledger and should be writable through a narrow explicit booking function after staff confirmation.
-
-### Contactlist
-
-Remains a staff-facing operational/contact surface and compatibility mirror. Structured fields such as inclusion, MRI contact, MRI time/date, and re-MRI-needed may affect scheduling state. Free-text remarks may be shown to staff but must not be the only machine-readable authority for booking state.
+After a participant's Screening MRIadmin information is accepted and the participant is ready for MRI scheduling, Admin should automatically show a concise MRI scheduling task with the participant's stored preference/assistance summary.
 
 ### UBSN helper
 
-Owns live facility availability monitoring and candidate-slot matching. It must not invent participant availability or become a second identity engine. It consumes the derived MRI waiting/scheduling state and proposes usable slots.
+UBSN consumes the derived MRI waiting state from Screening MRIadmin and matches it against live Human MRI availability.
 
-## 3. Derived MRI scheduling states
+UBSN must not read Contactlist or a manually maintained MRI waiting list as scheduling authority.
 
-The backend should derive a participant-level MRI scheduling state from accepted Participant MRIadmin evidence + Contactlist + MRI Time + completed MRI evidence.
+### MRI Time
 
-Minimum states:
+`MRI Time` is an output / staff-visible booking ledger.
 
-- `NOT_ACTIONABLE`: excluded / withdrawn / otherwise not currently intended for MRI.
-- `PREFERENCE_MISSING`: MRI is expected but usable scheduling preference is absent or incomplete.
-- `TO_SCHEDULE`: MRI is expected, no current booked MRI slot exists, and usable preference exists.
-- `MATCH_AVAILABLE`: UBSN has a live candidate slot but booking is not yet confirmed.
-- `BOOKED`: current future appointment exists in MRI Time / accepted operational booking state.
-- `COMPLETED`: MRI completion evidence exists for the intended visit.
-- `RE_MRI_TO_SCHEDULE`: re-MRI is explicitly required and no replacement appointment is booked.
-- `SYNC_CONFLICT`: structured operational sources disagree (for example Contactlist says booked but MRI Time has no corresponding appointment, or duplicate/conflicting future appointments exist).
+After staff completes the human CAPTCHA/final confirmation in the UBSN booking flow, APATHY writes the confirmed booking into `MRI Time` automatically.
 
-Do not infer `NOT_ACTIONABLE` merely from PD/HC classification. Use the actual study inclusion/protocol/operational state.
+`MRI Time` is not the upstream source used to decide who needs scheduling in the new workflow.
 
-Withdrawal alone remains non-actionable in Admin; preserve evidence without producing a staff reminder.
+### Contactlist / historical manual MRI lists
 
-## 4. Admin tasks
+Do not use these as inputs to the new MRIadmin scheduling engine. They exist because the MRIadmin loop was previously incomplete and staff had to copy/maintain information manually.
 
-MRI scheduling should use a small explicit task vocabulary.
+Once the feature is working, staff should no longer need to maintain MRI availability or scheduling state there for this purpose.
 
-### `MRI_SCHEDULE_NEEDED`
+## 3. Minimal operational states
 
-Condition: MRI expected + no current booking + usable MRI preference.
+Keep the state model small:
 
-Visible Admin summary should include:
+- `WAITING`: participant is ready for MRI scheduling and has usable MRIadmin preference.
+- `PREFERENCE_MISSING`: participant is ready for MRI scheduling but usable MRIadmin preference is absent/incomplete.
+- `BOOKING_READY`: UBSN has found a candidate slot for the participant, but staff has not yet completed the facility booking.
+- `BOOKED`: human-confirmed facility booking has been recorded by APATHY.
+- `NOT_ACTIONABLE`: no MRI scheduling action is currently required.
+
+Withdrawal alone remains non-actionable and must not generate an Admin reminder.
+
+Do not create re-MRI state from Contactlist. If re-MRI is needed later, it must come from an explicit APATHY workflow/evidence path rather than a legacy manual field.
+
+## 4. Admin task
+
+For `WAITING`, Admin should show one participant-level MRI task:
 
 - PID / Name
 - `需要預約 MRI`
-- concise preference summary, e.g. preferred months + weekday/daypart windows
+- concise preference summary from Screening MRIadmin
 - relevant transport/access/companion flags
-- next action: `打開 MRI Booking Assistant / 安排 MRI`
+- next action: open MRI Booking Assistant / arrange MRI
 
-### `MRI_PREFERENCE_NEEDED`
+For `PREFERENCE_MISSING`, Admin should show:
 
-Condition: MRI expected + no booking + preference unavailable/incomplete.
+- `需要補 MRI 可用時間`
+- next action: update the participant's MRI scheduling information
 
-Next action: contact participant / update MRI availability. Do not treat blank preference as all-day availability.
+For `BOOKING_READY`, Admin can indicate that a UBSN slot is available / ready for staff booking.
 
-### `MRI_RESCHEDULE_NEEDED`
-
-Condition: structured re-MRI state or replacement MRI required + no future replacement booking.
-
-### `MRI_BOOKING_SYNC_CONFLICT`
-
-Condition: MRI Time, Contactlist, or accepted booking state disagree materially.
-
-Next action: review MRI booking record. This is a system/operations reconciliation task, not participant re-entry.
-
-Once a valid booking exists, the scheduling task disappears from active Admin.
+For `BOOKED` and `NOT_ACTIONABLE`, no active MRI scheduling problem should remain.
 
 ## 5. MRI preference representation
 
-Do not collapse Screening MRIadmin into one broad `earliest_time/latest_time` window. Preserve weekday + daypart structure so combinations such as Tuesday AM and Thursday PM do not accidentally imply Tuesday PM or Thursday AM.
+Do not collapse Screening MRIadmin into one broad `earliest_time/latest_time` window. Preserve month + weekday + daypart structure so combinations such as Tuesday AM and Thursday PM do not accidentally imply Tuesday PM or Thursday AM.
 
-Derived UBSN waiting payload should be equivalent to:
+The UBSN waiting payload should preserve structured windows, for example:
 
-```text
-pid
-wait_since
-preferred_months[]
-weekly_windows:
-  mon: [AM|PM]
-  tue: [AM|PM]
-  ...
-minimum_duration_minutes
-assistance_flags
-remark
-priority
+```json
+{
+  "pid": "P0123",
+  "mri_status": "WAITING",
+  "wait_since": "2026-08-20",
+  "availability_windows": [
+    {"months": [9,10,11], "weekday": 1, "start": "09:00", "end": "12:00"},
+    {"months": [9,10,11], "weekday": 3, "start": "13:00", "end": "18:00"}
+  ],
+  "minimum_duration": 90,
+  "priority": 100
+}
 ```
 
-AM/PM clock boundaries must be configuration, not scientific hardcoding. Facility unavailable periods still come from live UBSN calendar data.
+Blank preference must never be expanded to unrestricted availability.
 
-## 6. MRI Time read contract
+AM/PM clock boundaries should be configuration, not participant-specific hardcoding.
 
-Implement one read-only backend adapter that parses the existing MRI Time ledger by current sheet headers rather than fixed column positions.
+## 6. Booking confirmation and MRI Time write
 
-It must return normalized appointments with at least:
+A UBSN free slot or prepared booking is not enough to write `MRI Time`.
+
+The sequence is:
 
 ```text
-subject_no
-pid_if_resolved
-start
-end
-admin
-remark
-row_id_or_row_number
+Screening MRIadmin
+  -> Admin MRI scheduling task
+  -> UBSN live slot match
+  -> staff opens/prepares booking
+  -> human CAPTCHA + final UBSN confirmation
+  -> staff records outcome BOOKED
+  -> APATHY records the confirmed booking state
+  -> APATHY writes the booking into MRI Time
+  -> Admin MRI task resolves
 ```
 
-Identity should be resolved through existing Registry/Participant authority. Do not build new fuzzy PID/SID/phone matching inside UBSN.
-
-The adapter should detect duplicate/conflicting future appointments and expose them as `SYNC_CONFLICT` rather than silently choosing one.
-
-## 7. MRI Time write contract
-
-Create a single narrow function, conceptually:
+Use one narrow write function conceptually:
 
 ```text
 recordMriBooking(pid, start, end, admin, remark, source)
@@ -153,66 +132,59 @@ recordMriBooking(pid, start, end, admin, remark, source)
 
 Rules:
 
-- explicit staff-confirmed booking only;
-- resolve the current Subject No. according to existing Registry / MRI Time convention;
-- write one normalized row to MRI Time;
-- update the structured Contactlist `MRI TIME&DATE` / `MRI contact` mirror where appropriate;
-- preserve existing manual remarks;
+- human-confirmed booking only;
+- resolve current Subject No. through existing Registry / participant identity authority;
+- append/update the normalized `MRI Time` booking row according to the existing sheet convention;
+- no Contactlist writeback required for the new workflow;
 - no Raw rewrite;
 - no scientific Result/Boss scoring changes;
-- idempotent against the same PID + start + end booking;
-- reject conflicting duplicate appointments rather than overwriting silently.
+- idempotent against the same participant + start + end booking;
+- preserve an internal authoritative booking outcome/evidence so the task can resolve without treating manually maintained sheets as source truth.
 
-A UBSN candidate or prepared booking is **not** enough to write MRI Time. The write occurs only after the human completes CAPTCHA/final facility booking and explicitly records outcome `BOOKED`.
+## 7. UBSN integration
 
-## 8. UBSN integration
+UBSN should consume a read-only waiting snapshot derived from accepted/current Screening MRIadmin state.
 
-UBSN should consume the derived MRI scheduling queue rather than a manually maintained `waiting-list.local.json` once the backend adapter exists.
+It must not read Contactlist or a manually maintained MRI waiting list to decide availability.
 
 Flow:
 
 ```text
 Screening MRIadmin evidence
-        +
-Contactlist operational state
-        +
-MRI Time booked appointments
-        +
-MRI completion evidence
-        -> derived MRI scheduling state
+        -> resolved participant MRI scheduling state
         -> Admin task
         -> UBSN waiting payload
         + live UBSN free slots
         -> candidate booking
         -> human CAPTCHA/final confirmation
         -> explicit BOOKED outcome
-        -> recordMriBooking(...)
-        -> MRI Time + Contactlist mirror
+        -> APATHY booking evidence/state
+        -> write MRI Time
         -> Admin task resolves
 ```
 
-## 9. Minimum implementation sequence
+## 8. Minimum implementation sequence
 
-Functionality first. Do not begin with a broad audit/test programme.
+Functionality first.
 
-1. **Read MRI Time** into a normalized appointment map.
-2. **Derive MRI scheduling state** for current participants using accepted MRIadmin + Contactlist + MRI Time.
-3. **Surface Admin tasks** `MRI_SCHEDULE_NEEDED` / `MRI_PREFERENCE_NEEDED` / `MRI_RESCHEDULE_NEEDED` / `MRI_BOOKING_SYNC_CONFLICT`.
-4. **Expose read-only UBSN waiting payload** from the same derived state.
-5. **Make UBSN consume that payload** instead of the local example waiting list.
-6. **Add explicit confirmed-booking write** to MRI Time and Contactlist mirror after human outcome `BOOKED`.
-7. Staff verifies one real unscheduled participant -> candidate slot -> human booking -> MRI Time update -> Admin task disappears.
+1. Ensure current/accepted Screening MRIadmin fields survive into an identity-resolved participant scheduling read model.
+2. Derive `WAITING` / `PREFERENCE_MISSING` / `NOT_ACTIONABLE` from that Screening state and current APATHY workflow state.
+3. Surface the MRI task in Admin with the Screening preference summary.
+4. Expose the same `WAITING` rows through the UBSN read-only endpoint.
+5. Let UBSN match live Human MRI availability against the structured Screening windows.
+6. On explicit human-confirmed `BOOKED`, record APATHY booking state and write the confirmed slot to `MRI Time`.
+7. Resolve the Admin task automatically.
 
-No Full rebuild is required for narrow MRI scheduling/output changes. Use participant-scoped Incremental and/or output rebuild only where the current architecture requires it.
+Do not build the new scheduling state by reading Contactlist or manual MRI lists.
 
-## 10. Acceptance boundary
+## 9. Acceptance boundary
 
-MRIadmin v1 is usable when staff no longer need to remember that Screening contained hidden MRI preference data:
+MRIadmin v1 is usable when:
 
-- an included participant who needs MRI and has no booking appears automatically in Admin;
-- Admin shows the useful MRI preference/assistance summary;
-- MRI Time appointments suppress already-booked participants from the waiting queue;
-- UBSN matches live free slots against those preferences;
-- after human-confirmed booking, one action writes the appointment to MRI Time and structured Contactlist fields;
-- the Admin scheduling task then resolves automatically;
-- missing preference produces a contact/update task, never an assumption of full availability.
+- Screening MRIadmin information no longer disappears operationally;
+- staff automatically sees who needs MRI booking in Admin;
+- the task shows the participant's actual Screening availability/assistance information;
+- UBSN matches against that same information without a second manual waiting list;
+- after staff confirms the facility booking, APATHY writes the booking into `MRI Time`;
+- the Admin task resolves;
+- staff no longer needs to duplicate MRI scheduling information into Contactlist/manual MRI lists.

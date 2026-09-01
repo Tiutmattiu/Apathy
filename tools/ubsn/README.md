@@ -4,7 +4,7 @@ Local staff tool only. It keeps one visible Playwright profile, passively reads 
 
 ## Current checkpoint
 
-A real Human MRI `reservations.js` capture has now been observed and the parser is no longer fixture-only.
+A real Human MRI `reservations.js` capture has been observed and the parser is no longer fixture-only.
 
 Confirmed live response shape:
 
@@ -50,6 +50,45 @@ With `--monitor`, the helper also performs background checks using the configure
 
 If URFMS itself expires the server-side session later, one new SAML authentication may still be required, but normal repeated checks during the running helper session should not restart login every time.
 
+## One-shot diagnostics
+
+A manual `check` now prints both newly created actions and a `status.last_check` summary:
+
+```powershell
+.\.venv\Scripts\python.exe run.py check `
+  --start 2026-09-01T00:00:00+08:00 `
+  --end 2026-09-08T00:00:00+08:00
+```
+
+The summary distinguishes:
+
+- `free_interval_count`: calendar gaps derived from UBSN;
+- `waiting_participant_count`: local waiting-list participants;
+- `matchable_interval_count`: free intervals that actually overlap at least one waiting participant's constraints;
+- `matchable_participant_count`: unique participants who can use at least one current free interval;
+- `calendar_change_count`: availability changes relative to the previous successful check in that helper process;
+- `created_action_count`: genuinely new actionable recommendations created by this check.
+
+This means an empty `created` list is no longer ambiguous. It can mean “no free interval”, “free intervals exist but nobody currently matches”, or “matching availability already existed and therefore did not create a duplicate action”.
+
+The persistent helper exposes the same information through `GET /status`, and `POST /check-now` returns both `created` and `status`.
+
+## Participant-window matching
+
+Calendar free intervals are often wider than the participant's usable time window. Matching therefore uses **overlap**, not the old rule that the entire calendar gap had to fit inside participant availability.
+
+For each waiting participant the helper now finds the earliest interval inside:
+
+- participant earliest/latest date;
+- allowed weekday;
+- earliest/latest daily time;
+- the current UBSN free interval;
+- minimum MRI duration.
+
+The booking action is clipped to that participant-compatible interval. When `minimum_duration` is positive, the prepared booking uses exactly that duration rather than filling the whole free calendar gap.
+
+Example: a calendar gap of 08:00–13:00 and participant availability 09:30–12:00 with a 90-minute requirement produces a prepared candidate of **09:30–11:00**, not 08:00–13:00.
+
 ## Capture / inspect a response when live behavior changes
 
 ```powershell
@@ -76,7 +115,7 @@ The parser:
 2. clips them to the requested window;
 3. merges overlapping/adjacent blocks;
 4. returns every remaining free interval;
-5. lets participant matching enforce date, weekday, time-window and minimum-duration rules.
+5. lets participant matching intersect those intervals with participant date/weekday/time/duration constraints.
 
 The interval diff is coverage-aware. If a new reservation merely shrinks/splits an already-free interval, that does **not** create a false `NEW_SLOT` alert. If previously blocked time becomes free, the expanded free interval becomes actionable.
 
@@ -98,6 +137,7 @@ Replaced: browser/login per monitor cycle, availability probing by clicking conf
 ## Remaining live-dependent work
 
 - confirm the persistent `serve --monitor` workflow removes repeated login friction during a normal work session;
+- use the new `status.last_check` output to confirm real free/matchable intervals over several live checks;
 - confirm timezone/date behavior over several manual checks;
 - confirm assistant-selection row text and session-expiry recovery;
 - confirm booking field IDs/options and `#confirm_reservation` against the current live page during one dry preparation;

@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from core import Change, Participant, Slot, diff_slots, make_action, match, parse_reservations_response
+from core import Change, Participant, Slot, diff_slots, make_action, match, parse_reservations_response, summarize_capture_schema
 from watcher import Watcher
 
 
@@ -75,6 +75,20 @@ class UBSNTest(unittest.TestCase):
 
     def test_unknown_real_response_requires_capture(self):
         with self.assertRaisesRegex(ValueError,"NEEDS_REAL_CAPTURE"):parse_reservations_response("[]")
+
+    def test_capture_schema_inspector_never_echoes_scalar_values(self):
+        raw=json.dumps({"events":[{"title":"PRIVATE SUBJECT","start":"2026-09-01T10:00:00+08:00","free":True}]})
+        summary=json.dumps(summarize_capture_schema(raw),ensure_ascii=False)
+        self.assertIn('"events"',summary)
+        self.assertIn('"title"',summary)
+        self.assertIn('"start"',summary)
+        self.assertNotIn("PRIVATE SUBJECT",summary)
+        self.assertNotIn("2026-09-01T10:00:00+08:00",summary)
+
+    def test_capture_schema_inspector_handles_non_json_without_echoing_body(self):
+        summary=json.dumps(summarize_capture_schema("secret-looking javascript body"))
+        self.assertIn("non_json_text",summary)
+        self.assertNotIn("secret-looking",summary)
 
     def test_transient_error_keeps_last_successful_state(self):
         client=FailingClient([self.body,RuntimeError("temporary"),self.body]);watcher=Watcher(client,self.config)

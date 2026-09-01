@@ -6,12 +6,14 @@ import threading
 import time as clock
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from core import Change, Slot, diff_slots, load_participants, make_action, match, parse_reservations_response
 
 
-CALENDAR_TZ = ZoneInfo("Asia/Hong_Kong")
+# Hong Kong has used UTC+08:00 continuously since 1979. Use a fixed offset here
+# instead of zoneinfo/`tzdata` so the local Windows helper has no extra timezone
+# package dependency.
+CALENDAR_TZ = timezone(timedelta(hours=8), "Asia/Hong_Kong")
 
 
 class Watcher:

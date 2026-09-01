@@ -6,6 +6,34 @@ Purpose: concise current-state handoff for Codex. This file is newer than the 20
 
 Privacy: no participant-identifiable values, private workbook contents, credentials, tokens, Script IDs, or reservation capture payloads belong here.
 
+## 0. Codex interruption / resume point
+
+Both active Codex windows hit their usage limit before completing their current narrow tasks. Treat the notes below as **resume points**, not completed work.
+
+### Mainline repair window — interrupted mid-diagnosis
+
+Last confirmed progress before the interruption:
+
+- scope remained limited to CGT, P065 MRI publication, shared diagnosis, and Output/Admin;
+- Production mirror was refreshed and the permitted files were clean before diagnosis;
+- the **code-side CGT cause had been narrowed to Result projection**;
+- Codex then switched to read-only current Google Sheet evidence to determine the actually affected participant set without guessing;
+- no final root cause, generic fix, Incremental PID set, Output rerender, or verification result was reported before the usage limit was reached.
+
+Resume from that point. Do not restart the historical migration or broad-audit the repository.
+
+### Participant-report window — interrupted mid-print diagnosis
+
+Last confirmed progress before the interruption:
+
+- Production `report.html` print path was being inspected;
+- preview rendering already worked;
+- investigation was limited to print-button binding / Apps Script iframe print behavior;
+- Codex explicitly intended to keep the repair inside the print function and not change payloads, metric bindings, or backend scientific calculation;
+- no deployed print fix or verified print/save-PDF result was reported before the usage limit was reached.
+
+Resume from the current Production `report.html`; do not redesign/rebuild the participant report.
+
 ## 1. Main Production repair currently in progress
 
 Historical migration repair already completed these steps:

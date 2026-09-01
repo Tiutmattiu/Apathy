@@ -50,8 +50,10 @@ class FakeClient:
     def __init__(self, responses):
         self.responses = list(responses)
         self.prepared = []
+        self.calendar_calls = []
 
-    def request_calendar(self, *_):
+    def request_calendar(self, start, end):
+        self.calendar_calls.append((start, end))
         return self.responses.pop(0)
 
     def prepare_booking(self, slot, dry_run=False):
@@ -59,7 +61,8 @@ class FakeClient:
 
 
 class FailingClient(FakeClient):
-    def request_calendar(self, *args):
+    def request_calendar(self, start, end):
+        self.calendar_calls.append((start, end))
         value = self.responses.pop(0)
         if isinstance(value, Exception):
             raise value
@@ -197,6 +200,20 @@ class UBSNTest(unittest.TestCase):
         self.assertEqual(1, status["free_interval_count"])
         self.assertEqual(0, status["matchable_interval_count"])
         self.assertEqual(0, status["created_action_count"])
+
+    def test_check_normalizes_midday_utc_request_to_hk_calendar_days(self):
+        client = FakeClient([self.body])
+        watcher = Watcher(client, self.config)
+        watcher.check(
+            datetime.fromisoformat("2026-09-01T04:05:00+00:00"),
+            datetime.fromisoformat("2026-09-08T04:05:00+00:00"),
+        )
+        start, end = client.calendar_calls[0]
+        self.assertEqual("2026-09-01T00:00:00+08:00", start.isoformat())
+        self.assertEqual("2026-09-08T00:00:00+08:00", end.isoformat())
+        status = watcher.status()["last_check"]
+        self.assertEqual("2026-09-01T00:00:00+08:00", status["window"]["start"])
+        self.assertEqual("2026-09-08T00:00:00+08:00", status["window"]["end"])
 
     def test_ranking_is_priority_then_wait_since_then_pid(self):
         slot = next(iter(parse_reservations_response(self.body)))

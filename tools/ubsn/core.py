@@ -28,6 +28,34 @@ class Slot:
 
 
 @dataclass(frozen=True)
+class AvailabilityWindow:
+    """One truthful recurring participant-availability window.
+
+    `months` keeps MRIadmin month selections attached to the correct weekday/time
+    combination. An empty month set means any month inside earliest/latest_date.
+    """
+
+    weekday: int
+    start: time
+    end: time
+    months: frozenset[int] = frozenset()
+
+    @classmethod
+    def from_dict(cls, row: dict[str, Any]) -> "AvailabilityWindow":
+        weekday = int(row["weekday"])
+        if weekday < 0 or weekday > 6:
+            raise ValueError("availability window weekday must be 0..6")
+        start = time.fromisoformat(str(row["start"]))
+        end = time.fromisoformat(str(row["end"]))
+        if end <= start:
+            raise ValueError("availability window end must be after start")
+        months = frozenset(int(x) for x in row.get("months", []))
+        if any(x < 1 or x > 12 for x in months):
+            raise ValueError("availability window months must be 1..12")
+        return cls(weekday=weekday, start=start, end=end, months=months)
+
+
+@dataclass(frozen=True)
 class Participant:
     pid: str
     mri_status: str
@@ -40,9 +68,20 @@ class Participant:
     minimum_duration: int
     priority: int = 100
     notes: str = ""
+    # None means legacy coarse availability fields are in use. An explicit empty
+    # list from the backend means availability is unknown/unavailable and must not
+    # be widened into a permissive default.
+    availability_windows: tuple[AvailabilityWindow, ...] | None = None
 
     @classmethod
     def from_dict(cls, row: dict[str, Any]) -> "Participant":
+        structured = None
+        if "availability_windows" in row:
+            value = row.get("availability_windows")
+            if not isinstance(value, list):
+                raise ValueError("availability_windows must be a list")
+            structured = tuple(AvailabilityWindow.from_dict(x) for x in value)
+
         return cls(
             pid=str(row["pid"]).strip().upper(),
             mri_status=str(row.get("mri_status", "WAITING")).strip().upper(),
@@ -55,6 +94,7 @@ class Participant:
             minimum_duration=int(row.get("minimum_duration", 0)),
             priority=int(row.get("priority", 100)),
             notes=str(row.get("notes", "")),
+            availability_windows=structured,
         )
 
 
@@ -160,8 +200,6 @@ def _real_calendar_free_slots(
         if clipped_end > clipped_start:
             blocked.append((clipped_start, clipped_end))
 
-    # Fail closed. An empty/unrecognized response must never be interpreted as
-    # "the entire MRI calendar is free".
     if recognized == 0:
         raise ValueError(
             f"{NEEDS_REAL_CAPTURE}: reservations.js contained no confirmed Human MRI blocking rows"
@@ -185,13 +223,7 @@ def parse_reservations_response(
     window_start: datetime | None = None,
     window_end: datetime | None = None,
 ) -> set[Slot]:
-    """Return usable intervals from a fixture or confirmed live reservations.js body.
-
-    Fixture payloads already contain usable intervals. The confirmed real endpoint
-    returns blocking calendar events, so real parsing requires the exact requested
-    start/end bounds and returns the complement of all non-cancelled Human MRI
-    reservations/admin holds plus `className=unavailable` regions.
-    """
+    """Return usable intervals from a fixture or confirmed live reservations.js body."""
     try:
         payload = json.loads(raw_text)
     except json.JSONDecodeError as exc:
@@ -233,13 +265,7 @@ def _covered_by(slot: Slot, candidates: Iterable[Slot]) -> bool:
 
 
 def diff_slots(previous: set[Slot], current: set[Slot], seen_keys: set[str]) -> list[Change]:
-    """Detect genuinely new free time, not mere interval reshaping.
-
-    A current free interval wholly covered by the previous free intervals is not
-    new availability. This prevents a newly-added reservation that *shrinks* a
-    free interval from creating a false NEW_SLOT alert merely because its exact
-    start/end key changed.
-    """
+    """Detect genuinely new free time, not mere interval reshaping."""
     changes: list[Change] = []
     for slot in sorted(current):
         if not _covered_by(slot, previous):
@@ -250,36 +276,65 @@ def diff_slots(previous: set[Slot], current: set[Slot], seen_keys: set[str]) -> 
     return changes
 
 
+def _candidate_from_window(
+    slot: Slot,
+    participant: Participant,
+    day: date,
+    window_start: time,
+    window_end: time,
+) -> Slot | None:
+    tz = slot.start.tzinfo
+    allowed_start = datetime.combine(day, window_start, tzinfo=tz)
+    allowed_end = datetime.combine(day, window_end, tzinfo=tz)
+    start = max(slot.start, allowed_start)
+    end = min(slot.end, allowed_end)
+    if end <= start:
+        return None
+    if participant.minimum_duration > 0:
+        candidate_end = start + timedelta(minutes=participant.minimum_duration)
+        if candidate_end <= end:
+            return Slot(start, candidate_end, slot.source)
+        return None
+    return Slot(start, end, slot.source)
+
+
 def candidate_booking_slot(slot: Slot, participant: Participant) -> Slot | None:
     """Return the earliest bookable interval for one participant inside a free slot.
 
-    Calendar free intervals can be much wider than a participant's allowed daily
-    window. Matching therefore uses overlap, not the old requirement that the
-    *entire* free interval fit inside participant availability. The returned slot
-    is clipped to the participant's date/weekday/time constraints and, when a
-    positive minimum duration is supplied, uses exactly that duration so booking
-    preparation never fills an unnecessarily large free interval.
+    New backend snapshots can preserve multiple MRIadmin weekday/time/month windows
+    independently, so e.g. Tuesday-AM plus Thursday-PM never widens into all-day
+    Tuesday/Thursday availability. Legacy coarse fields remain supported only for
+    the local development file while the Production producer is being built.
     """
     if participant.mri_status != "WAITING" or slot.end <= slot.start:
         return None
 
     day = max(slot.start.date(), participant.earliest_date)
     last_day = min(slot.end.date(), participant.latest_date)
-    tz = slot.start.tzinfo
 
     while day <= last_day:
-        if day.weekday() in participant.allowed_weekdays:
-            allowed_start = datetime.combine(day, participant.earliest_time, tzinfo=tz)
-            allowed_end = datetime.combine(day, participant.latest_time, tzinfo=tz)
-            start = max(slot.start, allowed_start)
-            end = min(slot.end, allowed_end)
-            if end > start:
-                if participant.minimum_duration > 0:
-                    candidate_end = start + timedelta(minutes=participant.minimum_duration)
-                    if candidate_end <= end:
-                        return Slot(start, candidate_end, slot.source)
-                else:
-                    return Slot(start, end, slot.source)
+        if participant.availability_windows is not None:
+            candidates: list[Slot] = []
+            for window in participant.availability_windows:
+                if day.weekday() != window.weekday:
+                    continue
+                if window.months and day.month not in window.months:
+                    continue
+                candidate = _candidate_from_window(slot, participant, day, window.start, window.end)
+                if candidate is not None:
+                    candidates.append(candidate)
+            if candidates:
+                return min(candidates, key=lambda x: (x.start, x.end))
+        elif day.weekday() in participant.allowed_weekdays:
+            candidate = _candidate_from_window(
+                slot,
+                participant,
+                day,
+                participant.earliest_time,
+                participant.latest_time,
+            )
+            if candidate is not None:
+                return candidate
         day += timedelta(days=1)
     return None
 
@@ -304,7 +359,7 @@ def make_action(change: Change, matches: list[Participant]) -> dict[str, Any]:
         "free_interval": {"start": change.slot.start.isoformat(), "end": change.slot.end.isoformat()},
         "matching_pids": [x.pid for x in matches],
         "recommended_pid": matches[0].pid,
-        "reason": f"{matches[0].pid} matches date, weekday, time and duration constraints",
+        "reason": f"{matches[0].pid} matches MRI availability and duration constraints",
         "status": "READY",
     }
 

@@ -23,6 +23,18 @@ def participant(pid="P0123", *, earliest_time="09:00", priority=100, wait_since=
     return {"pid": pid, "mri_status": "WAITING", "wait_since": wait_since, "earliest_date": "2026-08-01", "latest_date": "2026-10-31", "allowed_weekdays": [5], "earliest_time": earliest_time, "latest_time": "12:30", "minimum_duration": 90, "priority": priority}
 
 
+def real_calendar(*rows):
+    return json.dumps(list(rows))
+
+
+def unavailable(start, end):
+    return {"className": "unavailable", "title": "", "start": start, "end": end, "allDay": False}
+
+
+def reservation(start, end, *, canceled=False, title="Reservation"):
+    return {"start": start, "end": end, "allDay": False, "title": title, "product": "Human MRI", "is_canceled": canceled}
+
+
 class FakeClient:
     def __init__(self, responses): self.responses=list(responses); self.prepared=[]
     def request_calendar(self, *_): return self.responses.pop(0)
@@ -54,6 +66,61 @@ class UBSNTest(unittest.TestCase):
     def test_disappeared_is_observation_not_cancellation(self):
         slots=parse_reservations_response(self.body);self.assertEqual("DISAPPEARED",diff_slots(slots,set(),set())[0].kind)
 
+    def test_interval_shrink_does_not_create_false_new_slot(self):
+        previous={Slot(datetime.fromisoformat("2026-09-07T09:00:00+08:00"),datetime.fromisoformat("2026-09-07T11:00:00+08:00"))}
+        current={
+            Slot(datetime.fromisoformat("2026-09-07T09:00:00+08:00"),datetime.fromisoformat("2026-09-07T09:30:00+08:00")),
+            Slot(datetime.fromisoformat("2026-09-07T10:00:00+08:00"),datetime.fromisoformat("2026-09-07T11:00:00+08:00")),
+        }
+        self.assertFalse(any(x.kind in ("NEW_SLOT","REOPENED_SLOT") for x in diff_slots(previous,current,set())))
+
+    def test_interval_expansion_creates_new_slot(self):
+        previous={
+            Slot(datetime.fromisoformat("2026-09-07T09:00:00+08:00"),datetime.fromisoformat("2026-09-07T09:30:00+08:00")),
+            Slot(datetime.fromisoformat("2026-09-07T10:00:00+08:00"),datetime.fromisoformat("2026-09-07T11:00:00+08:00")),
+        }
+        current={Slot(datetime.fromisoformat("2026-09-07T09:00:00+08:00"),datetime.fromisoformat("2026-09-07T11:00:00+08:00"))}
+        self.assertEqual(["NEW_SLOT"],[x.kind for x in diff_slots(previous,current,set()) if x.kind!="DISAPPEARED"])
+
+    def test_real_calendar_returns_complement_of_reservations_and_unavailable(self):
+        start=datetime.fromisoformat("2026-09-07T00:00:00+08:00");end=datetime.fromisoformat("2026-09-08T00:00:00+08:00")
+        body=real_calendar(
+            unavailable("2026-09-07T00:00:00+08:00","2026-09-07T09:00:00+08:00"),
+            reservation("2026-09-07T10:00:00+08:00","2026-09-07T13:30:00+08:00"),
+            unavailable("2026-09-07T13:30:00+08:00","2026-09-07T14:30:00+08:00"),
+            reservation("2026-09-07T14:30:00+08:00","2026-09-07T18:30:00+08:00"),
+            unavailable("2026-09-07T18:30:00+08:00","2026-09-08T00:00:00+08:00"),
+        )
+        slots=parse_reservations_response(body,start,end)
+        self.assertEqual(1,len(slots));slot=next(iter(slots))
+        self.assertEqual("2026-09-07T09:00:00+08:00",slot.start.isoformat())
+        self.assertEqual("2026-09-07T10:00:00+08:00",slot.end.isoformat())
+        self.assertEqual("reservations.js",slot.source)
+
+    def test_real_calendar_admin_hold_blocks_time(self):
+        start=datetime.fromisoformat("2026-09-03T09:00:00+08:00");end=datetime.fromisoformat("2026-09-03T12:00:00+08:00")
+        body=real_calendar(
+            reservation("2026-09-03T09:00:00+08:00","2026-09-03T11:00:00+08:00",title="Admin Hold"),
+            reservation("2026-09-03T11:00:00+08:00","2026-09-03T12:00:00+08:00"),
+        )
+        self.assertEqual(set(),parse_reservations_response(body,start,end))
+
+    def test_real_calendar_canceled_reservation_does_not_block(self):
+        start=datetime.fromisoformat("2026-09-07T09:00:00+08:00");end=datetime.fromisoformat("2026-09-07T10:00:00+08:00")
+        body=real_calendar(
+            reservation("2026-09-07T09:00:00+08:00","2026-09-07T10:00:00+08:00",canceled=True),
+            unavailable("2026-09-07T08:00:00+08:00","2026-09-07T09:00:00+08:00"),
+        )
+        slots=parse_reservations_response(body,start,end)
+        self.assertEqual(1,len(slots));self.assertEqual(60,next(iter(slots)).minutes)
+
+    def test_empty_real_calendar_fails_closed(self):
+        start=datetime.fromisoformat("2026-09-07T09:00:00+08:00");end=datetime.fromisoformat("2026-09-07T10:00:00+08:00")
+        with self.assertRaisesRegex(ValueError,"NEEDS_REAL_CAPTURE"):parse_reservations_response("[]",start,end)
+
+    def test_real_calendar_requires_requested_bounds(self):
+        with self.assertRaisesRegex(ValueError,"window_start"):parse_reservations_response(real_calendar(unavailable("2026-09-07T00:00:00+08:00","2026-09-07T09:00:00+08:00")))
+
     def test_no_match_creates_no_action(self):
         self.waiting.write_text(json.dumps([participant(earliest_time="14:00")]))
         self.assertEqual([],Watcher(FakeClient([self.body]),self.config).check(self.start,self.end))
@@ -72,9 +139,6 @@ class UBSNTest(unittest.TestCase):
         watcher.actions[action["action_id"]]["detected_at"]=(datetime.now(timezone.utc)-timedelta(hours=1)).isoformat()
         with self.assertRaisesRegex(ValueError,"expired"):watcher.prepare(action["action_id"])
         self.assertEqual([],client.prepared)
-
-    def test_unknown_real_response_requires_capture(self):
-        with self.assertRaisesRegex(ValueError,"NEEDS_REAL_CAPTURE"):parse_reservations_response("[]")
 
     def test_capture_schema_inspector_never_echoes_scalar_values(self):
         raw=json.dumps({"events":[{"title":"PRIVATE SUBJECT","start":"2026-09-01T10:00:00+08:00","free":True}]})

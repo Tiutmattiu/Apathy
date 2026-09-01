@@ -18,7 +18,9 @@ Participants who already have a valid current booking should not be emitted as o
 
 ## Read-only JSON response
 
-The local helper accepts either a bare array or an object with `participants`:
+The local helper accepts either a bare array or an object with `participants`.
+
+The preferred Production shape preserves each MRIadmin weekday/time combination independently:
 
 ```json
 {
@@ -28,21 +30,47 @@ The local helper accepts either a bare array or an object with `participants`:
       "mri_status": "WAITING",
       "wait_since": "2026-08-20",
       "earliest_date": "2026-09-01",
-      "latest_date": "2026-10-31",
-      "allowed_weekdays": [1, 3],
-      "earliest_time": "09:00",
-      "latest_time": "12:30",
+      "latest_date": "2026-11-30",
       "minimum_duration": 90,
       "priority": 100,
-      "notes": ""
+      "availability_windows": [
+        {
+          "months": [9, 10, 11],
+          "weekday": 1,
+          "start": "09:00",
+          "end": "12:00"
+        },
+        {
+          "months": [9, 10, 11],
+          "weekday": 3,
+          "start": "13:00",
+          "end": "18:00"
+        }
+      ]
     }
   ]
 }
 ```
 
-Weekdays use Python numbering: Monday=0 through Sunday=6.
+Weekdays use Python numbering: Monday=0 through Sunday=6. Months are 1 through 12.
 
-This is a normalized transport contract for the current matcher. The backend remains responsible for converting MRIadmin month/daypart semantics into truthful scheduling constraints; it must not invent availability that the participant did not provide.
+The important rule is that MRIadmin combinations remain separate. For example, `Tuesday AM` plus `Thursday PM` must **not** be widened into Tuesday/Thursday all-day availability. The matcher now understands multiple `availability_windows` and also preserves month selections.
+
+An explicit empty `availability_windows: []` is fail-closed and matches nothing. This can represent availability that is still unknown, although the preferred Production behavior is to classify that participant as `PREFERENCE_MISSING` for Admin rather than emit them as an ordinary UBSN `WAITING` row.
+
+The legacy coarse fields below remain supported only for the local development fallback while the Production producer is being built:
+
+```json
+{
+  "allowed_weekdays": [1, 3],
+  "earliest_time": "09:00",
+  "latest_time": "12:30"
+}
+```
+
+## MRIadmin daypart conversion
+
+Screening currently records month / weekday / AM-PM preferences rather than exact clock ranges. The APATHY producer should convert AM/PM into explicit windows using one project-level rule, then emit separate `availability_windows`. Do not infer wider availability than the participant supplied.
 
 ## Privacy
 

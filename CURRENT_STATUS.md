@@ -104,20 +104,26 @@ Do not reopen accepted identity semantics or redesign all Admin logic at once.
 - Current public frontend code must be audited against that baseline before claiming individual P0/P1 features are missing or complete.
 - A proven remaining defect is payload/evidence hygiene: routes can emit unrelated/default completion values that must not masquerade as authoritative evidence.
 
-### Participant-facing report — NOT an SPSS/reporting workflow
+### Participant-facing report — prior work recovered; implementation still unfinished
 
-This project still requires the **report given to the participant**.
+This is the **report handed to the participant**, not an SPSS/R report and not the staff screening summary.
 
-Current frontend code has an in-flow screening result/decision view, including staff-only interim wording. That is **not** the participant report product. The public frontend currently has no dedicated participant-report/print/PDF implementation.
+Prior work already exists and should be continued rather than redesigned from scratch:
 
-The participant report must be treated as a separate deliverable from:
+- an editable participant-report template was produced from the older report design;
+- a three-page PDF visual prototype was produced and visually checked;
+- a later single-page participant-report prototype also exists;
+- the report intentionally keeps the original participant-facing domains:
+  - Digit Span forward / backward;
+  - MoCA overall cognition;
+  - the three apathy dimensions;
+  - the three CGT metrics;
+- the redesign replaced static/raw presentation with dynamic percentile positioning, cohort `N`, plain-language interpretation, and data/version metadata;
+- the single-page version groups these into `認知表現`, `動機與情緒`, and `決策表現`, using participant-readable labels and relative-performance bars.
 
-- SPSS/R analysis exports;
-- Boss/Admin staff QA;
-- the in-progress screening result UI;
-- technical Trace/provenance.
+The current public frontend does **not** yet contain a dedicated participant-report renderer/print path. Existing `renderScreenResult()` is staff-facing interim screening output and must not be mistaken for the participant report.
 
-See `PARTICIPANT_REPORT_SPEC.md` for the current product contract and implementation boundary.
+See `PARTICIPANT_REPORT_SPEC.md`; it records the recovered report contract instead of inventing a new report scope.
 
 ### UBSN Human MRI booking assistant
 
@@ -130,7 +136,8 @@ Current checkpoint:
 - slot matching/ranking, watcher, local service endpoints, and booking-form prefill path exist;
 - CAPTCHA and final booking confirmation remain human;
 - the exact live `reservations.js` response schema has not yet been confirmed, so production parsing intentionally stops at `NEEDS_REAL_CAPTURE`;
-- live field selectors/session-expiry/calendar semantics still need confirmation against the real site.
+- live field selectors/session-expiry/calendar semantics still need confirmation against the real site;
+- a privacy-safe offline `inspect-capture` command is now available on the working branch so a real capture can be structurally inspected without echoing scalar booking values.
 
 Next milestone is real-capture schema reconciliation, not a rewrite of the UBSN tool.
 
@@ -151,7 +158,7 @@ The old Phase 5B controlled Step 3/4 rollback proof remains a valid release-vali
 ## CURRENT MAINLINE
 
 1. Finish the current historical-migration repair cycle: run the affected Incremental batch and perform the final historical Boss diff.
-2. In parallel, advance the **participant-facing report** as a standalone product deliverable.
+2. In parallel, implement the **existing participant-facing report design** from its recovered template/spec; do not replace it with a new generic report.
 3. In parallel, advance **UBSN** from `NEEDS_REAL_CAPTURE` to confirmed live-schema parsing and safe booking preparation.
 4. Audit the current frontend implementation against `FRONTEND_REQUIREMENTS_LATEST.md`, then fix only proven gaps; payload hygiene is already proven work.
 5. Optimize participant-scoped Incremental performance without changing scientific semantics.

@@ -71,6 +71,8 @@ Post-rebuild acceptance:
 
 This closes **Admin admission/actionability Slice A**. It does not close Admin readability. Slice B remains: compact the visible staff task wording while retaining exact item/lineage detail through Trace/hidden technical evidence.
 
+A fresh Production read of the 11 active rows shows the remaining inbox is now concentrated in genuine Stage 2 / Clinical source-item completion work. The main readability defect is no longer false admission; it is the extremely long exact-item wall in `为什么`. A bounded Slice B patch packet has been prepared to keep the visible row compact while preserving the complete exact detail in hidden Admin technical evidence.
+
 Fresh read-only cross-checks also established that multiple representative historical/current `BACKEND_REPAIR` rows were false-positive/stale system diagnoses: Admin claimed results were not generated while the same current participants already had those derived values in Boss. Therefore system-maintenance diagnosis is not a data-rescue queue. Before any future “rescue,” compare actual Participant/Result/Boss state; do not re-enter data or reopen historical migration merely because a system-maintenance diagnosis exists.
 
 Target product rule remains:
@@ -93,9 +95,19 @@ Technical lineage columns remain useful and should be preserved/hidden rather th
 
 Do not reopen the historical 108-participant migration audit to fix Boss presentation. Obtain the exact current diagnosis source and reconcile current first-break/applicability/publication semantics narrowly.
 
-## FULL STEP 3
+## FULL STEP 3 — FRESH FAILURE NOW LOCALIZED TO PRE-RESULT SNAPSHOT CAPTURE
 
-The current Full run repeatedly encountered Spreadsheet-service timeout around Result Core. The stale persisted run state was safely cancelled; no checkpoint was committed and no official Full Boss/Admin publication completed from that run. The timeout is not proven to be a semantic/scientific regression: the same runner version has completed Step 3/Full before. Treat it as a runtime/Spreadsheet-I/O/performance-sensitive blocker and do not reopen established scientific semantics merely because Full is slow/failing.
+A fresh real Full run reproduced the blocker with a more precise boundary:
+
+- Step 1 Event passed with 360 formal payloads, 0 Pipeline Data Loss and 0 unaccounted rows.
+- Step 2 Participant passed with 176 Registry rows, 174 qualified Registry participants, 360 assigned formal events and 0 unassigned events.
+- Step 3 failed before Result/Decision completion with `OUTPUT_SNAPSHOT_CAPTURE_FAILED: Service Spreadsheets timed out ...`.
+- Step 4 did not run.
+- Checkpoint was not committed and this run did not complete an official Full Boss/Admin publication.
+
+This is stronger evidence that the immediate blocker is the pre-Result rollback-snapshot Spreadsheet I/O path, not a scientific Result/Decision regression. Current reviewed helper source still creates rollback backups through a generic exact-size allocator that can delete surplus default rows/columns; the existing fast-fix packet now explicitly targets a snapshot-only grow-only/no-shrink allocator.
+
+The failed-stage retry contract already permits retrying the same `RESULT_CORE` stage. After the helper patch is deployed and the persisted run is confirmed still failed at Step 3, the safest acceptance action is **retry Step 3 once**, not rerun Step 1/2. If the same timeout persists after the no-shrink patch, move to the already-identified participant-fingerprint I/O cost as a separate performance task.
 
 ## FRONTEND PAYLOAD HYGIENE
 
@@ -140,14 +152,14 @@ Current resolved Participant state also contains structured MRIadmin fields for 
 
 Preview is working and report content/scoring is not the current defect.
 
-The print/save-PDF root cause is now proven in current private report source:
+The print/save-PDF root cause was proven in current private report source:
 
 - the `id="print"` button starts disabled;
 - `loadReports()` attempted `print.disabled = false`;
 - in that scope `print` resolves to native `window.print`, not the button element;
-- therefore the button never becomes enabled and its existing `onclick="window.print()"` handler is never reached.
+- therefore the button never became enabled and its existing `onclick="window.print()"` handler was never reached.
 
-The smallest prepared fix is two local `report.html` changes from `print.disabled` to `document.getElementById('print').disabled`. No PDF library, popup architecture, scoring change, or report redesign is indicated by current evidence. Production deployment and one human browser-native Print/Save-as-PDF acceptance test remain.
+The two-line `report.html` fix changing those references to `document.getElementById('print').disabled` has now been deployed through a fresh live overlay. The deploy reported that only `report.html` changed and all other files matched the live baseline. Remaining acceptance is only one human browser-native click: confirm the Print dialog opens and Save-as-PDF/A4 pagination behaves correctly. Do not redesign the report unless that human acceptance exposes a new defect.
 
 ## AGENT ROUTING
 
@@ -179,10 +191,10 @@ The smallest prepared fix is two local `report.html` changes from `print.disable
 
 ## CURRENT MAINLINE
 
-1. Admin acceptance Slice B: compact visible staff wording while preserving exact detail/lineage through Trace/hidden technical columns.
-2. Participant-report print/save-PDF: deploy the already-prepared two-line `report.html` fix once against fresh live source, then perform one human native Print/Save-as-PDF acceptance test.
-3. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
-4. Stabilize Step-3 runtime without redesigning scientific semantics.
+1. Step-3 rollback-snapshot fast fix: snapshot-only grow/no-shrink allocation, then one human Step-3 retry if the failed run state remains retryable.
+2. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
+3. Participant-report print/save-PDF: code patch is deployed; one human native Print/Save-as-PDF acceptance click remains.
+4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
 5. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
 6. Fix frontend route-owned payload hygiene.
 7. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.

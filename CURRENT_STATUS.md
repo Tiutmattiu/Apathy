@@ -45,12 +45,54 @@ Raw is preserved by default and must not be rewritten merely to fix downstream i
 - Boss remains the 90-column scientific output contract.
 - Diagnosis/Trace/Admin are explanatory/operations layers, not scientific-data authorities.
 
-## CURRENT NARROW CLOSEOUT FINDINGS
+## VERIFIED 2026-09-03 FAST-PATCH CLOSEOUT
 
-- Substantive CGT values are visible again; broad CGT repair is not active.
-- The remaining historical MRI-date case is already present in current Participant state and Result A; the visible Boss value requires targeted republish, not another trace or Backfill.
-- `apathyOutputAdmin_()->add()` currently computes `TRACE_ONLY_NO_ACTION` but can still push those rows into active Admin. Intended narrow fix: suppress them from active Admin.
-- The current `inc==='n'` participant-action branch can generate `NON_INCLUDED_CONTACT_CLOSEOUT`; non-inclusion/withdrawal alone must return without active staff work.
+The bounded Admin/MRI publication patch completed successfully:
+
+- `TRACE_ONLY_NO_ACTION` is suppressed from active Admin; current count is 0.
+- `NON_INCLUDED_CONTACT_CLOSEOUT` is no longer emitted merely because `Inclusion=n`; current count is 0.
+- The previously recovered MRI-date publication tail was republished through the current participant-scoped Incremental path and is now visible in Boss.
+- No additional Backfill or historical trace was required for that publication tail.
+
+These facts close the narrow patch only. They do **not** mean the overall Admin or Boss presentation is product-accepted.
+
+## ADMIN PRODUCT ACCEPTANCE — NOT YET PASSED
+
+Read-only Production acceptance after the fast patch found that active Admin is still not the intended staff operations console.
+
+Current aggregate findings:
+
+- active Admin has 31 participant rows;
+- 28 rows contain `ESCALATE`;
+- 11 rows contain `STAFF_DATA_ACTION`;
+- 0 rows contain `RESOLVABLE_IN_APP`;
+- the overlap implies 20 rows are system/escalation-only and 8 rows mix a real staff-data action with a system/escalation component.
+
+The main current defect is no longer `TRACE_ONLY_NO_ACTION`. System-maintenance issue codes such as `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR` can still classify as `ESCALATE` and remain in the staff-facing inbox. Do **not** globally suppress all `ESCALATE`; authority/identity escalation may be genuine staff work. The next patch must target non-staff system-maintenance issue semantics specifically.
+
+A second verified UX defect is universal checkbox validation: the current Output helper can apply an `执行` checkbox to every Admin row. `STAFF_DATA_ACTION` means staff must supply/complete real source data outside the in-app executor; it is not a checkbox-executable repair. Checkbox/action affordance must be restricted to issue types that have a real implemented in-app executor, such as the existing explicit identity-resolution workflow.
+
+Readability also remains below acceptance: participant-level collapse can concatenate very long exact-item lists into the visible `为什么` cell. Exact lineage/detail should remain available through Trace/technical evidence, while the primary staff view should summarize the human task compactly.
+
+Target product rule remains:
+
+```text
+Admin = human work projection
+Admin != diagnosis table
+Admin != developer/system repair queue
+```
+
+Technical lineage columns remain useful and should be preserved/hidden rather than deleted.
+
+## BOSS PRODUCT ACCEPTANCE — SCIENTIFIC PUBLICATION PROVISIONALLY OK, DIAGNOSIS/PRESENTATION OPEN
+
+- Boss retains the 90-column scientific output contract.
+- The targeted recovered MRI date now publishes through the current pipeline.
+- Current positive control: non-applicable PD-specific fields for an HC participant can be rendered grey with `NON_APPLICABLE` / no staff action.
+- Current diagnosis coverage/first-break semantics still require reconciliation on a small set of hostile fixtures; do not infer diagnosis from blankness alone.
+- MRI-date display is not normalized across all rows: date objects/strings can render in different textual formats. Treat this as representation normalization, not a scientific-data rewrite.
+
+Do not reopen the historical 108-participant migration audit to fix Boss presentation. Obtain the exact current diagnosis source and reconcile current first-break/applicability/publication semantics narrowly.
 
 ## FULL STEP 3
 
@@ -105,17 +147,21 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 - MRI Time is transitional history, not future MRI authority.
 - Contactlist MRI note is neither authoritative nor useless: it is a human operational reconciliation signal.
 - MRI scheduling remains human-in-the-loop.
+- A successful narrow patch != product acceptance of the whole surface.
+- System-maintenance diagnosis may remain in Trace/Boss without belonging in staff Admin.
+- Do not globally suppress `ESCALATE`; suppress/route non-staff system-maintenance semantics specifically.
 - FAST PATCH overrides broad planning/audit workflows when the requested change is already explicit.
 
 ## CURRENT MAINLINE
 
-1. Complete the narrow Admin fixes and targeted remaining MRI-date republish/verification.
-2. Stabilize Step-3 runtime without redesigning scientific semantics.
-3. Reconcile Boss diagnosis/color/action presentation.
-4. Fix frontend route-owned payload hygiene.
-5. Build electronic MRIadmin Participant-state -> Admin/UBSN human-in-loop scheduling and migrate/reconcile legacy MRI Time; stop routine MRI Time updates after cutover.
-6. Fix participant-report print path in the separate report thread.
-7. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
+1. Admin acceptance slice A: remove non-staff system-maintenance issues from the staff inbox and restrict checkbox/action affordance to implemented in-app actions; preserve genuine `STAFF_DATA_ACTION` and identity/authority work.
+2. Admin acceptance slice B: compact visible staff wording while preserving exact detail/lineage through Trace/hidden technical columns.
+3. Stabilize Step-3 runtime without redesigning scientific semantics.
+4. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
+5. Fix frontend route-owned payload hygiene.
+6. Build electronic MRIadmin Participant-state -> Admin/UBSN human-in-loop scheduling and migrate/reconcile legacy MRI Time; stop routine MRI Time updates after cutover.
+7. Fix participant-report print path in the separate report thread.
+8. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
 
 ## OPERATING RULES
 

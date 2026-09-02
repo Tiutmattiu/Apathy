@@ -148,18 +148,35 @@ Among future bookings in the inspected snapshot, seven exact current Participant
 
 Current resolved Participant state also contains structured MRIadmin fields for a current subset of participants, confirming again that the missing component is the Production operational producer, not Raw ingestion. The UBSN local consumer exists; Production still needs the Participant-state -> MRI status/Admin -> read-only waiting snapshot -> human-confirmed BOOKED loop.
 
-## PARTICIPANT REPORT
+## PARTICIPANT REPORT — CURRENT DELIVERY CONTRACT CORRECTED
 
-Preview is working and report content/scoring is not the current defect.
+The earlier print/PDF-first acceptance target is superseded by the current product requirement. A real Production preview showed that the page still exposed internal PID, did not display name/phone as the ordinary participant identity, and rendered category labels without the required visible horizontal bars.
 
-The print/save-PDF root cause was proven in current private report source:
+The current required workflow is now documented in `PARTICIPANT_REPORT_SPEC.md` and a bounded implementation packet exists at `CODEX_PARTICIPANT_REPORT_PNG_BATCH_20260903.md`.
 
-- the `id="print"` button starts disabled;
-- `loadReports()` attempted `print.disabled = false`;
-- in that scope `print` resolves to native `window.print`, not the button element;
-- therefore the button never became enabled and its existing `onclick="window.print()"` handler was never reached.
+Current target:
 
-The two-line `report.html` fix changing those references to `document.getElementById('print').disabled` has now been deployed through a fresh live overlay. The deploy reported that only `report.html` changed and all other files matched the live baseline. Remaining acceptance is only one human browser-native click: confirm the Print dialog opens and Save-as-PDF/A4 pagination behaves correctly. Do not redesign the report unless that human acceptance exposes a new defect.
+```text
+staff enters numeric range:
+P [start] 到 P [end]
+-> one read-only batch report payload
+-> participant-facing page with name + phone, never PID/SID
+-> real horizontal bars for available metrics
+-> client-side PNG rasterization
+-> one separate PNG download per participant
+```
+
+Rules:
+
+- the staff boxes accept numbers only; staff does not type `P`;
+- inclusive range, same start/end = single participant;
+- participant image and filename must never expose PID/SID;
+- preferred filename is `<phone>_<name>_報告.png`, with safe fallbacks that never use PID;
+- scientific nine-metric mapping and directionality remain unchanged;
+- missing/TBD metrics remain `待確認` without a fabricated bar;
+- PDF/print may remain secondary/debug capability but is no longer the primary acceptance path.
+
+The previously deployed two-line print-button fix can remain; it is no longer sufficient to close the report feature.
 
 ## AGENT ROUTING
 
@@ -187,13 +204,15 @@ The two-line `report.html` fix changing those references to `document.getElement
 - A successful narrow patch != product acceptance of the whole surface.
 - System-maintenance diagnosis may remain in Trace/Boss without belonging in staff Admin.
 - Do not globally suppress `ESCALATE`; suppress/route non-staff system-maintenance semantics specifically.
+- Report participant-visible output must never expose PID/SID; internal identifiers remain staff lookup keys only.
+- A successful print-dialog fix does not satisfy the current direct-PNG report delivery contract.
 - FAST PATCH overrides broad planning/audit workflows when the requested change is already explicit.
 
 ## CURRENT MAINLINE
 
 1. Step-3 rollback-snapshot fast fix: snapshot-only grow/no-shrink allocation, then one human Step-3 retry if the failed run state remains retryable.
-2. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
-3. Participant-report print/save-PDF: code patch is deployed; one human native Print/Save-as-PDF acceptance click remains.
+2. Participant-report PNG batch redesign: numeric range selector, name/phone header, no participant PID exposure, visible bars, separate PNG downloads; bounded packet prepared.
+3. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
 4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
 5. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
 6. Fix frontend route-owned payload hygiene.

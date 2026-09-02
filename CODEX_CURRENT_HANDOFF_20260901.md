@@ -1,26 +1,32 @@
 # APATHY — Current Codex Handoff Snapshot
 
+> **SUPERSEDED FOR NEW WORK (2026-09-03).**
+>
+> Read `APATHY_CORE_PIPELINE_HANDOFF_20260903.md` first. It restores the authoritative core data/product contract and contains newer read-only Production findings, including the explicit `Contactlist Inclusion=y` Boss-admission contract, the current implementation mismatch (`inclusion != n`), the deterministic Full Step-3 failure, current frontend payload-hygiene evidence, and the corrected MRIadmin authority.
+>
+> This 2026-09-01 file is retained as a historical interruption snapshot only. Do not restart its old CGT diagnosis or treat phase-specific rollback/Operations scaffolding as the APATHY core architecture.
+
 Date: 2026-09-01
 
-Purpose: concise current-state handoff for Codex. This file is newer than the 2026-08-27 public status on `codex/ops-vnext-vertical-slice` and should be read before starting new APATHY work.
+Purpose: concise historical current-state handoff for Codex at the time both active Codex windows hit usage limits.
 
 Privacy: no participant-identifiable values, private workbook contents, credentials, tokens, Script IDs, or reservation capture payloads belong here.
 
-## 0. Codex interruption / resume point
+## 0. Codex interruption / resume point at 2026-09-01
 
-Both active Codex windows hit their usage limit before completing their current narrow tasks. Treat the notes below as **resume points**, not completed work.
+Both active Codex windows hit their usage limit before completing their current narrow tasks. These notes describe the interruption at that time; newer runtime state is in `APATHY_CORE_PIPELINE_HANDOFF_20260903.md`.
 
 ### Mainline repair window — interrupted mid-diagnosis
 
 Last confirmed progress before the interruption:
 
-- scope remained limited to CGT, P065 MRI publication, shared diagnosis, and Output/Admin;
+- scope remained limited to CGT, historical MRI publication, shared diagnosis, and Output/Admin;
 - Production mirror was refreshed and the permitted files were clean before diagnosis;
-- the **code-side CGT cause had been narrowed to Result projection**;
+- the code-side CGT cause had been narrowed to Result projection;
 - Codex then switched to read-only current Google Sheet evidence to determine the actually affected participant set without guessing;
 - no final root cause, generic fix, Incremental PID set, Output rerender, or verification result was reported before the usage limit was reached.
 
-Resume from that point. Do not restart the historical migration or broad-audit the repository.
+**Newer note:** substantive CGT values are visible again in current Production. Do not reopen broad CGT repair merely because this historical resume point says they were blank.
 
 ### Participant-report window — interrupted mid-print diagnosis
 
@@ -32,46 +38,30 @@ Last confirmed progress before the interruption:
 - Codex explicitly intended to keep the repair inside the print function and not change payloads, metric bindings, or backend scientific calculation;
 - no deployed print fix or verified print/save-PDF result was reported before the usage limit was reached.
 
-Resume from the current Production `report.html`; do not redesign/rebuild the participant report.
+This remains a valid narrow resume point for the separate report Codex window unless newer report runtime evidence supersedes it.
 
-## 1. Main Production repair currently in progress
+## 1. Historical migration state at this snapshot
 
-Historical migration repair already completed these steps:
+Historical migration repair had already completed these steps:
 
 - six explicit historical Backfill evidence values were created with provenance `historical_legacy_boss_backfill`;
 - HADS historical totals stayed summary-only; no HADS items were fabricated;
 - participant-scoped Incremental ran for 38 affected PIDs: 38 success, 0 failed, elapsed 4m53s;
 - `buildApathyOutput()` completed successfully;
 - five of the six targeted historical values published;
-- P065 `MRI_Date` still has accepted upstream historical Backfill evidence but remains blank in Boss.
+- one historical MRI-date value remained blank downstream.
 
-A new post-repair scientific regression is also visible:
+At this snapshot a post-repair CGT regression was visible. That observation is now stale; use the 2026-09-03 handoff for current runtime state.
 
-- many substantive CGT Boss values that existed before the repair are now blank;
-- S090–S101 is a visible affected cohort and must be used as an inspection starting point, not hardcoded repair scope;
-- inspect the three substantive CGT fields: `CGT_Prop_Best_Choices`, `CGT_Mean_Deliberation_RT_MS`, `CGT_Risk_Adjustment`;
-- do not create CGT Backfill or copy historical Boss values;
-- `CGT_Complete` must not erase otherwise valid substantive CGT metrics.
+Admin rule update from this period remains valid:
 
-Current repair order:
-
-1. restore substantive CGT publication generically from accepted evidence;
-2. fix P065 MRI-date publication generically;
-3. rerender/reconcile Boss diagnosis colors/notes after scientific values are correct;
-4. rerender/reconcile Admin prompts after scientific values are correct.
-
-Admin rule update:
-
-- withdrawal/退出 status alone is no longer actionable;
-- preserve withdrawal evidence/state but suppress withdrawal-only Admin reminders/actions;
-- receipt/archive alone is also non-actionable;
+- withdrawal/退出 status alone is non-actionable;
+- receipt/archive alone is non-actionable;
 - only unresolved `payment_status` may create a payment issue.
-
-Do not run Full. Do not redo the 38-PID batch. Use Incremental only for actually affected PIDs.
 
 ## 2. Incremental status
 
-The 2026-08-27 public statement that Incremental is disabled is stale.
+The older 2026-08-27 statement that Incremental is disabled is stale.
 
 Current Production has a real participant-scoped Incremental path:
 
@@ -80,13 +70,13 @@ Current Production has a real participant-scoped Incremental path:
 - checked Admin actions can execute through the existing menu path;
 - no silent Full fallback.
 
-Known issue: runtime is still slow and needs later optimization, but functionality is accepted.
+Known issue: runtime is still slower than desired. Do not create a second scientific engine to optimize it.
 
 ## 3. Admin / Boss diagnosis status
 
-Admin currently uses one participant per row and aggregates participant problems.
+Admin uses one participant per row and aggregates participant problems.
 
-Desired semantics:
+Desired semantics remain:
 
 - whole source absent -> concise whole-source problem;
 - partial source -> exact missing/invalid item detail;
@@ -103,7 +93,7 @@ Boss diagnosis colors:
 - red = downstream/system/publication break;
 - purple = identity unresolved.
 
-Current user observation: Boss colors/notes and Admin prompts are visibly wrong after the historical repair. Reconcile only after CGT/MRI scientific publication is fixed.
+Reconcile presentation only after scientific values are correct. Diagnosis is an explanatory/operations layer, not research-data authority.
 
 ## 4. Participant-facing report
 
@@ -118,13 +108,13 @@ The single-page A4 design is fixed:
 - no cohort N shown;
 - longer bar = better relative performance after internal direction normalization.
 
-Production implementation has now been deployed:
+Production implementation at this snapshot:
 
 - `helper.js`: menu `个人报告 → 生成参与者报告`;
 - `report_backend.js`: report payload / PID validation / comparative normalization;
 - `report.html`: shared single + batch renderer, one A4 per participant, print/save control.
 
-Current field bindings:
+Current field bindings at this snapshot:
 
 - Forward Digit Span -> `For_DGS` (higher better)
 - Backward Digit Span -> `Back_DGS` (higher better)
@@ -136,56 +126,42 @@ Current field bindings:
 - CGT quality -> `CGT_Prop_Best_Choices` (higher better)
 - CGT risk adjustment -> `CGT_Risk_Adjustment` (direction not yet confirmed; participant output remains `待確認`)
 
-Batch-first delivery is the v1 decision: staff can enter one or multiple PIDs; one participant per A4 page; one print/save-PDF action.
-
-Current real defect:
-
-- preview renders successfully;
-- the `列印／儲存PDF` button does not produce a usable print/download flow from the Apps Script HTML context;
-- fix should be limited to the print path (`report.html`, and `report_backend.js` only if strictly necessary), not report data/scoring.
+Known report defect: preview renders, but `列印／儲存PDF` does not produce a usable flow from Apps Script HTML. Keep the separate report Codex task limited to that print path.
 
 ## 5. UBSN Human MRI assistant
 
-UBSN is a separate local staff module under `tools/ubsn/` and must not be mixed into backend repair work.
+UBSN is a separate local staff module under `tools/ubsn/` and must not be mixed into core backend repair work.
 
-Current state:
+At this snapshot:
 
-- real `reservations.js` capture has been obtained;
-- live schema is now parsed as a JSON event array containing reservation/admin-hold blocks plus `className=unavailable` blocks;
-- parser derives free intervals as the complement of merged blocking intervals within the requested window;
-- canceled reservation rows do not block;
-- parser fails closed for empty/unrecognized live responses;
-- coverage-aware diff prevents false NEW_SLOT alerts when a reservation merely shrinks an existing free interval;
-- 13 local UBSN tests passed on 2026-09-01.
+- real `reservations.js` parsing was implemented;
+- free intervals were derived from reservation/admin-hold/unavailable blocks;
+- cancelled reservations did not block;
+- parser failed closed on empty/unrecognized responses;
+- coverage-aware diff prevented false NEW_SLOT alerts;
+- persistent helper mode existed;
+- CAPTCHA and final booking confirmation remained human.
 
-Observed usability issue:
+For current MRIadmin authority and waiting-source rules, use `APATHY_CORE_PIPELINE_HANDOFF_20260903.md`, `MRI_ADMIN_WORKFLOW_SPEC.md`, and `tools/ubsn/BACKEND_WAITING_CONTRACT.md`.
 
-- one-shot `run.py check` starts/closes Playwright each time, causing repeated SAML interaction even with a persistent profile;
-- working-branch change adds `run.py serve --monitor` so staff can keep one browser/session open for the work period and reuse it for manual/background checks;
-- this persistent mode still needs local human verification.
-
-CAPTCHA and final booking confirmation remain human.
-
-## 6. Frontend requirements
+## 6. Frontend
 
 `FRONTEND_REQUIREMENTS_LATEST.md` is a requirements baseline, not a completion report.
 
-Do not claim individual P0/P1 items are missing without checking current code.
-
-One proven backlog remains frontend payload/evidence hygiene: non-owner routes can emit unrelated/default state that should not masquerade as authoritative evidence.
+The payload/evidence-hygiene defect is now proven from current public `app.js`: global derived calculation plus broad serialization of shared `ST.answers` can emit non-owner/default evidence. Treat this as active correctness work after the current core runtime is restored.
 
 ## 7. Deferred / do not resurrect automatically
 
-- controlled staged Step3/Step4 rollback proof: deferred, not current blocker;
-- broad legacy cleanup: later;
-- global redesigns of Admin/Trace: only from concrete staff-use defects;
-- Full rebuild for narrow derived/output fixes: do not use.
+- controlled staged Step3/Step4 rollback proof as a standalone release exercise;
+- broad legacy cleanup;
+- global redesigns of Admin/Trace;
+- broad CGT re-audit based only on this stale snapshot.
 
 ## 8. Agent division
 
-- ChatGPT: product scope, status/docs, offline audits, prompts, UBSN public-module work.
-- current mainline Codex window: Production CGT/MRI/diagnosis/Admin repair only.
-- report Codex window: participant-report print/save-PDF fix only.
-- human: minimal real UI/runtime checks.
+Use the newer 2026-09-03 handoff for current division. Preserve the two existing Codex threads:
 
-Functionality first. Use narrow edits. Do not rerun broad audits/tests unless a concrete defect requires them.
+- mainline Codex: only the next already-reduced Production backend repair slice;
+- report Codex: report print/save-PDF path only.
+
+ChatGPT should inspect and reduce problems read-only before spending Codex quota. Heavy mechanical offline scans are suitable for Copilot. Human operator owns genuine authority decisions and minimal UI/runtime actions.

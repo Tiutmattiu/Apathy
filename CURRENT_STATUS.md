@@ -60,7 +60,7 @@ These facts close the narrow patch only. They do **not** mean the overall Admin 
 
 Read-only Production acceptance after the fast patch found that active Admin is still not the intended staff operations console.
 
-Current aggregate findings:
+Current aggregate findings before Admin Slice A:
 
 - active Admin has 31 participant rows;
 - 28 rows contain `ESCALATE`;
@@ -68,7 +68,9 @@ Current aggregate findings:
 - 0 rows contain `RESOLVABLE_IN_APP`;
 - the overlap implies 20 rows are system/escalation-only and 8 rows mix a real staff-data action with a system/escalation component.
 
-The main current defect is no longer `TRACE_ONLY_NO_ACTION`. System-maintenance issue codes such as `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR` can still classify as `ESCALATE` and remain in the staff-facing inbox. Do **not** globally suppress all `ESCALATE`; authority/identity escalation may be genuine staff work. The next patch must target non-staff system-maintenance issue semantics specifically.
+The main current defect is no longer `TRACE_ONLY_NO_ACTION`. System-maintenance issue codes such as `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR` can still classify as `ESCALATE` and remain in the staff-facing inbox. Do **not** globally suppress all `ESCALATE`; authority/identity escalation may be genuine staff work. Admin Slice A targets non-staff system-maintenance issue semantics specifically.
+
+**Important fresh finding:** do not treat those system-maintenance Admin rows as a current data-rescue backlog. Read-only cross-checks of several representative `BACKEND_REPAIR` rows found that Admin claimed questionnaire/clinical results were not generated while the corresponding current Boss already contained the derived results. Therefore a substantial part of this system-maintenance queue is stale/false-positive diagnosis, not evidence that participant data are still trapped. Remove these rows from ordinary Admin and later repair the diagnosis logic separately; do not rerun historical migration or re-enter data merely because `BACKEND_REPAIR` appears.
 
 A second verified UX defect is universal checkbox validation: the current Output helper can apply an `执行` checkbox to every Admin row. `STAFF_DATA_ACTION` means staff must supply/complete real source data outside the in-app executor; it is not a checkbox-executable repair. Checkbox/action affordance must be restricted to issue types that have a real implemented in-app executor, such as the existing explicit identity-resolution workflow.
 
@@ -96,7 +98,7 @@ Do not reopen the historical 108-participant migration audit to fix Boss present
 
 ## FULL STEP 3
 
-The current Full run repeatedly encounters Spreadsheet-service timeout around Result Core. This is not proven to be a semantic/scientific regression: the same runner version has completed Step 3/Full before. Treat as a runtime/Spreadsheet-I/O/performance-sensitive blocker and do not reopen established scientific semantics merely because Full is slow/failing.
+The current Full run repeatedly encountered Spreadsheet-service timeout around Result Core. The stale persisted run state was safely cancelled; no checkpoint was committed and no official Full Boss/Admin publication completed from that run. The timeout is not proven to be a semantic/scientific regression: the same runner version has completed Step 3/Full before. Treat it as a runtime/Spreadsheet-I/O/performance-sensitive blocker and do not reopen established scientific semantics merely because Full is slow/failing.
 
 ## FRONTEND PAYLOAD HYGIENE
 
@@ -125,9 +127,21 @@ Key rules:
 - Structured month/weekday/daypart windows must not be widened.
 - CAPTCHA/final UBSN booking confirmation remains human.
 
+### Verified MRI migration inventory
+
+Read-only Patch-0 inventory found 18 existing `MRI Time` booking rows:
+
+- 14/18 have an exact unique Subject-No./SID match in current resolved Participant state and are safe candidates for idempotent booking adoption;
+- 3/18 can be associated only through Contactlist while current Participant state lacks that SID, so they are **not** safe for automatic adoption and require human reconciliation;
+- 1/18 uses a noncanonical/variant Subject No. with no exact current identity match and also requires human reconciliation.
+
+Among future bookings in the inspected snapshot, seven exact current Participant-state matches form a safe fixture set for Patch 0. Existing `MRI Time` rows must remain unchanged. The first implementation slice should adopt only exact current identity matches into APATHY `BOOKED` evidence and route ambiguous rows to reconciliation; it must not guess from Contactlist.
+
+Current resolved Participant state also contains structured MRIadmin fields for a current subset of participants, confirming again that the missing component is the Production operational producer, not Raw ingestion. The UBSN local consumer exists; Production still needs the Participant-state -> MRI status/Admin -> read-only waiting snapshot -> human-confirmed BOOKED loop.
+
 ## PARTICIPANT REPORT
 
-Preview is working. Remaining task is the existing Apps Script print/save-PDF path only; do not reopen scientific payload/scoring unless required by concrete evidence.
+Preview is working. Remaining task is the existing Apps Script print/save-PDF path only; do not reopen scientific payload/scoring unless required by concrete evidence. Current ChatGPT access does not include the deployed private `report.html` / `report_backend.js`, so the exact print-button root cause is not yet proven; a separate report Codex may inspect that narrow private source in parallel, but Production writes must remain serialized with mainline backend deployment.
 
 ## AGENT ROUTING
 
@@ -135,6 +149,10 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 - **Copilot/local heavy worker:** preferred for long/token-heavy mechanical audits and large offline scans, especially when local/network constraints make simultaneous GPT/Codex use impractical.
 - **Codex:** primarily after direction/root cause is narrowed: precise code edits, precise tests, narrow reconnaissance requiring private repo/runtime access, deployment/runtime verification. Broad Codex audit only when the problem is genuinely unknown and GPT/Copilot lack the needed access.
 - **Human:** research/identity authority, approval of Raw corrections, ambiguous real-world MRI decisions, minimal safe runtime actions and final UBSN confirmation.
+
+**Do not use Codex as a finger.** If a task is mostly `find/open/click/run/copy` and a human or ChatGPT can already identify the exact target, do not spend Codex quota on it. Human mechanical actions include selecting a known Apps Script function, clicking Run, opening a known sheet/row and copying an error. Codex is for `modify/implement/instrument/deploy/precise private-runtime probe`, not routine UI operation.
+
+**Serialize Production writes; parallelize independent reads.** Two agents must not concurrently deploy overlapping Apps Script source. A secondary workstream may inspect/read and prepare a patch while another agent owns the Production write lane, then refresh/rebase before deployment.
 
 ## ANTI-RATIONALIZATION RULES
 
@@ -144,6 +162,7 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 - Narrow defect != new persistent technical table.
 - Raw is preserve-by-default, not absolutely immutable: only human-approved targeted corrections may change it.
 - Staff re-entry is allowed but existing evidence comes first; true loss should be field-specific and support structured/JSON recovery.
+- A system-maintenance Admin diagnosis does not prove that current data are missing or unpublished; compare current Participant/Result/Boss before attempting rescue.
 - MRI Time is transitional history, not future MRI authority.
 - Contactlist MRI note is neither authoritative nor useless: it is a human operational reconciliation signal.
 - MRI scheduling remains human-in-the-loop.
@@ -156,11 +175,11 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 
 1. Admin acceptance slice A: remove non-staff system-maintenance issues from the staff inbox and restrict checkbox/action affordance to implemented in-app actions; preserve genuine `STAFF_DATA_ACTION` and identity/authority work.
 2. Admin acceptance slice B: compact visible staff wording while preserving exact detail/lineage through Trace/hidden technical columns.
-3. Stabilize Step-3 runtime without redesigning scientific semantics.
-4. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
-5. Fix frontend route-owned payload hygiene.
-6. Build electronic MRIadmin Participant-state -> Admin/UBSN human-in-loop scheduling and migrate/reconcile legacy MRI Time; stop routine MRI Time updates after cutover.
-7. Fix participant-report print path in the separate report thread.
+3. Participant-report print/save-PDF narrow fix can be investigated in parallel but must not deploy concurrently with mainline backend changes.
+4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
+5. Stabilize Step-3 runtime without redesigning scientific semantics.
+6. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
+7. Fix frontend route-owned payload hygiene.
 8. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
 
 ## OPERATING RULES
@@ -170,4 +189,6 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 - No new persistent data layer for a narrow repair.
 - `Inclusion=n` excludes from Boss; blank Inclusion does not itself exclude.
 - Give Codex one narrow deliverable at a time.
+- Do not spend Codex quota on trivial human UI/mechanical actions.
+- Serialize overlapping Production writes; parallelize independent read-only work.
 - At verified task completion, synchronize canonical MD immediately.

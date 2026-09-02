@@ -121,13 +121,51 @@ Therefore: **recover/publish existing formal evidence first; do not mass re-ente
 
 This supports the conclusion that MRIadmin's missing feature is operational projection, not ingestion recovery.
 
-### Current visible outputs / narrow closeout findings
+### Verified narrow closeout
+
+The bounded 2026-09-03 fast patch is complete and verified:
+
+- active Admin has `TRACE_ONLY_NO_ACTION = 0`;
+- active Admin has `NON_INCLUDED_CONTACT_CLOSEOUT = 0`;
+- the previously recovered MRI-date publication tail was republished through the current participant-scoped Incremental path and is visible in Boss;
+- no new Backfill or historical trace was required.
+
+This closes that narrow patch. It does **not** constitute whole-surface Admin/Boss product acceptance.
+
+### Admin acceptance finding — current root cause is narrower
+
+Current active Admin has 31 participant rows. Aggregate read-only classification counts are:
+
+- 28 rows contain `ESCALATE`;
+- 11 rows contain `STAFF_DATA_ACTION`;
+- 0 rows contain `RESOLVABLE_IN_APP`;
+- therefore 20 rows are system/escalation-only and 8 rows combine a staff-data action with a system/escalation component.
+
+The current staff inbox is still polluted by system-maintenance issues. Codes used for backend/system repair include `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR`; they may classify as `ESCALATE` and survive the `TRACE_ONLY_NO_ACTION` suppression even though ordinary staff cannot resolve them.
+
+Do **not** globally suppress `ESCALATE`: some future/current authority or identity escalation may be genuine human work. Route/suppress specifically by non-staff system-maintenance semantics while preserving diagnosis/Trace evidence.
+
+The current Output helper also applies checkbox validation to the entire `执行` column. This creates a false affordance for `STAFF_DATA_ACTION` rows: a real source gap requires staff to supply/complete source evidence, not press a backend repair checkbox. Restrict executable controls to issue types for which an actual in-app executor exists; the established identity-resolution workflow is the primary current example.
+
+Participant-level collapse currently concatenates exact-item detail into the visible staff row, producing long walls of text. Preserve exact item/lineage evidence in Trace/technical detail, but summarize the primary staff view compactly.
+
+Product invariant:
+
+```text
+Admin = human work projection
+Admin != diagnosis table
+Admin != developer/system repair queue
+```
+
+Technical lineage columns are useful and should remain available/hidden, not be deleted.
+
+### Boss acceptance finding
 
 - Boss retains the 90-column contract.
-- Substantive CGT values are visible again for the previously obvious affected cohort. Do not reopen broad CGT migration/repair without new evidence.
-- The remaining historical MRI-date case is already present in both current Participant state and current Result A; the visible Boss cell is stale/has not yet been successfully republished. First action is targeted incremental republish, not another historical trace or Backfill.
-- Active Admin currently exposes rows whose diagnosis is `TRACE_ONLY_NO_ACTION`; current `apathyOutputAdmin_()->add()` computes the action classification but still pushes those rows. The narrow intended fix is to suppress those rows from active Admin.
-- The current participant-action `inc==='n'` branch can create `NON_INCLUDED_CONTACT_CLOSEOUT`; withdrawal/non-inclusion alone should return without generating active staff work.
+- Targeted recovered evidence can now publish through the current pipeline.
+- Applicability handling has at least one current positive control where a non-applicable blank is grey and explicitly no-action.
+- Diagnosis/first-break coverage is not yet product-accepted across all current blank fields; reconcile the exact current diagnosis source against current Participant/Result evidence on a small hostile fixture set rather than rerunning the historical migration audit.
+- MRI-date representation is inconsistent across rows because values may arrive/render as different date/string types. Normalize display representation separately; do not reinterpret or rewrite scientific evidence merely for formatting.
 
 ### Full Step 3 runtime finding — recurrent timeout, not a proven deterministic regression
 
@@ -137,7 +175,35 @@ Historical ledger evidence shows the same runner version has successfully comple
 
 Do not let this runtime blocker trigger a broad re-audit of already established scientific/data semantics.
 
-## 6. MRIadmin / real-world operations contract
+## 6. Admin interaction/action contract
+
+Admin is a staff operations surface, not merely a readable error table.
+
+Current action semantics remain conceptually:
+
+- `RESOLVABLE_IN_APP`: the system has enough evidence and an implemented safe control path exists for an explicit staff authority/action decision.
+- `STAFF_DATA_ACTION`: genuine source evidence is absent/incomplete and staff must obtain/enter the exact missing evidence; the row must not pretend a checkbox can synthesize it.
+- `TRACE_ONLY_NO_ACTION`: explainable system state with no staff action; excluded from active Admin.
+- `ESCALATE`: unresolved authority/system condition requiring escalation. This class alone does not prove it belongs in ordinary staff Admin; owner/issue semantics still matter.
+
+The established identity-resolution design remains:
+
+```text
+unresolved formal event
+-> Admin identity-review task
+-> staff chooses correct Registry PID
+-> explicit execute action
+-> validate against Registry
+-> persist durable manual-resolution authority in technical control state
+-> deterministic rebuild consumes it
+-> issue closes automatically
+```
+
+Raw is not rewritten merely to resolve identity.
+
+Visible controls must match actual executors. `归档PID` / `执行` are not universal controls for every issue type.
+
+## 7. MRIadmin / real-world operations contract
 
 MRIadmin is ordinary Screening payload evidence, but MRI scheduling is intentionally **human-in-the-loop**, not a fully automated process.
 
@@ -164,7 +230,7 @@ Rules:
 - Participant-requested changes and other real-world exceptions require staff confirmation/reconciliation before electronic scheduling state is updated.
 - CAPTCHA/final UBSN booking confirmation remains human.
 
-## 7. Agent/work split and audit routing
+## 8. Agent/work split and audit routing
 
 ### ChatGPT
 
@@ -204,7 +270,7 @@ Keep isolated to the already narrowed report implementation issue(s); do not reo
 
 Owns genuine research/identity authority decisions, approval of Raw corrections, ambiguous real-world MRI scheduling decisions, minimal safe runtime actions, and CAPTCHA/final booking confirmation.
 
-## 8. Anti-rationalization / do-not-reopen rules
+## 9. Anti-rationalization / do-not-reopen rules
 
 | Tempting shortcut | APATHY rule |
 |---|---|
@@ -214,19 +280,22 @@ Owns genuine research/identity authority decisions, approval of Raw corrections,
 | “A new persistent table would make this easier.” | Do not add a persistent data layer for a narrow defect unless it is genuinely required by the product model. |
 | “Editing Raw is always forbidden.” | Default preserve Raw; only a narrow human-approved, auditable correction may change Raw. |
 | “Just ask staff to redo the form.” | Re-entry is allowed but existing evidence comes first; if truly lost, identify exact fields and support precise structured/JSON recovery. |
+| “System maintenance is still an Admin task because it is ESCALATE.” | No. Action class alone is insufficient; non-staff system-maintenance issues stay in diagnosis/Trace and out of ordinary staff Admin. |
+| “Every Admin row should have an Execute checkbox.” | No. Expose executable controls only when a real safe executor exists for that issue type. |
+| “A successful narrow patch means Admin is done.” | No. Patch acceptance and product-surface acceptance are separate. |
 | “MRI Time already has bookings, so use it as MRI authority.” | MRI Time is transitional legacy booking history only; migrate/reconcile, then stop routine updates after electronic cutover. |
 | “Contactlist MRI note is useless or authoritative.” | Neither: it is a non-authoritative real-world remark/reconciliation signal. |
 | “MRI scheduling can be fully automated from payloads.” | No: electronic derivation supports staff, but booking/change/cancellation remains human-in-the-loop. |
 | “Codex can investigate this from scratch.” | Prefer ChatGPT/Copilot audit when possible; give Codex narrowed implementation/test/recon work. |
 
-## 9. Current priority order
+## 10. Current priority order
 
-### P0 — stabilize current backend and close known tails
+### P0 — Admin acceptance + runtime stability
 
-1. Resolve the current Step-3 runtime bottleneck without redesigning scientific semantics.
-2. Targeted republish of the already-recovered remaining historical MRI-date value.
-3. Suppress `TRACE_ONLY_NO_ACTION` from active Admin and stop `NON_INCLUDED_CONTACT_CLOSEOUT` for `Inclusion=n`.
-4. Reconcile Boss diagnosis/color/action presentation once scientific values are correct.
+1. Admin slice A: remove non-staff system-maintenance issues from ordinary staff Admin without globally suppressing `ESCALATE`; restrict `执行`/checkbox affordance to implemented in-app actions.
+2. Admin slice B: compact visible staff summaries while retaining exact detail/lineage in Trace/hidden technical evidence.
+3. Stabilize the Step-3 runtime bottleneck without redesigning scientific semantics.
+4. Reconcile Boss diagnosis/color/action presentation and normalize date display separately from scientific-value semantics.
 
 ### P1 — prevent new evidence pollution
 
@@ -242,7 +311,7 @@ Owns genuine research/identity authority decisions, approval of Raw corrections,
 
 9. Optimize Incremental and perform technical materialization/contraction only after correctness and daily operations are stable.
 
-## 10. Operating rules
+## 11. Operating rules
 
 - Functionality first.
 - Core evidence path first; scaffolding second.

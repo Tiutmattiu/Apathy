@@ -2,7 +2,7 @@
 
 > **SUPERSEDED FOR NEW WORK (2026-09-03).**
 >
-> Read `APATHY_CORE_PIPELINE_HANDOFF_20260903.md` first. It restores the authoritative core data/product contract and contains newer read-only Production findings, including the explicit `Contactlist Inclusion=y` Boss-admission contract, the current implementation mismatch (`inclusion != n`), the deterministic Full Step-3 failure, current frontend payload-hygiene evidence, and the corrected MRIadmin authority.
+> Read `APATHY_CORE_PIPELINE_HANDOFF_20260903.md` first. It restores the authoritative core data/product contract and contains newer read-only Production findings, including the correct Boss-admission rule (`Inclusion !== n`), the current recurrent Step-3 Spreadsheet-timeout verdict, current frontend payload-hygiene evidence, and the corrected MRIadmin authority.
 >
 > This 2026-09-01 file is retained as a historical interruption snapshot only. Do not restart its old CGT diagnosis or treat phase-specific rollback/Operations scaffolding as the APATHY core architecture.
 

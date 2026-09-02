@@ -1,137 +1,164 @@
-# APATHY Participant-Facing Report — Recovered Product Spec
+# APATHY Participant-Facing Report — Current Product Spec
 
-Status: **PRIOR DESIGN RECOVERED / IMPLEMENTATION NOT YET WIRED INTO PUBLIC FRONTEND**
+Status: **CURRENT PRODUCT CONTRACT — corrected 2026-09-03**
 
-This document records prior participant-report work so future agents do not redesign the report from scratch.
+This report is the image handed/sent to the participant. It is not Boss/Admin/Trace, not an SPSS/R report, and not the staff interim screening-result screen.
 
-The report is the **document handed to the participant**. It is not an SPSS/R analysis report, not Boss/Admin, not Trace, and not the current staff-only interim screening result screen.
+The prior PDF/print-first delivery contract is superseded by the current user requirement below. Preserve the established nine scientific participant-facing metrics and interpretation direction, but change the staff workflow and participant-visible identity/output format.
 
-## 1. Prior deliverables already produced
+## 1. Scientific/content scope
 
-Earlier work produced:
-
-- an editable APATHY participant-report template based on the older report;
-- a three-page PDF visual prototype that was rendered and visually checked;
-- a later **single-page A4** participant-report prototype in both DOCX and PDF form.
-
-Those artifacts are private/user files and are not committed to this public repository.
-
-## 2. Scientific/content scope that must be preserved
-
-The participant report intentionally keeps the older report's participant-facing domains rather than dumping every APATHY scale.
+The report intentionally keeps nine participant-facing outputs rather than dumping every APATHY scale.
 
 ### 認知表現
 
-1. **順序記憶**
-   - source concept: Digit Span Forward
-   - participant explanation: short-term retention and repeating information in the original order.
-
-2. **倒序記憶**
-   - source concept: Digit Span Backward
-   - participant explanation: retaining information, mentally reorganizing it, and repeating it in reverse order.
-
-3. **整體認知能力**
-   - source concept: MoCA
-   - participant explanation: overall attention, memory, language and thinking performance.
+1. **順序記憶** — Digit Span Forward concept.
+2. **倒序記憶** — Digit Span Backward concept.
+3. **整體認知能力** — MoCA concept.
 
 ### 動機與情緒
 
-Keep the three-dimensional apathy presentation from the prior report work:
+1. **思考與社交動機**.
+2. **情緒反應與表達**.
+3. **主動開始活動**.
 
-1. **思考與社交動機**
-   - cognitive/social motivation dimension.
-
-2. **情緒反應與表達**
-   - emotional response/expression dimension.
-
-3. **主動開始活動**
-   - behavioural/autonomy/self-initiation dimension.
-
-The final implementation must bind these human labels to the accepted current APATHY apathy-domain outputs rather than inventing a new scoring model.
+Bind these labels to the accepted current APATHY apathy-domain outputs. Do not invent a second scoring model.
 
 ### 決策表現
 
-Keep the three CGT-derived participant-facing dimensions:
+1. **決策速度**.
+2. **決策質素**.
+3. **風險調整**.
 
-1. **決策速度**
-2. **決策質素**
-3. **風險調整**
+Use accepted current CGT outputs and directionality. A numerically larger raw value does not automatically mean better performance. CGT risk-adjustment direction remains `TBD` unless the accepted current project mapping is explicitly established; do not guess.
 
-The final mapping must use the accepted current CGT outputs and directionality. Do not assume that a numerically larger raw value always means better performance.
+## 2. Participant-facing visual contract
 
-## 3. Final participant-facing presentation model
+The visual target remains a single portrait A4-ratio page, but the delivered artifact is now a **PNG image**, not a PDF.
 
-The **single-page A4 prototype is the current visual target**.
-
-For each metric, participant-facing output contains exactly:
+For each available metric show:
 
 1. metric name;
-2. one very short plain-language explanation;
-3. horizontal comparative bar + simple category label.
+2. one short plain-language explanation;
+3. a **real visible horizontal bar**;
+4. a simple category label such as `良好` / `一般` / `待確認` according to the accepted interpretation contract.
 
-The bar uses an internal cohort-relative normalized 0–100 position, but the participant-facing page must **not display**:
+The bar uses the internal cohort-relative normalized 0–100 position. Participant-facing output must not display percentile numbers, cohort N, scoring-direction rules, or conversion formulas.
 
-- percentile numbers;
-- `第 XX 百分位`;
-- cohort N;
-- technical scoring-direction explanations;
-- internal conversion rules.
-
-The visual direction is always intuitive:
+Visual invariant:
 
 > **longer bar = better relative performance**
 
-Therefore reverse-direction metrics are normalized internally before rendering. GAS/apathy dimensions and CGT speed require direction-aware conversion. CGT risk-adjustment direction must remain explicit `TBD` until the accepted current project direction is confirmed; do not guess.
+For an available metric, the bar track and filled portion must be visibly rendered in the PNG; text-only category output is not acceptable. For an unavailable metric, show `待確認` and do not fabricate a filled position.
 
-Participant-readable category labels such as `良好`, `一般`, or `待確認` are secondary to the bar and must come from the agreed report interpretation contract rather than arbitrary frontend thresholds.
-
-The one-page layout groups all nine outputs into:
+Keep the three sections:
 
 - `認知表現`
 - `動機與情緒`
 - `決策表現`
 
-Footer wording may remain:
+Footer may remain:
 
 `柱越長，代表在該項目中的相對表現越好。`
 
-## 4. What is NOT the participant report
+Recommended PNG target is A4 portrait ratio at approximately 1240 × 1754 px or another crisp equivalent. White background; Chinese text must remain readable when shared on a phone.
 
-The current public frontend's `renderScreenResult()` is not the report.
+## 3. Participant-visible identity and privacy
 
-It contains staff workflow language such as interim screening review, blocking conditions, and a staff final-decision control. That is useful during collection but must not be printed or handed to a participant as the report.
+**Never show internal PID or SID to the participant.**
 
-Likewise, do not expose:
+Do not show `Pxxx`, `Sxxx`, `參與者編號`, or any internal identifier anywhere in:
 
-- internal group/eligibility decisions;
-- Admin action classes;
-- Event/Raw/Field Provenance lineage;
-- authority-gate codes;
-- payment/receipt status;
-- raw technical field names;
-- debugging or pipeline diagnostics.
+- the report image;
+- the downloaded filename;
+- participant-visible metadata.
 
-## 5. Data-source contract
+Participant-facing header should use ordinary identity/contact information instead:
 
-The report must be generated from **final accepted backend data**, not from incomplete local browser state.
+- `姓名：<display name>` when a trustworthy display name is available;
+- `電話：<phone>` when a trustworthy phone value is available;
+- assessment/report date may remain.
 
-Preferred architecture:
+The staff selector may use internal PID ranges because it is not participant-facing.
+
+Identity/contact lookup is **display metadata only** and must not redefine scientific or participant identity authority. Use an exact existing PID linkage to retrieve name/phone; never fuzzy-match a participant for report generation. Preferred lookup is the current staff contact directory/Contactlist exact PID match. If current Production requires a historical directory fallback, it may be used only when the PID match is exact and unique; do not use it as scientific authority or silently merge identities.
+
+Name may fall back to the accepted Boss `Name` value. Phone must not be invented. If no unique phone can be resolved, surface a staff-side warning and use a safe filename fallback rather than exposing PID.
+
+## 4. Staff generation UI — range first
+
+The staff workflow should be extremely small.
+
+Primary control:
+
+```text
+P [ numeric start ]   到   P [ numeric end ]
+[下載報告圖片]
+```
+
+Rules:
+
+- the two boxes accept **numbers only**; staff should not need to type the letter `P`;
+- `101` to `120` means inclusive internal range `P101` through `P120`;
+- start = end is the single-participant case;
+- existing participants inside the range are generated; missing numeric gaps are skipped and summarized staff-side;
+- no need to type a comma-separated PID list for ordinary batch use.
+
+The button is **direct download**, not “print”.
+
+Do not require the browser print dialog for the normal workflow.
+
+## 5. Batch image download contract
+
+One explicit staff click should generate and download **one separate PNG file per participant** in the selected range.
+
+Do not make one multi-page PDF the normal output.
+
+Do not combine participants into one image.
+
+Default filename rule:
+
+```text
+<phone>_<name>_報告.png
+```
+
+If name is unavailable:
+
+```text
+<phone>_報告.png
+```
+
+If phone is unavailable but a trustworthy name exists, use:
+
+```text
+<name>_報告.png
+```
+
+and show a staff-side warning that phone metadata is missing.
+
+Filename values must be sanitized for filesystem-invalid characters. **Never fall back to PID in the filename.**
+
+The browser may require permission for multiple downloads. Trigger the separate downloads from the one explicit staff action and surface a short staff message if the browser blocks multiple files. Do not silently switch to PDF. A ZIP fallback is not the default product requirement unless explicitly requested later.
+
+## 6. Data-source contract
+
+Scientific report values must come from accepted backend report payload/scientific state, not incomplete local form state and not a second client-side scoring engine.
+
+Conceptually:
 
 ```text
 accepted current participant outputs
-+ report reference distributions / version
++ report reference distribution/version
++ exact display/contact lookup
 -> read-only participant-report payload
 -> one reusable report renderer
--> single report OR batch print view
+-> PNG rasterization
+-> one separate downloaded PNG per participant
 ```
 
-Do not build a second scientific scoring engine in the report UI.
+The internal report payload may contain the PID solely as a staff-side lookup key, but the renderer/download filename must not expose it.
 
-Do not read arbitrary Boss cells and infer the report directly from presentation columns if a canonical accepted field exists upstream.
-
-## 6. Internal normalization/reference contract
-
-For each of the nine participant-facing outputs, the internal report payload needs enough information to derive the bar safely, for example:
+For each metric the internal payload should retain enough information to safely draw the bar, e.g.:
 
 ```text
 metric_code
@@ -139,75 +166,56 @@ participant_label
 plain_language_explanation
 accepted_value
 normalized_direction
-reference_group_definition
-reference_n_internal
 relative_position_0_100
 interpretation_label
+reference_group_definition
+reference_n_internal
 reference_data_version
 ```
 
-Rules:
+Missing values remain unavailable, never zero.
 
-- reference group must be explicit, not silently mixed;
-- reference N and version remain internal/metadata unless staff need them for QA;
-- missing/unavailable values remain unavailable, never zero;
-- reverse-direction metrics must be normalized before drawing the bar;
-- `待確認` is preferable to a misleading bar when the current data/reference contract is insufficient.
+## 7. Rendering/export implementation boundary
 
-## 7. Delivery model — staff batch first
+Reuse the current one-page report renderer where practical; do not rewrite scientific scoring merely to make PNG files.
 
-The primary v1 delivery model is **staff-controlled generation**, not participant self-service links.
+The implementation must ensure the actual rendered `.participant-report-page` (including visible bar fills and labels) is rasterized to PNG. A small pinned client-side DOM-to-canvas dependency such as `html2canvas`, or an equally bounded self-contained rendering approach, is acceptable if required. Do not add a server-side PDF stack or a broad frontend framework.
 
-The same renderer must support both:
+If a third-party browser library is used:
 
-### Single participant
+- HTTPS only;
+- pin a concrete version;
+- use it only for rasterization;
+- do not send report data to an external service.
 
-- staff opens one finalized participant;
-- preview the one-page report;
-- print / save as PDF.
+PNG generation should occur client-side from the already-rendered participant page.
 
-### Batch generation
+## 8. What must never appear in the participant image
 
-- staff selects multiple finalized participants, or a defined eligible/completed set;
-- frontend requests report payloads in one batch;
-- render **one A4 report page per participant** in one print document;
-- CSS uses page breaks so each participant starts on a separate A4 page;
-- one browser `列印／儲存PDF` action can therefore produce a multi-page PDF containing many participants.
+Do not expose:
 
-This is the preferred first implementation because it avoids introducing participant authentication, expiring-token links, email delivery and access-control complexity just to distribute a one-page result sheet.
+- PID / SID / participant display ID;
+- internal group/eligibility decisions;
+- Admin action classes;
+- Event/Raw/Field Provenance lineage;
+- authority-gate codes;
+- payment/receipt status;
+- raw technical field names;
+- debugging/pipeline diagnostics;
+- percentile numbers or cohort N.
 
-### Optional later self-service
+## 9. Current acceptance boundary
 
-Participant self-download links are **not required for v1**.
+The report feature is accepted when staff can:
 
-If added later, they must use a dedicated read-only report endpoint and a participant-specific expiring/unpredictable token or equivalent approved access-control mechanism. Do not expose a report through a guessable `?pid=P123` URL.
+1. type two numeric PID bounds into `P [ ] 到 P [ ]`;
+2. click one `下載報告圖片` action;
+3. receive one separate PNG per existing participant in the inclusive range;
+4. see no PID/SID in image or filename;
+5. see name + phone on the participant-facing image when uniquely resolvable;
+6. see real horizontal bars for available metrics, with longer = better;
+7. see `待確認` without a fabricated bar when a metric is unavailable;
+8. get filenames based on phone/name rather than internal participant ID;
+9. preserve the established nine-metric scientific mapping/direction contract.
 
-## 8. v1 implementation target
-
-Build the report into the existing APATHY staff frontend as a **staff-triggered read-only report view with single + batch mode**.
-
-Minimum v1:
-
-1. staff can choose one or many eligible/finalized participants;
-2. frontend fetches dedicated read-only report payload(s) from current accepted backend state;
-3. renderer reproduces the recovered single-page A4 structure;
-4. batch mode renders one `.participant-report-page` per participant;
-5. print CSS hides staff navigation/actions and inserts page breaks;
-6. `列印／儲存PDF` uses the browser print dialog (`window.print()` is sufficient for v1);
-7. unavailable metrics render as `待確認`/unavailable without fabricating a bar position;
-8. participant-facing output shows participant display ID and assessment/report date but not internal reference N/percentile values.
-
-No server-side PDF stack and no participant login/download portal are required for v1.
-
-## 9. Acceptance boundary
-
-Participant-report v1 is complete when staff can:
-
-- open and print a real finalized participant's one-page report;
-- select multiple finalized participants and produce a correctly paginated batch PDF/print document;
-- reproduce the prior nine-metric single-page participant-facing design;
-- avoid exposing staff-only/technical fields;
-- avoid displaying percentile numbers/cohort N to participants;
-- preserve `longer bar = better relative performance` through correct internal direction normalization.
-
-Do not broaden v1 into a general research dashboard, SPSS export, every-scale clinical report, or participant authentication portal.
+Browser-native print/PDF may remain as an optional secondary/debug capability, but it is no longer the primary acceptance path.

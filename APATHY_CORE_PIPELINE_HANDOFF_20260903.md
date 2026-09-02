@@ -4,13 +4,33 @@ Status: **CURRENT PRODUCT / DATA CONTRACT + READ-ONLY INSPECTION HANDOFF**
 
 This file is the current sanitized handoff for the APATHY core pipeline. Phase-specific repair/diagnosis/rollback documents are supporting history; they must not redefine the core research-data contract.
 
+**Canonical-doc rule:** when an implementation or verified operational change is completed, synchronize this handoff and `CURRENT_STATUS.md` immediately. Once synchronized, agents may rely on these canonical files instead of re-auditing established facts. If a contradiction is discovered, current Production/runtime/current source wins and the canonical docs must then be corrected in the same closeout. Old unsynchronized MD is historical context only.
+
 Public-repo privacy rule: do not commit participant identifiers, names, phone numbers, clinical payload values, private workbook rows, Script/Spreadsheet IDs, credentials, tokens, or other private Production evidence. Production findings below are aggregate/sanitized only.
 
-## 1. Core product contract
+## 1. Ubiquitous language / authority map
+
+```text
+Contactlist = recruitment/candidate layer; Inclusion=n is an exclusion signal.
+Registry = participant identity authority once the participant exists there.
+Raw = primary submitted research evidence; default policy is preserve, not rewrite.
+Event = lossless field-level evidence parsed from submitted payload_json.
+Participant state = resolved current evidence selected from formal evidence; not a new authority.
+Backfill = formal evidence only for fields it actually evidences.
+Result / Medication / Decision = derived scientific calculation layers.
+Boss = scientific output for Boss-eligible participants.
+Admin = genuine unresolved human work only, not a generic warning dump.
+MRIadmin = Screening-derived MRI preference/assistance evidence resolved to the participant.
+Contactlist MRI note = non-authoritative operational remark / real-world staff interface.
+MRI Time = legacy transitional manually maintained booking sheet, not future MRI authority.
+Audit / Bridge / Diagnosis / Candidate sheets = implementation/support surfaces, never scientific authority.
+```
+
+## 2. Core product contract
 
 ```text
 frontend submission
-  -> append-only Raw row with complete payload_json
+  -> Raw row with complete payload_json
   -> lossless field-level Event evidence
   -> resolve to Registry participant
   -> Participant current evidence selected by field/domain/source ownership
@@ -23,15 +43,16 @@ Technical Candidate, bridge, audit, diagnosis, checkpoint and rollback sheets ar
 
 ### Raw / Event
 
-- Raw is append-only research evidence.
+- Default rule: Raw is preserved as primary submitted research evidence; do not rewrite it merely to make downstream identity/scoring/publication easier.
 - The complete submission is carried in `payload_json`; it must not be reduced to a fixed wide-column schema.
 - Event parsing should expose every submitted payload field losslessly and preserve source/submission lineage.
-- Raw must not be rewritten to repair identity, scoring or downstream publication.
+- **Narrow exception:** a direct Raw correction is allowed when a human research authority has explicitly approved the correction and leaving known-wrong Raw evidence would create continuing downstream corruption. Such edits must be targeted, auditable and limited to the approved row/field/value; never use broad automated Raw rewriting as a repair shortcut.
+- Identity/scoring/publication bugs normally belong downstream and do not justify Raw mutation.
 
 ### Identity / Participant
 
 - Registry is participant identity authority once a participant exists there.
-- Formal submissions must be assigned to the correct Registry participant; ambiguous identity is resolved through the existing control/authority path, not by rewriting Raw.
+- Formal submissions must be assigned to the correct Registry participant; ambiguous identity is resolved through the existing control/authority path.
 - Participant current state selects evidence by field/domain/source ownership. A later unrelated event must not overwrite stronger owner evidence merely because it is later.
 - Backfill is formal evidence for the fields it actually evidences; it is not blanket authority over unrelated fields.
 
@@ -43,17 +64,28 @@ A participant is Boss-eligible when:
 2. at least one formal Raw submission is assigned to that participant;
 3. Contactlist does **not** explicitly mark the participant `Inclusion=n`.
 
-In code terms, the active intended exclusion rule is:
+In code terms:
 
 ```text
 inclusionAllowed = inclusion !== 'n'
 ```
 
-A blank Inclusion value is therefore not, by itself, a Boss exclusion gate. S_ID, MRI date, Stage 2 completion and clinical/MRI completion are also not Boss-admission gates.
+A blank Inclusion value is not, by itself, a Boss exclusion gate. S_ID, MRI date, Stage 2 completion and clinical/MRI completion are also not Boss-admission gates.
 
-Do not confuse this Boss-admission rule with Registry-creation workflow rules: creating a new Registry identity from Contactlist can still require an explicit positive inclusion decision. Those are different operations.
+Do not confuse Boss admission with Registry creation from Contactlist; creating a new Registry identity may still require an explicit positive inclusion decision.
 
-## 2. Proven historical data-loss mechanism
+## 3. Data-preservation and recovery policy
+
+APATHY is a research system. The first priority is to avoid losing already-collected participant evidence.
+
+- A blank Boss/output cell does **not** prove source loss. Trace existing formal evidence first.
+- Staff re-entry is allowed, but it is operationally expensive and should not be the first remedy when valid evidence already exists somewhere in the system.
+- When data are genuinely lost, localize the loss to the exact participant + field(s), not an entire assessment by default.
+- Recovery tooling should support precise structured re-entry, including direct JSON upload/backfill for known missing fields, so staff do not need to manually recreate an entire form.
+- Human-approved corrections may be applied directly to Raw when that is the cleanest authoritative repair, provided the correction is narrow and auditable as described above.
+- Do not mass-copy historical Boss values into current Boss and do not fabricate missing item-level answers from totals.
+
+## 4. Proven historical data-loss mechanism
 
 Earlier Production forensic work established that the apparent broad data loss was largely not Raw loss. Two defects interacted.
 
@@ -70,173 +102,155 @@ A non-owner route can therefore emit unrelated/default completion or derived val
 
 The older Participant merge effectively assigned present values chronologically. Later non-owner/default values could overwrite earlier valid domain-owner evidence.
 
-The accepted repair direction is field/domain ownership at Participant projection, not Raw rewriting.
+The accepted repair direction is field/domain ownership at Participant projection, plus frontend payload hygiene; do not reopen the completed historical root-cause audit without new evidence.
 
 ### Historical Boss recovery verdict
 
 The historical Boss root-cause audit established that most audited material historical values were still represented in Event and/or provenance/current evidence. The dominant defect classes were authority, Event->Participant promotion, completion/publication, and downstream mapping gaps; only a small minority were genuine source migration gaps.
 
-Therefore: **recover/publish existing formal evidence first; do not mass re-enter historical data and do not copy historical Boss values directly into current Boss.**
+Therefore: **recover/publish existing formal evidence first; do not mass re-enter historical data.**
 
-## 3. Current Production inspection — 2026-09-03 handoff
+## 5. Current Production inspection — 2026-09-03 handoff
 
 ### Raw/Event payload integrity
 
-- `_Candidate_Payload_Loss` currently contains its header only in the inspected snapshot: no active payload-loss rows were found.
+- `_Candidate_Payload_Loss` contained its header only in the inspected snapshot: no active payload-loss rows were found.
 - Screening `payload_json` contains MRIadmin fields.
 - `_Candidate_Event_Values` contains formal `mri_avail_*` paths.
-- resolved `_Candidate_Participant_State.state_json` contains MRIadmin preference/assistance fields for many current participants.
+- resolved `_Candidate_Participant_State.state_json` contains MRIadmin preference/assistance fields for current participants.
 
-This supports the existing conclusion that MRIadmin's missing feature is operational projection, not ingestion recovery.
+This supports the conclusion that MRIadmin's missing feature is operational projection, not ingestion recovery.
 
-### Current visible outputs
+### Current visible outputs / narrow closeout findings
 
-- Boss currently contains 137 participant rows and retains the 90-column contract.
-- Admin currently contains 35 participant-level rows in the inspected snapshot.
-- Substantive CGT values are visible again in the current Boss for the previously obvious affected cohort. Do not reopen a broad CGT migration/repair without new evidence.
-- One historical MRI-date publication case remains the known narrow downstream publication tail after the historical repair.
-- Boss diagnosis coloring/notes and Admin actionability still require reconciliation after scientific values are correct.
+- Boss retains the 90-column contract.
+- Substantive CGT values are visible again for the previously obvious affected cohort. Do not reopen broad CGT migration/repair without new evidence.
+- The remaining historical MRI-date case is already present in both current Participant state and current Result A; the visible Boss cell is stale/has not yet been successfully republished. First action is targeted incremental republish, not another historical trace or Backfill.
+- Active Admin currently exposes rows whose diagnosis is `TRACE_ONLY_NO_ACTION`; current `apathyOutputAdmin_()->add()` computes the action classification but still pushes those rows. The narrow intended fix is to suppress those rows from active Admin.
+- The current participant-action `inc==='n'` branch can create `NON_INCLUDED_CONTACT_CLOSEOUT`; withdrawal/non-inclusion alone should return without generating active staff work.
 
 ### Full Step 3 runtime finding — recurrent timeout, not a proven deterministic regression
 
-The current Full run has passed Event and Participant and has repeatedly encountered:
+The current Full run has passed Event and Participant and has repeatedly encountered Spreadsheet-service timeout while attempting Result Core, with no checkpoint committed.
+
+Historical ledger evidence shows the same runner version has successfully completed Step 3/Full before, including a run that required repeated Step-3 attempts before succeeding. Therefore current evidence supports Spreadsheet I/O/runtime instability or a performance-sensitive path, but not a proven semantic Result regression.
+
+Do not let this runtime blocker trigger a broad re-audit of already established scientific/data semantics.
+
+## 6. MRIadmin / real-world operations contract
+
+MRIadmin is ordinary Screening payload evidence, but MRI scheduling is intentionally **human-in-the-loop**, not a fully automated process.
 
 ```text
-Service Spreadsheets timed out
-```
-
-while attempting Result Core. No checkpoint has been committed.
-
-Important historical ledger evidence:
-
-- the same runner version successfully completed Step 3 and Full runs multiple times on 2026-08-26 and 2026-08-27;
-- on 2026-09-01 an earlier Full run also needed repeated Step-3 attempts and then succeeded, followed by a successful Step 4/checkpoint;
-- the current failing run records repeated Result-Core starts rather than a stable application exception identifying one code line.
-
-Therefore the current evidence supports **Spreadsheet I/O/runtime instability or a performance-sensitive path**, but does not yet prove that rollback snapshot code or a new source change is the root cause.
-
-The rollback snapshot remains a plausible expensive preamble because it copies visible output sheets before Result, but that is a hypothesis, not a proven regression.
-
-Next diagnostic rule:
-
-1. do not redesign the runner;
-2. do not keep hammering Full indefinitely;
-3. compare the current Step-3 path/source with the last known successful same-version path only if a code delta exists;
-4. if source is unchanged, profile/inspect the largest current Spreadsheet I/O operations and workbook growth rather than inventing a semantic fix;
-5. preserve the existing Result/Decision scientific engines unless a concrete defect is demonstrated.
-
-## 4. MRIadmin contract
-
-MRIadmin is ordinary Screening payload evidence, not a second data system.
-
-```text
-Screening MRIadmin
+Screening MRIadmin payload
   -> identity-resolved Participant current state
-  -> MRI scheduling operational state
-  -> Admin + UBSN waiting producer
-  -> human-confirmed booking
-  -> APATHY BOOKED evidence/state
-  -> link/append MRI Time
+  -> determine who needs MRI / waiting / preference follow-up
+  -> electronic MRI scheduling state
+  -> Admin + UBSN operational workflow
+  -> staff reviews real-world changes and available slots
+  -> human-confirmed booking/change/cancellation
+  -> APATHY electronic BOOKED / scheduling evidence
 ```
 
 Rules:
 
-- Contactlist and historical manual MRI waiting lists are not MRI preference/availability/waiting authorities.
-- Contactlist `Inclusion=n` is an upstream exclusion condition; blank/y are not MRI preference evidence.
-- `MRI Time` is the familiar staff booking ledger/history. Existing confirmed rows may be adopted/reconciled non-destructively as booking evidence, but MRI Time must not be used to infer availability, assistance needs or waiting priority.
-- Existing MRI Time rows must not be cleared/rebuilt/reordered/normalized by a generated cache.
-- v1 states remain `WAITING`, `PREFERENCE_MISSING`, `BOOKED`, `NOT_ACTIONABLE`.
+- Raw/resolved MRIadmin is the formal authority for submitted MRI preferences/assistance data.
+- Contactlist MRI note is **not** a scientific/preference authority and must not silently overwrite Raw/Participant MRIadmin. However it is a useful real-world operational remark surface because staff may record participant calls, requested time changes and messy current logistics there. Treat it as a human reconciliation signal/interface, not as automatic truth.
+- The electronic workflow must know which participants need MRI, are waiting, lack preference, are already booked, or are otherwise not actionable.
+- `MRI Time` is a manually maintained **transitional** sheet created because electronic MRIadmin/booking was not yet available. Preserve its historical rows and use existing confirmed bookings only for safe migration/reconciliation. After the electronic MRIadmin + UBSN booking workflow is established, MRI Time should stop receiving new routine updates and should not become the future scheduling ledger.
+- v1 operational states remain conceptually `WAITING`, `PREFERENCE_MISSING`, `BOOKED`, `NOT_ACTIONABLE`; additional human review/reconciliation signals may sit alongside these states without redefining submitted preference evidence.
 - blank preference means unknown, never unrestricted availability.
 - month + weekday + AM/PM combinations must remain structured windows; never widen combinations.
+- Participant-requested changes and other real-world exceptions require staff confirmation/reconciliation before electronic scheduling state is updated.
+- CAPTCHA/final UBSN booking confirmation remains human.
 
-The local UBSN parser/session/matcher is already a separate staff helper. The missing backend feature is the read-only APATHY waiting producer and later confirmed-booking writeback, after the core backend runtime is stable enough to change safely.
-
-## 5. What technical sheets mean — and what they do not mean
-
-Current Production contains large materialized technical surfaces including Event Values, Participant State, Field Provenance, Result Bridge, Result/Review/Audit, Decision, Output facts, Admin lineage, run ledgers and rollback sheets.
-
-For current work:
-
-- do not create another persistent technical table to solve a narrow bug;
-- do not promote an audit/diagnosis/bridge table into a new authority;
-- Result Bridge is an interface adapter from Participant State into the legacy exact Result engines, not a conceptual research-data source;
-- diagnosis/Trace surfaces explain current evidence and staff actionability; they must not alter scientific evidence;
-- contraction/cleanup is later work and must not block restoring reliable daily operation.
-
-## 6. Current priority order
-
-### P0 — stabilize current backend and close known publication tail
-
-1. **Step 3 runtime:** determine whether current source differs from the last successful same-version path. If not, treat the repeated timeout as a performance/Spreadsheet-I/O problem and isolate the dominant operation; patch only a proven bottleneck.
-2. **Historical publication tail:** finish the one remaining historical MRI-date downstream publication case generically.
-3. **Boss/Admin reconciliation:** once values are correct, make color/diagnosis/action text agree with the evidence. Pipeline breaks must not become staff re-entry requests.
-
-### P1 — prevent new evidence pollution
-
-4. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata; do not globally serialize unrelated `ST.answers`/derived defaults into every submission.
-5. Keep Participant field/domain ownership defense even after frontend is clean, because historical and external submissions remain evidence.
-
-### P2 — finish operational features
-
-6. MRIadmin Participant-state -> Admin/UBSN waiting projection; then human-confirmed BOOKED -> narrow MRI Time link/append.
-7. Participant report: fix only the existing Apps Script print/save-PDF path; do not redesign scoring/report content.
-
-## 7. Agent/work split
+## 7. Agent/work split and audit routing
 
 ### ChatGPT
 
-Own:
+Default owner for:
 
-- read-only Production inspection;
+- read-only Production inspection when connectors/source access are sufficient;
 - source/history/runtime reconciliation;
 - product/data-contract protection;
-- sanitized GitHub handoffs/status;
-- offline diffs and narrow implementation packets;
-- public UBSN module/doc corrections.
+- precise research/web search and synthesis;
+- sanitized canonical GitHub handoff/status maintenance;
+- offline diffs and narrow implementation packets.
 
-Do not ask Codex to rediscover facts that can be established read-only first.
+For a genuinely unknown complex problem, ChatGPT may perform the audit directly when it has the required read access. Do not send a broad audit to Codex merely because a bug exists.
 
-### Mainline Codex window
+### Copilot / local heavy worker
 
-Use only after a defect has been reduced to a narrow implementation change. Preserve the existing thread/context; do not start a broad audit.
+Preferred for token-heavy or long mechanical audits that can run locally, especially when local environment/network constraints make simultaneous ChatGPT/Codex use impractical. Good examples: large static inventories, repetitive source diffs, call-site enumeration, route/field matrices.
 
-Likely next task depends on the source comparison:
+Copilot findings are evidence/working material; they do not invent research authority.
 
-- if a concrete current-vs-last-successful Step-3 code delta exists, patch only that delta;
-- if not, inspect/profile the dominant current Spreadsheet I/O path and reduce only that bottleneck;
-- then separately finish the remaining MRI publication mapping and diagnosis/Admin reconciliation.
+### Mainline Codex
 
-### Participant-report Codex window
+Use Codex primarily **after direction/root cause is already narrowed** for:
 
-Keep isolated to `report.html` print/save-PDF behavior. Preview/scientific payload/scoring are not the task.
+- precise code edits;
+- precise tests;
+- narrow reconnaissance that requires repository/private-runtime access unavailable to ChatGPT;
+- deployment/runtime verification through the existing safe workflow.
 
-### Copilot / heavy offline worker
+Codex may audit only when the problem truly remains unknown **and** ChatGPT/Copilot cannot perform the required inspection because of missing access/capability. Preserve the existing thread/context and avoid broad rediscovery.
 
-Good tasks:
+### Participant-report Codex
 
-- mechanical current-vs-last-known-successful source diff on the Step-3 caller/preamble and Result entry path;
-- static inventory of large Spreadsheet reads/writes/copies in Step 3, ranked by likely cost;
-- frontend route -> owned payload-field matrix and identification of cross-route/default emissions;
-- large static dependency inventories when useful.
-
-Do not let Copilot write Production or invent identity/scientific authority.
+Keep isolated to the already narrowed report implementation issue(s); do not reopen scientific payload/scoring when not required.
 
 ### Human operator
 
-Owns:
+Owns genuine research/identity authority decisions, approval of Raw corrections, ambiguous real-world MRI scheduling decisions, minimal safe runtime actions, and CAPTCHA/final booking confirmation.
 
-- genuine research/identity authority decisions;
-- minimal safe UI/runtime actions;
-- CAPTCHA/final UBSN booking confirmation.
+## 8. Anti-rationalization / do-not-reopen rules
 
-## 8. Operating rules
+| Tempting shortcut | APATHY rule |
+|---|---|
+| “An old MD says this, so it must still be true.” | Use synchronized canonical docs; if contradicted by current Production/source, current truth wins and docs are immediately corrected. |
+| “Boss is blank, so the source data are missing.” | Trace existing formal evidence first. |
+| “This looks complex; re-audit everything.” | Do not reopen an already completed diagnosis without new contradictory evidence. |
+| “A new persistent table would make this easier.” | Do not add a persistent data layer for a narrow defect unless it is genuinely required by the product model. |
+| “Editing Raw is always forbidden.” | Default preserve Raw; only a narrow human-approved, auditable correction may change Raw. |
+| “Just ask staff to redo the form.” | Re-entry is allowed but existing evidence comes first; if truly lost, identify exact fields and support precise structured/JSON recovery. |
+| “MRI Time already has bookings, so use it as MRI authority.” | MRI Time is transitional legacy booking history only; migrate/reconcile, then stop routine updates after electronic cutover. |
+| “Contactlist MRI note is useless or authoritative.” | Neither: it is a non-authoritative real-world remark/reconciliation signal. |
+| “MRI scheduling can be fully automated from payloads.” | No: electronic derivation supports staff, but booking/change/cancellation remains human-in-the-loop. |
+| “Codex can investigate this from scratch.” | Prefer ChatGPT/Copilot audit when possible; give Codex narrowed implementation/test/recon work. |
+
+## 9. Current priority order
+
+### P0 — stabilize current backend and close known tails
+
+1. Resolve the current Step-3 runtime bottleneck without redesigning scientific semantics.
+2. Targeted republish of the already-recovered remaining historical MRI-date value.
+3. Suppress `TRACE_ONLY_NO_ACTION` from active Admin and stop `NON_INCLUDED_CONTACT_CLOSEOUT` for `Inclusion=n`.
+4. Reconcile Boss diagnosis/color/action presentation once scientific values are correct.
+
+### P1 — prevent new evidence pollution
+
+5. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata.
+6. Keep Participant field/domain ownership defense even after frontend is clean.
+
+### P2 — finish operational features
+
+7. Build electronic MRIadmin Participant-state -> Admin/UBSN human-in-loop scheduling workflow; migrate/reconcile legacy MRI Time, then stop routine MRI Time updates after cutover.
+8. Fix participant-report print/save-PDF path without redesigning scoring/report content.
+
+### Later
+
+9. Optimize Incremental and perform technical materialization/contraction only after correctness and daily operations are stable.
+
+## 10. Operating rules
 
 - Functionality first.
 - Core evidence path first; scaffolding second.
-- No Raw rewrite.
 - No participant hardcoding.
 - No new persistent data layer for a narrow repair.
-- Do not infer missing source from a blank Boss cell.
+- Do not infer source loss from an output blank.
 - `Inclusion=n` excludes from Boss; blank Inclusion is not itself exclusion.
-- Prefer existing data/evidence over recollection/re-entry.
+- Prefer existing evidence over recollection/re-entry, while allowing precise staff re-entry when data are genuinely absent.
+- FAST PATCH overrides broad planning/audit workflows when the defect and requested patch are already explicit.
 - Give Codex one narrow deliverable at a time; do not spend quota on broad rediscovery.
+- At verified task completion, synchronize the canonical MD immediately so future agents can trust it.

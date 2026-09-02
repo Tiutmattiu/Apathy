@@ -54,27 +54,24 @@ The bounded Admin/MRI publication patch completed successfully:
 - The previously recovered MRI-date publication tail was republished through the current participant-scoped Incremental path and is now visible in Boss.
 - No additional Backfill or historical trace was required for that publication tail.
 
-These facts close the narrow patch only. They do **not** mean the overall Admin or Boss presentation is product-accepted.
+## VERIFIED 2026-09-03 ADMIN SLICE A CLOSEOUT
 
-## ADMIN PRODUCT ACCEPTANCE — NOT YET PASSED
+Admin Slice A is deployed and Production-verified.
 
-Read-only Production acceptance after the fast patch found that active Admin is still not the intended staff operations console.
+Post-rebuild acceptance:
 
-Current aggregate findings before Admin Slice A:
+- active Admin contracted from 31 participant rows to 11;
+- all 11 remaining rows retain genuine `STAFF_DATA_ACTION` work;
+- active system-maintenance issues are 0;
+- `TRACE_ONLY_NO_ACTION` is 0;
+- `NON_INCLUDED_CONTACT_CLOSEOUT` is 0;
+- non-identity rows with `执行` checkbox validation are 0;
+- Boss remains exactly 90 columns;
+- no Full or participant Incremental was required for this slice.
 
-- active Admin has 31 participant rows;
-- 28 rows contain `ESCALATE`;
-- 11 rows contain `STAFF_DATA_ACTION`;
-- 0 rows contain `RESOLVABLE_IN_APP`;
-- the overlap implies 20 rows are system/escalation-only and 8 rows mix a real staff-data action with a system/escalation component.
+This closes **Admin admission/actionability Slice A**. It does not close Admin readability. Slice B remains: compact the visible staff task wording while retaining exact item/lineage detail through Trace/hidden technical evidence.
 
-The main current defect is no longer `TRACE_ONLY_NO_ACTION`. System-maintenance issue codes such as `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR` can still classify as `ESCALATE` and remain in the staff-facing inbox. Do **not** globally suppress all `ESCALATE`; authority/identity escalation may be genuine staff work. Admin Slice A targets non-staff system-maintenance issue semantics specifically.
-
-**Important fresh finding:** do not treat those system-maintenance Admin rows as a current data-rescue backlog. Read-only cross-checks of several representative `BACKEND_REPAIR` rows found that Admin claimed questionnaire/clinical results were not generated while the corresponding current Boss already contained the derived results. Therefore a substantial part of this system-maintenance queue is stale/false-positive diagnosis, not evidence that participant data are still trapped. Remove these rows from ordinary Admin and later repair the diagnosis logic separately; do not rerun historical migration or re-enter data merely because `BACKEND_REPAIR` appears.
-
-A second verified UX defect is universal checkbox validation: the current Output helper can apply an `执行` checkbox to every Admin row. `STAFF_DATA_ACTION` means staff must supply/complete real source data outside the in-app executor; it is not a checkbox-executable repair. Checkbox/action affordance must be restricted to issue types that have a real implemented in-app executor, such as the existing explicit identity-resolution workflow.
-
-Readability also remains below acceptance: participant-level collapse can concatenate very long exact-item lists into the visible `为什么` cell. Exact lineage/detail should remain available through Trace/technical evidence, while the primary staff view should summarize the human task compactly.
+Fresh read-only cross-checks also established that multiple representative historical/current `BACKEND_REPAIR` rows were false-positive/stale system diagnoses: Admin claimed results were not generated while the same current participants already had those derived values in Boss. Therefore system-maintenance diagnosis is not a data-rescue queue. Before any future “rescue,” compare actual Participant/Result/Boss state; do not re-enter data or reopen historical migration merely because a system-maintenance diagnosis exists.
 
 Target product rule remains:
 
@@ -141,12 +138,21 @@ Current resolved Participant state also contains structured MRIadmin fields for 
 
 ## PARTICIPANT REPORT
 
-Preview is working. Remaining task is the existing Apps Script print/save-PDF path only; do not reopen scientific payload/scoring unless required by concrete evidence. Current ChatGPT access does not include the deployed private `report.html` / `report_backend.js`, so the exact print-button root cause is not yet proven; a separate report Codex may inspect that narrow private source in parallel, but Production writes must remain serialized with mainline backend deployment.
+Preview is working and report content/scoring is not the current defect.
+
+The print/save-PDF root cause is now proven in current private report source:
+
+- the `id="print"` button starts disabled;
+- `loadReports()` attempted `print.disabled = false`;
+- in that scope `print` resolves to native `window.print`, not the button element;
+- therefore the button never becomes enabled and its existing `onclick="window.print()"` handler is never reached.
+
+The smallest prepared fix is two local `report.html` changes from `print.disabled` to `document.getElementById('print').disabled`. No PDF library, popup architecture, scoring change, or report redesign is indicated by current evidence. Production deployment and one human browser-native Print/Save-as-PDF acceptance test remain.
 
 ## AGENT ROUTING
 
 - **ChatGPT:** default for read-only Production inspection, source/history reconciliation, precise web/research work, product contract and narrow implementation packets when access is sufficient.
-- **Copilot/local heavy worker:** preferred for long/token-heavy mechanical audits and large offline scans, especially when local/network constraints make simultaneous GPT/Codex use impractical.
+- **Copilot/local heavy worker:** preferred for long/token-heavy mechanical audits and large offline scans, especially when local/network constraints make simultaneous GPT/Codex use impractical. When VPN prevents Copilot use, do not force that lane; ChatGPT can perform smaller read-only work and heavy local inventory can wait.
 - **Codex:** primarily after direction/root cause is narrowed: precise code edits, precise tests, narrow reconnaissance requiring private repo/runtime access, deployment/runtime verification. Broad Codex audit only when the problem is genuinely unknown and GPT/Copilot lack the needed access.
 - **Human:** research/identity authority, approval of Raw corrections, ambiguous real-world MRI decisions, minimal safe runtime actions and final UBSN confirmation.
 
@@ -173,13 +179,13 @@ Preview is working. Remaining task is the existing Apps Script print/save-PDF pa
 
 ## CURRENT MAINLINE
 
-1. Admin acceptance slice A: remove non-staff system-maintenance issues from the staff inbox and restrict checkbox/action affordance to implemented in-app actions; preserve genuine `STAFF_DATA_ACTION` and identity/authority work.
-2. Admin acceptance slice B: compact visible staff wording while preserving exact detail/lineage through Trace/hidden technical columns.
-3. Participant-report print/save-PDF narrow fix can be investigated in parallel but must not deploy concurrently with mainline backend changes.
-4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
-5. Stabilize Step-3 runtime without redesigning scientific semantics.
-6. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
-7. Fix frontend route-owned payload hygiene.
+1. Admin acceptance Slice B: compact visible staff wording while preserving exact detail/lineage through Trace/hidden technical columns.
+2. Participant-report print/save-PDF: deploy the already-prepared two-line `report.html` fix once against fresh live source, then perform one human native Print/Save-as-PDF acceptance test.
+3. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
+4. Stabilize Step-3 runtime without redesigning scientific semantics.
+5. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
+6. Fix frontend route-owned payload hygiene.
+7. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.
 8. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
 
 ## OPERATING RULES

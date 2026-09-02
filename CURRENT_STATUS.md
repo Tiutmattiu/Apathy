@@ -1,8 +1,8 @@
 # APATHY CURRENT STATUS
 
-Last updated: 2026-09-01
+Last updated: 2026-09-03
 
-This file is the canonical **sanitized engineering/product status** for agent handoff.
+This file is the canonical **sanitized engineering/product status**. Read `APATHY_CORE_PIPELINE_HANDOFF_20260903.md` for the current core data contract, read-only Production inspection findings, and agent work split.
 
 Public-repo privacy rule: never commit participant names/identifiers, phone numbers, clinical payloads, private workbook rows, credentials, tokens, Script/Spreadsheet IDs, reservation captures containing staff/account data, or other private Production evidence. Private Production facts may be summarized here only at aggregate/product level.
 
@@ -10,188 +10,220 @@ Public-repo privacy rule: never commit participant names/identifiers, phone numb
 
 - `DONE`: complete for the stated scope.
 - `ACCEPTED`: validated and safe to rely on, but not necessarily the finished product.
-- `DEPLOYED_PENDING_VERIFY`: code is live but final human/runtime verification for the current change is still pending.
+- `DEPLOYED_PENDING_VERIFY`: code is live but final human/runtime verification is pending.
 - `PROVEN`: defect/fact established by code or real runtime evidence.
 - `NOT_DONE`: explicitly unfinished.
 - `DEFERRED`: valid backlog, not a current blocker.
+
+## AUTHORITATIVE CORE CONTRACT
+
+The APATHY core is:
+
+```text
+frontend submission
+-> complete payload_json in append-only Raw
+-> lossless field-level Event evidence
+-> identity resolution to Registry participant
+-> Participant current evidence selected by field/domain/source ownership
+-> Result / Medication / Decision calculation
+-> Boss
+-> Admin for genuine staff work
+```
+
+Technical Candidate, bridge, audit, diagnosis, checkpoint and rollback surfaces are implementation/support layers. They are not new scientific authorities.
+
+### Boss admission product rule
+
+Boss eligibility requires all three:
+
+1. valid/unique Registry participant;
+2. at least one formal Raw submission assigned to that participant;
+3. explicit Contactlist `Inclusion=y`.
+
+S_ID, MRI date and downstream workflow completion are not Boss-admission gates.
+
+### PROVEN critical mismatch — current implementation vs product rule
+
+Current Result/Decision source permits Boss admission when Contactlist Inclusion is anything except explicit `n` (`inclusion != n`). Current read-only Production aggregates show substantially fewer explicit `Inclusion=y` Contactlist rows than current Boss rows.
+
+**Do not change the code to `== y` blindly.** Historical/current inclusion authority must first be reconciled because a one-line code change would remove a large existing cohort. Do not infer `y` merely from historical Boss/Registry presence.
 
 ## ACCEPTED / CURRENTLY RELIABLE
 
 ### Raw / Event evidence model
 
 - Raw remains append-only research evidence.
-- Event preserves formal evidence and provenance.
+- Event preserves formal evidence and lineage from `payload_json`.
+- Current `_Candidate_Payload_Loss` inspection found no active payload-loss rows in the inspected snapshot.
 - Backfill is valid formal evidence, but authority is field/domain-specific rather than universal to the whole payload.
 - Rejected/non-owner evidence remains traceable instead of being silently deleted.
 
-### Identity resolution
+### Identity / Participant semantics
 
-- Generic manual identity resolution through the existing authority/control layer is accepted.
-- Raw submitted identity is not rewritten merely to make matching succeed.
+- Registry remains identity authority after inclusion.
+- Generic manual identity resolution through the existing control layer is accepted; Raw submitted identity is not rewritten to make matching succeed.
+- Evidence-gated field/domain ownership is the accepted Participant projection model.
+- Later unrelated events must not overwrite stronger owner evidence merely by chronology.
+- Historical Backfill may contribute fields it actually evidences without blanket authority.
 
-### Participant current-state semantics
+### Historical data-loss diagnosis
 
-- Evidence-gated field/domain ownership is the accepted direction for current Participant projection.
-- Later unrelated events must not overwrite stronger domain-owner evidence merely by chronology.
-- Historical Backfill can contribute the fields it actually evidences, without receiving blanket authority over unrelated fields.
+Historical forensic work established that apparent broad Boss loss was mostly **not Raw loss**. The main mechanisms were:
 
-### Boss / Trace / first Operations vNext slice
+- frontend/non-owner payload pollution and default derived state;
+- Participant latest-present overwrite before ownership defenses;
+- Event->Participant promotion gaps;
+- Result/publication aliases and authority gates.
 
-- Boss scan-mode diagnosis and notes are installed without changing the 90-column scientific-value contract.
-- Existing click-a-Boss-cell Trace remains available.
-- Participant-first Trace search, suspicious/all-blank/current-value views, first-break explanation, and safe lineage navigation are installed.
-- Shared action classes distinguish genuine staff data action, resolvable-in-app authority work, trace-only/no-action, and escalation.
-- Manual identity preview/confirmation is available through the existing control authority path.
+The historical root-cause audit found that most audited material historical values still existed in Event and/or provenance/current evidence. Recover/publish existing evidence first; do not mass re-enter old values or copy historical Boss into current Boss.
 
-### Incremental runner — supersedes the old 2026-08-27 Full-only status
+### Incremental runner
 
-- A real participant-scoped Incremental pipeline is implemented and deployed.
-- Reusable entrypoint processes one or many affected PIDs and reuses the existing Event/Participant/Result/Decision/Boss/Admin logic rather than creating a second scientific engine.
-- Admin has a checkbox queue and human menu action for checked items.
-- Successful items clear; failed/unprocessed items remain available for retry.
-- Incremental does not silently fall back to Full.
-- Full remains appropriate for true global schema/scoring/authority changes.
-- A recent 38-participant historical repair batch completed 38/38 successfully in 4m53s.
-- **Known issue:** participant-scoped runtime is still slower than desired; performance optimization remains required.
+- A real participant-scoped Incremental path is deployed.
+- It reuses the existing Event/Participant/Result/Decision/Boss/Admin logic rather than a second scientific engine.
+- It does not silently fall back to Full.
+- A previous 38-participant repair batch completed 38/38 successfully in 4m53s.
+- Runtime remains slower than desired; performance optimization is later work after current correctness/runtime blockers.
 
-### Admin precision redesign
+### Boss / Trace / Admin operations slice
 
-- Admin uses **one row per participant**, aggregating relevant problems rather than one row per issue.
-- Missingness can be derived from assigned Event Values, canonical field mappings, and Field Provenance down to exact missing/invalid item paths.
-- Whole-source absence, partial item-level absence, and downstream/system-only breaks are distinguished.
-- Complete Raw/evidence with missing downstream output is not turned into a re-entry request.
-- Receipt/archive status alone no longer creates an Admin task; unresolved payment status may still do so.
-- Technical lineage remains available in hidden fields/Trace rather than forcing staff to read technical issue rows.
+- Boss remains a 90-column scientific output contract.
+- Boss blank diagnosis/coloring and selected-cell Trace are installed.
+- Participant-first Trace/search exists.
+- Admin is one participant per row and aggregates relevant problems.
+- Receipt/archive alone is non-actionable; only unresolved payment status may create a payment issue.
+- Withdrawal alone is non-actionable for research workflow tasks.
 
-## DEPLOYED_PENDING_VERIFY
+Diagnosis/Trace/Admin are explanatory/operations layers, not scientific-data authorities.
 
-### Historical Boss migration repair
+## PROVEN ACTIVE DEFECTS / BLOCKERS
 
-A private forensic comparison of historical Boss data against the current evidence/provenance chain established that most apparent historical-value loss was authority/promotion/publication rather than broad source loss.
+### 1. Full Step 3 deterministic runtime failure
 
-Generic repairs were deployed for the diagnosed classes, including historical/manual LEDD authority fallback, field-wise formal Backfill promotion, canonical MID/PD publication paths, GAS derived publication, and CGT completion derivation.
+A current Full run passes Event and Participant stages, then repeated Step 3 Result/Decision attempts fail with Spreadsheet-service timeout and no checkpoint commit.
 
-The six explicitly identified historical source gaps were then written as formal historical Backfill evidence with historical provenance; HADS remained summary-only with no fabricated items.
+Read-only source/workbook/ledger inspection strongly implicates the current Step-3 orchestration/snapshot path as part of the second Spreadsheet-I/O bottleneck. Partially created rollback surfaces are consistent with failure before or at the start of Result Core.
 
-Runtime result:
+Next action: compare the current Step-3 preamble/path with the last known working source/runtime and isolate the smallest regression. **Do not invent another architecture or keep retrying Full.**
 
-- affected Incremental batch: 38 succeeded, 0 failed;
-- elapsed: 4m53s;
-- Output-only publication completed successfully;
-- Boss remained 90 columns and Admin refreshed;
-- five of the six historical values published;
-- one historical MRI date still has upstream evidence but remains blank downstream and requires a narrow mapping/publication diagnosis.
+### 2. Frontend payload/evidence hygiene
 
-**Newly observed post-repair issue:** current Boss diagnosis coloring/notes and Admin prompts are not fully aligned with the repaired evidence/publication state. This is now a concrete shared-diagnosis/output usability defect; fix it narrowly rather than reopening the entire Operations architecture.
+Current public `app.js` still proves this defect:
 
-Do not mark historical migration closed until the remaining MRI publication break and post-repair diagnosis/Admin reconciliation are fixed, then run the final historical Boss diff.
+- outgoing payload construction calls global derived calculation;
+- all shared `ST.answers` keys are broadly serialized into the current submission.
 
-### Participant-facing report v1
+A route can therefore emit unrelated/default evidence owned by a different workflow. This was one historical corruption mechanism and remains correctness work.
 
-Production Apps Script report support has now been deployed.
+Fix after the current core runner is stable: route-owned/applicable payload only, plus shared identity/metadata; keep Participant ownership defense as a second line of protection.
 
-Installed scope:
+### 3. Historical publication tail + diagnosis/Admin reconciliation
 
-- staff menu entry for participant reports;
-- dedicated report backend payload path;
-- single and batch PID input;
-- one shared renderer;
-- one A4 page per participant;
-- browser `列印／儲存PDF` workflow;
-- no Full rebuild and no scientific scoring rewrite.
+- Substantive CGT values are again visible in current Production; broad CGT repair is no longer the active blocker.
+- One historical MRI-date publication case remains a narrow downstream publication issue after the historical repair.
+- Boss diagnosis colors/notes and Admin prompts are not fully aligned with repaired evidence/publication state.
 
-The nine current bindings use final Boss-facing fields for Digit Span forward/backward, MoCA, three GAS dimensions, and three CGT metrics. GAS dimensions and CGT decision speed are internally direction-normalized. CGT risk-adjustment remains `待確認` until a formal direction contract is available.
+Repair values first, then reconcile presentation/actionability. A downstream pipeline break must not instruct staff to recollect/re-enter valid source data.
 
-Participant-facing output does not expose percentile numbers, cohort N, technical direction rules, staff workflow decisions, Admin/Trace, or provenance.
+## MRIADMIN / UBSN
 
-Still verify the deployed UI against a real participant and one small batch before calling report v1 accepted.
+### MRIadmin authority — ACCEPTED
 
-## NOT_DONE
-
-### Admin human readability and post-repair diagnosis reconciliation
-
-Admin is not finished.
-
-Immediate concrete work:
-
-- reconcile Boss colors/notes and Admin prompts with the newly repaired accepted evidence state;
-- resolved/published fields must not remain marked as missing/actionable;
-- accepted evidence with a downstream publication break must be technical/system handling, not staff re-entry;
-- preserve one-row-per-participant aggregation and exact item precision;
-- compress an entirely absent workflow/scale into a concise whole-source message rather than listing every item as missing;
-- expand exact item lists only for partially completed sources;
-- preserve clear `system handling / no re-entry` wording for downstream defects.
-
-Do not reopen accepted identity semantics or redesign all Admin logic at once.
-
-### Frontend implementation status + evidence hygiene
-
-- `FRONTEND_REQUIREMENTS_LATEST.md` remains the implementation baseline, not a completion report.
-- Current public frontend code must be audited against that baseline before claiming individual P0/P1 features are missing or complete.
-- A proven remaining defect is payload/evidence hygiene: routes can emit unrelated/default completion values that must not masquerade as authoritative evidence.
-
-### UBSN Human MRI booking assistant
-
-A real local helper exists under `tools/ubsn/`, and the frontend contains a staff UBSN route that talks to the local bridge.
-
-Current checkpoint:
-
-- persistent visible Playwright session exists;
-- a real Human MRI `reservations.js` capture has been observed and the real parser is implemented;
-- live response is a JSON event array containing Human MRI reservation/admin-hold blocks plus `className=unavailable` calendar blocks;
-- usable intervals are derived as the complement of merged blocking intervals inside the exact requested window;
-- cancelled Human MRI reservation rows do not block;
-- parsing fails closed on empty/unrecognized live responses;
-- interval diff is coverage-aware, avoiding false `NEW_SLOT` alerts when free time merely shrinks/splits;
-- local suite currently passes 13 tests against the integrated parser/diff behavior;
-- a one-shot live `check` completed and returned no matching staff action for the current local waiting-list input.
-
-**Login UX finding:** repeated `run.py check` invocations restart and then close the Playwright process, so they can force repeated SAML login despite the persistent profile. The intended daily workflow is now persistent helper mode:
+Screening MRIadmin is ordinary upstream participant evidence. Read-only Production inspection confirms MRIadmin values are present through:
 
 ```text
-run.py serve --monitor
+screening payload_json
+-> Event Values
+-> resolved Participant current state
 ```
 
-This authenticates once, keeps the terminal/browser alive, reuses the same browser session for APATHY `check now`, and optionally runs background polling. URFMS server-side session expiry can still require a later re-authentication.
+Therefore the current missing feature is operational projection, not ingestion recovery.
 
-Remaining UBSN work:
+Correct direction:
 
-- confirm persistent `serve --monitor` removes repeated-login friction during a normal work session;
-- confirm timezone/date semantics over repeated checks;
-- confirm booking-form selectors during one dry preparation;
-- replace example waiting-list JSON with the intended APATHY staff data source once that source contract is explicit;
-- keep CAPTCHA and final submission human.
+```text
+Screening MRIadmin
+-> resolved Participant state
+-> MRI scheduling state
+-> Admin + UBSN
+-> human-confirmed booking
+-> APATHY BOOKED evidence
+-> link/append MRI Time
+```
 
-### Incremental performance
+- Contactlist/manual MRI waiting lists are not MRI preference/eligibility authorities.
+- Contactlist explicit inclusion remains an upstream participant-admission authority.
+- MRI Time is the staff booking ledger/history; existing rows must be preserved. It may be reconciled as confirmed booking evidence only, never used to infer waiting availability/eligibility.
+- v1 states: `WAITING`, `PREFERENCE_MISSING`, `BOOKED`, `NOT_ACTIONABLE`.
+- blank preference is unknown, not unrestricted availability.
+- structured month/weekday/daypart combinations must not be widened.
 
-Functional participant-scoped Incremental exists, but runtime must be reduced by removing remaining cohort-wide work/repeated Spreadsheet I/O from the participant-scoped path.
+### UBSN local helper — ACCEPTED FOR CURRENT LOCAL SCOPE
 
-### Legacy / architecture cleanup
+- persistent visible Playwright session exists;
+- real Human MRI `reservations.js` response is parsed;
+- cancelled rows do not block;
+- free intervals are derived as complement of blocking intervals;
+- parser fails closed on empty/unrecognized live responses;
+- coverage-aware interval diff exists;
+- structured MRIadmin availability-window matching exists;
+- file/backend waiting-source adapter exists;
+- CAPTCHA and final submission remain human.
 
-Still later backlog. Do not block working research operations on cosmetic repository cleanup.
+Remaining backend work: APATHY read-only waiting producer, then later confirmed-booking writeback. Do not reopen the live calendar parser while doing that.
 
-## DEFERRED
+## PARTICIPANT REPORT
 
-### Controlled staged rollback proof
+### DEPLOYED_PENDING_VERIFY
 
-The old Phase 5B controlled Step 3/4 rollback proof remains a valid release-validation topic but is **deferred** and is not a blocker for the current product mainline. Do not resurrect it automatically.
+The fixed v1 report design remains:
+
+- one A4 page per participant;
+- nine metrics only;
+- Traditional-Chinese participant-facing explanations;
+- no percentile number or cohort N shown;
+- longer bar = better relative performance after internal direction normalization.
+
+Known defect remains narrow: preview renders, but the Apps Script `列印／儲存PDF` path is not usable. The existing report Codex thread should fix only that print path; do not redesign report payload/scoring.
+
+## TECHNICAL MATERIALIZATION / CLEANUP
+
+Current Production contains large Candidate/Event/Participant/Provenance/Bridge/Result/Audit/Output/rollback materializations.
+
+Rules for current work:
+
+- do not create another persistent table for a narrow defect;
+- do not turn an audit/diagnosis/bridge surface into a new authority;
+- Result Bridge is a legacy exact-engine interface adapter from Participant State, not a conceptual research-data source;
+- architecture contraction/cleanup is later work after the core reliable path is restored.
 
 ## CURRENT MAINLINE
 
-1. Fix the remaining historical MRI publication break and reconcile post-repair Boss diagnosis coloring/Admin prompts; then run the final historical Boss diff.
-2. Verify the deployed participant-report UI with one real participant and one small batch.
-3. Finish UBSN persistent-session live verification, then wire the real waiting-list source.
-4. Audit the current frontend implementation against `FRONTEND_REQUIREMENTS_LATEST.md`, then fix only proven gaps; payload hygiene is already proven work.
-5. Optimize participant-scoped Incremental performance without changing scientific semantics.
-6. Continue Admin readability/operations refinements only from concrete staff use.
-7. Do legacy cleanup last.
+1. Reconcile the explicit `Contactlist Inclusion=y` Boss-admission contract with historical/current Contactlist data; no guessed mass write.
+2. Isolate and fix the deterministic Full Step-3 regression by comparing current vs last-known-working orchestration; one narrow patch only.
+3. Finish the remaining historical MRI-date publication tail generically.
+4. Reconcile Boss diagnosis/color and Admin action wording after scientific values are correct.
+5. Fix frontend route-owned payload hygiene.
+6. Finish MRIadmin Participant-state -> Admin/UBSN operational projection; then confirmed BOOKED -> narrow MRI Time link/append.
+7. Fix participant-report print path in the separate report thread.
+8. Optimize Incremental / perform legacy contraction only after correctness and daily operations are stable.
+
+## AGENT DIVISION
+
+- **ChatGPT:** read-only Production inspection, source/history reconciliation, product contract, sanitized status/handoff docs, offline diffs, narrow implementation packets, public UBSN work.
+- **Mainline Codex:** only a defect already reduced to one narrow Production code change. Preserve the existing thread; no broad re-audit.
+- **Report Codex:** report print/save-PDF path only.
+- **Copilot/heavy offline worker:** mechanical source diffs, private inclusion reconciliation report, frontend route/field ownership matrix, large static inventories. No Production writes and no invented authority.
+- **Human:** real inclusion/identity authority decisions, minimal safe UI/runtime actions, CAPTCHA/final booking confirmation.
 
 ## OPERATING RULES
 
-- Functionality first; real use finds problems; then fix the concrete bug; keep validation minimal and targeted.
-- Prefer one narrow Codex deliverable at a time. Do not make Codex reread/re-audit the whole project for every change.
-- Human operator performs simple UI/runtime actions when safe.
-- Heavy offline scans/diffs can be delegated; Production-sensitive code surgery stays narrow.
-- Never hardcode participant-specific fixes into public or Production scientific logic.
-- Do not infer a staff task from a blank Boss cell alone.
-- Do not copy historical Boss values directly into current Boss to make a diff pass; preserve evidence/provenance and current scoring semantics.
+- Functionality first; evidence path first; scaffolding second.
+- No Raw rewrite.
+- No participant-specific hardcoding.
+- No new persistent data layer for a narrow repair.
+- Do not infer missing source from a blank Boss cell.
+- Do not infer `Inclusion=y` from historical Boss presence alone.
+- Prefer existing formal evidence over recollection/re-entry.
+- Do not run Full again until the deterministic Step-3 failure is fixed.
+- Give Codex one narrow deliverable at a time; do not spend quota on rediscovering established facts.

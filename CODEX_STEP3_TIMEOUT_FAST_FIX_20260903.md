@@ -6,27 +6,58 @@ Scope: **one narrow Production helper patch only.** Preserve the existing mainli
 
 Read first: `APATHY_CORE_PIPELINE_HANDOFF_20260903.md`.
 
+## Fresh exact Production reproduction — highest-priority evidence
+
+A new real Full run after the Admin Slice A closeout reproduced the blocker more precisely:
+
+- Step 1 Event: PASS
+  - formal payloads: 360
+  - pipeline data loss: 0
+  - unaccounted: 0
+- Step 2 Participant: PASS
+  - Registry rows: 176
+  - qualified Registry: 174
+  - assigned formal events: 360
+  - unassigned formal events: 0
+- Step 3 Result/Decision: FAILED before Result completion
+- Step 4 Output: not run
+- checkpoint: not committed
+- official Full Boss/Admin publication: not completed
+
+Exact error class:
+
+```text
+OUTPUT_SNAPSHOT_CAPTURE_FAILED:
+Service Spreadsheets timed out while accessing document ...
+```
+
+The private workbook identifier is intentionally omitted here.
+
+A fresh read-only check immediately after the failure found no readable `_Apathy_Run_Rollback_Boss` sheet, consistent with the snapshot catch/cleanup path removing an incomplete backup rather than leaving a committed rollback snapshot. Do not infer any scientific Result failure from this run: the failure is explicitly inside pre-Result output snapshot capture.
+
+The current runner also permits retrying the same failed stage: when the persisted run is `FAILED` at `RESULT_CORE`, `continueApathyCandidateFull('RESULT_CORE')` resets that same stage to waiting and retries it. Therefore, after the helper patch is deployed and current run state is confirmed still failed at Step 3, the safest human acceptance action is **retry Step 3 only**; do not rerun Step 1/2 unless the state has changed or the patched source requires it.
+
 ## Established facts — do not rediscover
 
 1. Boss admission is `Inclusion !== n`. There is no inclusion-contract defect to repair.
 2. Current Event and Participant stages pass; current `_Candidate_Payload_Loss` has no active loss rows in the inspected snapshot.
-3. Current Step 3 repeatedly ends in `Service Spreadsheets timed out` with no checkpoint commit.
-4. The same runner version has successfully completed Production Step 3 / Full multiple times historically, including 2026-08-26, 2026-08-27 and an earlier 2026-09-01 run. Therefore this is not established as a scientific/result regression.
-5. The rollback capture implementation visible in the 2026-08-26 helper snapshot and 2026-09-02 helper snapshot is textually unchanged around:
+3. The fresh failure is now localized to `OUTPUT_SNAPSHOT_CAPTURE_FAILED`, before Result/Decision is allowed to complete.
+4. The same runner version has successfully completed Production Step 3 / Full historically. Therefore this remains a runtime/Spreadsheet-I/O blocker, not an established scientific/result regression.
+5. The rollback capture implementation visible in the current reviewed helper source is unchanged around:
    - `apathyCaptureProductionOutputSnapshot_`
    - `apathyCaptureSheetForRollback_`
    - `apathyInsertSizedSheet_`
 6. Current workbook aggregate shape includes a very large `_Candidate_Field_Provenance` surface (~44.6k rows x 26 cols), so the Step-3 participant fingerprint already performs a large Spreadsheet read before snapshot capture.
-7. After repeated current hard timeouts, `_Apathy_Run_Rollback_Boss` and `_Apathy_Run_Rollback_Admin` exist only as empty default-grid shells; `_Apathy_Run_Rollback_Checkpoint` is absent. This is consistent with at least some attempts reaching snapshot creation and terminating during structural sheet creation/resizing/copy before the complete snapshot was committed to run state.
+7. `apathyCaptureSheetForRollback_` currently routes temporary rollback creation through the generic exact-size allocator, which performs structural row/column deletion on a newly inserted default sheet. Exact dimensions are unnecessary for rollback correctness.
 
 ## Concrete inefficiency to patch first
 
-Current snapshot backup creation calls the general `apathyInsertSizedSheet_()` helper. That helper:
+Current snapshot backup creation calls the general `apathyInsertSizedSheet_()` helper. That helper effectively does:
 
 ```text
 insertSheet(name)
--> delete surplus default rows
--> insert/delete columns to exact source size
+-> grow rows if needed OR delete surplus default rows
+-> grow columns if needed OR delete surplus default columns
 -> return
 ```
 
@@ -38,7 +69,7 @@ backup.getRange(1,1,meta.rows,meta.columns)
 
 Extra unused rows/columns on the hidden backup do not alter rollback semantics.
 
-Structural `deleteRows` / `deleteColumns` operations are therefore avoidable I/O in exactly the current failure area.
+Structural `deleteRows` / `deleteColumns` operations are therefore avoidable Spreadsheet I/O in the exact failure area.
 
 ## Required patch
 
@@ -105,32 +136,34 @@ Keep unchanged:
 
 Minimal only:
 
-1. syntax / combined Apps Script syntax;
-2. static confirmation that only snapshot backup allocation changed;
-3. verify restore still reads only `meta.rows × meta.columns`;
-4. verify no Raw/scientific/Registry logic touched;
-5. privacy/source-inventory checks from `BACKEND_SOURCE_SYNC.md`;
-6. fresh Production pull + exact reviewed overlay only.
+1. fresh Production pull;
+2. syntax / combined Apps Script syntax;
+3. static confirmation that only snapshot backup allocation changed;
+4. verify restore still reads only `meta.rows × meta.columns`;
+5. verify no Raw/scientific/Registry logic touched;
+6. privacy/source-inventory checks from `BACKEND_SOURCE_SYNC.md`;
+7. deploy by exact reviewed overlay only.
 
 Do not create a new broad test suite.
 
 ## Runtime verification
 
-Do **not** automatically run Full after deploying.
+Do **not** automatically restart Full from Step 1 after deploying.
 
 Return to human/ChatGPT with:
 
 - exact function(s) changed;
 - fresh-live vs candidate diff summary;
 - deployment confirmation;
-- whether current stale empty rollback sheets need a safe cleanup/cancel before the next human Step-3 attempt;
-- the exact safest next human action based on current run state.
+- current persisted run status and failed stage;
+- whether any rollback backup sheet remains active/stale;
+- if state is still `FAILED` at `RESULT_CORE`, instruct the human to click **Step 3 only once**.
 
-Then stop.
+Then stop before Step 4. Human/ChatGPT will inspect the Step-3 result first.
 
 ## If the same timeout persists after this patch
 
-Do not keep modifying snapshot logic.
+Do not keep modifying snapshot allocation blindly.
 
 The next already-identified target is Step-3 participant handoff fingerprint cost:
 

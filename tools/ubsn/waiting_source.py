@@ -58,9 +58,12 @@ def load_waiting_snapshot(config: dict) -> WaitingSnapshot:
     """Load one normalized MRI waiting snapshot from the configured authority.
 
     `file` remains the explicit local-development fallback. `backend` is intended
-    for the APATHY read-only adapter that will derive scheduling state from
-    Participant MRIadmin + MRI Time + Contactlist. Backend failure does not
-    silently fall back to a stale local list.
+    for the APATHY read-only producer derived from identity-resolved current
+    Participant MRIadmin plus current APATHY workflow/booking state. Contactlist
+    and manually maintained MRI waiting lists are not preference/eligibility
+    authorities. Existing MRI Time rows may be reconciled upstream only as
+    human-confirmed booking evidence; they must not define waiting availability.
+    Backend failure does not silently fall back to a stale local list.
     """
     mode = str(config.get("waiting_source", "file")).strip().lower()
     if mode == "file":

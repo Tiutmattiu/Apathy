@@ -130,26 +130,21 @@ The bounded 2026-09-03 fast patch is complete and verified:
 - the previously recovered MRI-date publication tail was republished through the current participant-scoped Incremental path and is visible in Boss;
 - no new Backfill or historical trace was required.
 
-This closes that narrow patch. It does **not** constitute whole-surface Admin/Boss product acceptance.
+### Verified Admin Slice A closeout
 
-### Admin acceptance finding — current root cause is narrower
+Admin Slice A is deployed and Production-verified:
 
-Current active Admin before Slice A has 31 participant rows. Aggregate read-only classification counts are:
+- active Admin contracted from 31 participant rows to 11;
+- all 11 remaining rows retain genuine `STAFF_DATA_ACTION` work;
+- active system-maintenance issues are 0;
+- `TRACE_ONLY_NO_ACTION` is 0;
+- `NON_INCLUDED_CONTACT_CLOSEOUT` is 0;
+- non-identity rows with `执行` checkbox validation are 0;
+- Boss remains exactly 90 columns.
 
-- 28 rows contain `ESCALATE`;
-- 11 rows contain `STAFF_DATA_ACTION`;
-- 0 rows contain `RESOLVABLE_IN_APP`;
-- therefore 20 rows are system/escalation-only and 8 rows combine a staff-data action with a system/escalation component.
+This closes admission/actionability Slice A. Admin readability remains open: exact-item detail is still too verbose for ordinary staff use and should be compacted in Slice B while preserving Trace/lineage detail.
 
-The current staff inbox is still polluted by system-maintenance issues. Codes used for backend/system repair include `BACKEND_REPAIR`, `PIPELINE_DATA_LOSS` and `SCREENING_RESULT_BACKEND_REPAIR`; they may classify as `ESCALATE` and survive the `TRACE_ONLY_NO_ACTION` suppression even though ordinary staff cannot resolve them.
-
-Do **not** globally suppress `ESCALATE`: some future/current authority or identity escalation may be genuine human work. Route/suppress specifically by non-staff system-maintenance semantics while preserving diagnosis/Trace evidence.
-
-Fresh read-only cross-checks established that multiple representative `BACKEND_REPAIR` rows are **false-positive/stale system diagnoses** rather than current publication failures: Admin says raw items are complete but results are not generated, while the same current participants already have those derived values in Boss. Therefore `BACKEND_REPAIR` must not be treated as a data-rescue queue. Before attempting any current “rescue,” compare actual Participant/Result/Boss state; do not re-enter data or reopen historical migration merely because a system-maintenance row exists.
-
-The current Output helper also applies checkbox validation to the entire `执行` column. This creates a false affordance for `STAFF_DATA_ACTION` rows: a real source gap requires staff to supply/complete source evidence, not press a backend repair checkbox. Restrict executable controls to issue types for which an actual in-app executor exists; the established identity-resolution workflow is the primary current example.
-
-Participant-level collapse currently concatenates exact-item detail into the visible staff row, producing long walls of text. Preserve exact item/lineage evidence in Trace/technical detail, but summarize the primary staff view compactly.
+Fresh read-only cross-checks established that multiple representative `BACKEND_REPAIR` rows were false-positive/stale system diagnoses rather than current publication failures: Admin said results were not generated while those current participants already had derived values in Boss. Therefore `BACKEND_REPAIR` is not a data-rescue queue. Before attempting any future “rescue,” compare actual Participant/Result/Boss state; do not re-enter data or reopen historical migration merely because a system-maintenance diagnosis exists.
 
 Product invariant:
 
@@ -253,7 +248,14 @@ Participant MRIadmin + adopted booking evidence
 
 ## 8. Participant report boundary
 
-The accepted report content/rendering exists and preview works. The remaining defect is the Apps Script print/save-PDF integration only. Current ChatGPT connectors do not expose the deployed private report HTML/backend source, so the exact button failure is not yet proven. A separate report Codex may perform narrow read-only/private-source inspection in parallel, but it must not deploy while another agent owns the Production Apps Script write lane. Do not alter report metrics/scoring/data binding to solve the print problem.
+The accepted report content/rendering exists and preview works. The current print/save-PDF root cause is now proven in private current report source:
+
+- `id="print"` starts disabled;
+- `loadReports()` uses `print.disabled = false`;
+- that identifier resolves to native `window.print`, not the button element;
+- therefore the button never becomes enabled and the existing `onclick="window.print()"` handler is never reached.
+
+The minimal prepared patch changes those two `print.disabled` references to `document.getElementById('print').disabled`. Current evidence does not justify a popup architecture, PDF library, scoring change, or report redesign. Remaining acceptance is: refresh against current live source, deploy `report.html` only through the safe overlay, then human-click Print/Save as PDF and confirm the browser-native print dialog and A4 pagination.
 
 ## 9. Agent/work split and audit routing
 
@@ -272,7 +274,7 @@ For a genuinely unknown complex problem, ChatGPT may perform the audit directly 
 
 ### Copilot / local heavy worker
 
-Preferred for token-heavy or long mechanical audits that can run locally, especially when local environment/network constraints make simultaneous ChatGPT/Codex use impractical. Good examples: large static inventories, repetitive source diffs, call-site enumeration, route/field matrices.
+Preferred for token-heavy or long mechanical audits that can run locally, especially when local environment/network constraints make simultaneous ChatGPT/Codex use impractical. Good examples: large static inventories, repetitive source diffs, call-site enumeration, route/field matrices. If VPN currently prevents Copilot use, do not force that workstream; defer the heavy local inventory or let ChatGPT do only the smaller read-only slices it can handle efficiently.
 
 Copilot findings are evidence/working material; they do not invent research authority.
 
@@ -293,7 +295,7 @@ Codex may audit only when the problem truly remains unknown **and** ChatGPT/Copi
 
 ### Participant-report Codex
 
-Keep isolated to the already narrowed report implementation issue(s); do not reopen scientific payload/scoring when not required. It may inspect/prepare while mainline work is active, but must not concurrently deploy to the same Production project.
+Keep isolated to the already narrowed report implementation issue(s); do not reopen scientific payload/scoring when not required. It may inspect/prepare while mainline work is active, but must not concurrently deploy to the same Production project. The mainline write lane is now free after Admin Slice A closeout, so the report lane may deploy its narrow `report.html` fix after a fresh live-source comparison.
 
 ### Human operator
 
@@ -312,7 +314,7 @@ Owns genuine research/identity authority decisions, approval of Raw corrections,
 | “Just ask staff to redo the form.” | Re-entry is allowed but existing evidence comes first; if truly lost, identify exact fields and support precise structured/JSON recovery. |
 | “System maintenance is still an Admin task because it is ESCALATE.” | No. Action class alone is insufficient; non-staff system-maintenance issues stay in diagnosis/Trace and out of ordinary staff Admin. |
 | “Every Admin row should have an Execute checkbox.” | No. Expose executable controls only when a real safe executor exists for that issue type. |
-| “A successful narrow patch means Admin is done.” | No. Patch acceptance and product-surface acceptance are separate. |
+| “A successful narrow patch means Admin is done.” | No. Slice A is closed; readability Slice B remains. |
 | “MRI Time already has bookings, so use it as MRI authority.” | MRI Time is transitional legacy booking history only; adopt exact bookings non-destructively, reconcile ambiguous rows, then stop routine updates after electronic cutover. |
 | “Contactlist can resolve ambiguous MRI Time identity automatically.” | No. Contactlist may suggest a match but is not participant identity authority. Ambiguous/non-current SID cases require human reconciliation. |
 | “Contactlist MRI note is useless or authoritative.” | Neither: it is a non-authoritative real-world remark/reconciliation signal. |
@@ -322,24 +324,23 @@ Owns genuine research/identity authority decisions, approval of Raw corrections,
 
 ## 11. Current priority order
 
-### P0 — Admin acceptance + quick operational closeouts
+### P0 — daily-operations acceptance
 
-1. Admin slice A: remove non-staff system-maintenance issues from ordinary staff Admin without globally suppressing `ESCALATE`; restrict `执行`/checkbox affordance to implemented in-app actions.
-2. Admin slice B: compact visible staff summaries while retaining exact detail/lineage in Trace/hidden technical evidence.
-3. Participant-report print/save-PDF: narrow private-source inspection/patch; may be prepared in parallel but deploy only when the Apps Script write lane is free.
-4. MRIadmin Patch 0: idempotently adopt only exact-current-identity existing MRI Time bookings into APATHY BOOKED evidence; route ambiguous rows to reconciliation.
-5. Build the Production MRI waiting/status producer and confirmed-booking writeback on top of Patch 0.
+1. Admin Slice B: compact visible staff summaries while retaining exact detail/lineage in Trace/hidden technical evidence.
+2. Participant-report print/save-PDF: deploy the prepared two-line fix against fresh current live source, then human-accept native Print/Save as PDF.
+3. MRIadmin Patch 0: idempotently adopt only exact-current-identity existing MRI Time bookings into APATHY BOOKED evidence; route ambiguous rows to reconciliation.
+4. Build the Production MRI waiting/status producer and confirmed-booking writeback on top of Patch 0.
 
 ### P1 — backend/runtime correctness
 
-6. Stabilize the Step-3 runtime bottleneck without redesigning scientific semantics.
-7. Reconcile Boss diagnosis/color/action presentation and normalize date display separately from scientific-value semantics.
-8. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata; keep Participant ownership defense.
+5. Stabilize the Step-3 runtime bottleneck without redesigning scientific semantics.
+6. Reconcile Boss diagnosis/color/action presentation and normalize date display separately from scientific-value semantics.
+7. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata; keep Participant ownership defense.
 
 ### Later
 
-9. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps, using one shared validation/write domain contract rather than separate form/import semantics.
-10. Optimize Incremental and perform technical materialization/contraction only after correctness and daily operations are stable.
+8. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps, using one shared validation/write domain contract rather than separate form/import semantics.
+9. Optimize Incremental and perform technical materialization/contraction only after correctness and daily operations are stable.
 
 ## 12. Operating rules
 

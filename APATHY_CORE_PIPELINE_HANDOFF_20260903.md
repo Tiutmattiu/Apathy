@@ -165,9 +165,9 @@ Technical lineage columns are useful and should remain available/hidden, not be 
 - MRI-date representation is inconsistent across rows because values may arrive/render as different date/string types. Normalize display representation separately; do not reinterpret or rewrite scientific evidence merely for formatting.
 - `_Candidate_Output_Audit` contains legacy-style aggregate metrics such as linking thousands of Boss blanks to Admin gaps; treat this as an implementation/audit artifact, not current product authority, because the accepted product contract explicitly rejects blank-cell→Admin generation.
 
-### Full Step 3 runtime finding
+### Full Step 3/4 runtime acceptance
 
-The recurrent Full Step-3 Spreadsheet timeout is a runtime/Spreadsheet-I/O/performance-sensitive blocker, not a proven semantic Result regression. The stale persisted Full run was safely cancelled without a committed checkpoint or official Full Boss/Admin publication. Do not reopen scientific semantics or historical migration because of this runtime issue.
+The recurrent pre-Result snapshot timeout is closed in Production. Snapshot capture now uses native sheet cloning instead of range copying plus 90-column width/hidden-state reconstruction on the normal path. The existing Full run then completed Step 3 Result/Medication/Decision, Step 4 Boss/Admin verification, and checkpoint commit. Runner state is `COMPLETE`. The exceptional rollback path still restores values, formatting, widths, hidden columns, frozen panes and gridline state from the cloned backup and verifies fingerprints before cleanup. No scientific or source-data contract changed.
 
 ## 6. Admin interaction/action contract
 

@@ -95,19 +95,18 @@ Technical lineage columns remain useful and should be preserved/hidden rather th
 
 Do not reopen the historical 108-participant migration audit to fix Boss presentation. Obtain the exact current diagnosis source and reconcile current first-break/applicability/publication semantics narrowly.
 
-## FULL STEP 3 — FRESH FAILURE NOW LOCALIZED TO PRE-RESULT SNAPSHOT CAPTURE
+## FULL STEP 3/4 — PRODUCTION PASS
 
-A fresh real Full run reproduced the blocker with a more precise boundary:
+The persisted Full run completed successfully after the rollback-snapshot capture path was changed from range copying plus per-column reconstruction to native sheet cloning:
 
-- Step 1 Event passed with 360 formal payloads, 0 Pipeline Data Loss and 0 unaccounted rows.
-- Step 2 Participant passed with 176 Registry rows, 174 qualified Registry participants, 360 assigned formal events and 0 unassigned events.
-- Step 3 failed before Result/Decision completion with `OUTPUT_SNAPSHOT_CAPTURE_FAILED: Service Spreadsheets timed out ...`.
-- Step 4 did not run.
-- Checkpoint was not committed and this run did not complete an official Full Boss/Admin publication.
+- Step 1 Event remained passed with 360 formal payloads, 0 Pipeline Data Loss and 0 unaccounted rows.
+- Step 2 Participant remained passed with 176 Registry rows, 174 qualified Registry participants, 360 assigned formal events and 0 unassigned events.
+- Step 3 Result/Medication/Decision completed in 57 seconds and passed direct Boss verification.
+- Step 4 Output/Admin completed in 60 seconds and committed the checkpoint.
+- Runner state is `COMPLETE`; the official Full Boss/Admin publication and checkpoint are complete.
+- A subsequent direct Output-only rebuild also completed, confirming current Output/Admin remains runnable.
 
-This is stronger evidence that the immediate blocker is the pre-Result rollback-snapshot Spreadsheet I/O path, not a scientific Result/Decision regression. Current reviewed helper source still creates rollback backups through a generic exact-size allocator that can delete surplus default rows/columns; the existing fast-fix packet now explicitly targets a snapshot-only grow-only/no-shrink allocator.
-
-The failed-stage retry contract already permits retrying the same `RESULT_CORE` stage. After the helper patch is deployed and the persisted run is confirmed still failed at Step 3, the safest acceptance action is **retry Step 3 once**, not rerun Step 1/2. If the same timeout persists after the no-shrink patch, move to the already-identified participant-fingerprint I/O cost as a separate performance task.
+Snapshot capture now uses one native sheet clone per protected surface and keeps the width/hidden-column loop only on the exceptional restore path. No scientific, Raw, Event, Participant, Result, Decision, Boss-schema or checkpoint semantics changed.
 
 ## FRONTEND PAYLOAD HYGIENE
 
@@ -210,14 +209,13 @@ The previously deployed two-line print-button fix can remain; it is no longer su
 
 ## CURRENT MAINLINE
 
-1. Step-3 rollback-snapshot fast fix: snapshot-only grow/no-shrink allocation, then one human Step-3 retry if the failed run state remains retryable.
+1. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
 2. Participant-report PNG batch redesign: numeric range selector, name/phone header, no participant PID exposure, visible bars, separate PNG downloads; bounded packet prepared.
 3. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
 4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
-5. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
-6. Fix frontend route-owned payload hygiene.
-7. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.
-8. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
+5. Fix frontend route-owned payload hygiene.
+6. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.
+7. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
 
 ## OPERATING RULES
 

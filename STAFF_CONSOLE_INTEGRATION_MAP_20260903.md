@@ -1,201 +1,106 @@
 # APATHY Staff Console Integration Map — 2026-09-03
 
-Status: CHATGPT PRE-OP COMPLETE / ARCHITECTURE REFINED BEFORE CODEX
+Status: CHATGPT PRE-OP COMPLETE / CONTINUE PARTIAL CODEX EDIT
 
-Purpose: minimize Codex quota by deciding the integration boundary before private-source edits.
+Purpose: minimize Codex quota. Current receiver source supplied by the user resolves the remaining architecture question.
 
-## 1. Correct placement: private staff surface, not the public questionnaire SPA
+## Current truth
 
-The public GitHub Pages frontend is useful for participant-facing forms and already contains staff-oriented flows, but it is not the correct home for a participant-directory/Admin console.
+Keep the existing public APATHY SPA as the Staff Console shell. Do not create a separate HTMLService console.
 
-Read-only source inspection established:
+The current receiver already has a real authenticated read boundary:
 
-- the public SPA has one `#app` shell and internal flows (`home`, questionnaire flows, Backfill, MRI visit, Clinical, UBSN);
-- its current staff password/gate is client-side UX, not a suitable protection boundary for exposing a searchable participant directory;
-- the only clearly referenced receiver GET action in the public frontend is `latest_moca`; there is no current reusable Participant/Admin directory API exposed by that frontend;
-- therefore adding `staff_search` / `staff_tasks` to the public receiver would create a new sensitive-data API surface merely to support UI consolidation.
+- `requireAdminToken_(params)` checks Script Properties `ADMIN_TOKEN`;
+- authenticated `READ_ACTIONS` already include `latest_moca`, `participant_events`, `participant_lookup`, `participant_detail`;
+- `participant_lookup` / `participant_detail` therefore prove that sensitive staff reads through the existing receiver are already an established architecture, not a new public unauthenticated directory.
 
-The preferred architecture is instead:
+The current public frontend defect is that `receiverGetPhase2_()` calls an undefined `adminTokenPhase2_()`. The old client-side `080` comparison in `staffGate()` is only a UX gate and is not receiver authentication.
 
-> one **private Apps Script Staff Console** in the existing Production Apps Script project, using server-side access / `google.script.run` (or the existing equivalent private HTML-service bridge), with no browser-direct Sheet access and no new public participant-directory endpoint.
+Codex had already begun fixing this when quota expired. Preserve that partial edit if sane; do not restart the architecture.
 
-This still satisfies the user requirement: ordinary staff gets one URL / interface and no routine spreadsheet switching.
+## Authentication fix
 
-The public questionnaire SPA remains the participant/data-entry surface. Staff Console may deep-link to existing data-entry flows when needed, but does not need to become the public questionnaire homepage.
+Do not embed the real admin token in public `config.js` or source.
 
-## 2. Why this is simpler overall
+Use the staff-entered value as the actual receiver token for the current browser session/in-memory state. Validate it against an existing authenticated receiver action before setting `ST.staffUnlocked=true`.
 
-The private Apps Script project already owns or can directly access:
+No separate auth service is required: a harmless authenticated lookup that returns an empty result is sufficient to prove token validity. Wrong token must receive `UNAUTHORIZED` from the existing receiver.
 
-- `_Candidate_Participant_State` for current participant identity/state;
-- `Admin` for current genuine staff tasks;
-- report implementation (`report.html` / report backend) in the same private source family;
-- Output/runner functions if an advanced-maintenance entry is ever required;
-- Spreadsheet service access without creating another public GET API.
+Define the missing token accessor (`adminTokenPhase2_()` or equivalent) from the in-memory staff token so existing `receiverGetPhase2_()` works.
 
-So the Console should be a thin staff product layer over existing projections, not another data authority.
+The old `C.staffPassword`/`080` may remain temporarily unused; do not spend this family cleaning unrelated config.
 
-## 3. Minimum private Staff Console service
+## Existing receiver reads to reuse
 
-No new persistent table.
+Do not duplicate endpoints already present:
 
-Add a small service/backend file rather than adding more unrelated behavior to `helper.js`, e.g. current-convention equivalent of:
+- reuse `participant_lookup` where its current semantics are suitable;
+- reuse `participant_detail` where its current semantics are suitable;
+- keep `latest_moca` untouched.
 
-- `staff_console_backend.js`
-- `staff_console.html`
+However, the Staff Console current-state/task view needs current Participant/Admin projections, not a new scientific engine.
 
-Exact filenames may follow the live project conventions.
+Add only the missing bounded staff operations if required:
 
-### `staffConsoleSearch(q)`
+### `staff_search`
+Use `_Candidate_Participant_State` for current staff discovery/summary when the older `participant_lookup` directory is insufficient for the current participant-state contract. Return bounded fields only: pid, sid, name, phone, pd_hc, registry_qualified. No fuzzy automatic merge.
 
-Read `_Candidate_Participant_State` and return a bounded list:
+### `staff_tasks`
+Read `Admin`. Optional exact PID filter. Return only ordinary staff fields: participant clue/PID, name, problem, next action, location, status, issue key/code, action class. Do not send the full lineage wall by default.
 
-- pid
-- sid
-- name
-- phone
-- pd_hc
-- registry_qualified
+### `staff_participant`
+Exact PID -> current `_Candidate_Participant_State` summary + that PID's active Admin tasks. If there is no task, say `目前沒有待辦`; do not invent `complete`.
 
-Matching is discovery only: PID/SID/phone/name; no fuzzy automatic identity merge.
+Do not create a new persistent table.
 
-### `staffConsoleTasks(pid?)`
+## Frontend target
 
-Read current `Admin` as a staff-work projection and return only ordinary fields by default:
+Continue the existing partial `app.js` Staff Console work:
 
-- participant clue / PID
-- name
-- problem
-- reason summary
-- next action
-- location
-- status
-- issue key/code
-- action class
+- one `工作台` entry instead of the ordinary multi-item staff dropdown;
+- `start('staff_console')` -> `renderStaffConsole()`;
+- one participant search box;
+- three ordinary task entries: `处理待办`, `生成报告`, `MRI预约`;
+- participant workspace with staff-visible name/phone/PID/SID/PD-HC and active tasks;
+- no Step 1/2/3/4, Full, Incremental or rebuild controls in ordinary view.
 
-Do not ship the entire lineage wall into the default UI.
+Do not create another identity/scoring/diagnosis engine in the browser.
 
-### `staffConsoleParticipant(pid)`
+## Report / MRI
 
-Return one current Participant summary plus current active Admin tasks.
+Report: wire the current report launcher/tool only. Do not touch report science; Family 3 remains open.
 
-If no Admin task exists, say `目前沒有待辦` / equivalent. Do not fabricate scientific/form `complete` unless an explicit completion contract exists.
+MRI: reuse the existing same-SPA UBSN flow (`renderUBSNAssistant()`). Do not implement WAITING/BOOKED here; Family 5 remains open.
 
-## 4. Minimum Console UI
+## Expected code boundary
 
-One private staff URL/interface.
+Likely multi-file surgery:
 
-Home should contain only:
+- public `app.js` (partial edit already started);
+- current receiver source to add only missing staff read actions / dispatch entries;
+- `style.css` only if the Console genuinely needs a few layout classes;
+- `index.html` only for cache/version bump if required.
 
-```text
-APATHY 工作台
+Do not expand into Result/Boss/helper/diagnosis.
 
-[ 搜尋：姓名 / 電話 / PID / SID ]
+## Minimum Codex verification
 
-[ 處理待辦 ] <live count>
-[ 生成報告 ]
-[ MRI 預約 ]
-```
+After edit/deploy:
 
-Do not expose Step 1/2/3/4, Full, Incremental, candidate sheets, Boss rebuild, or Apps Script function names in ordinary staff UX.
+1. Console loads;
+2. real token auth works once;
+3. one staff search returns JSON without exposing values in the report;
+4. one task-list call returns without runtime error;
+5. stop.
 
-Participant workspace should show only useful staff context:
+ChatGPT owns Production/read-only acceptance. No fixture matrix, no Full, no Output rebuild, no broad doc review.
 
-- name / phone
-- PID/SID (staff-visible only)
-- PD/HC
-- current active tasks
-- contextual primary actions
+## Global work still open after Family 2
 
-## 5. Admin integration
-
-Use `Admin` as the read model. Do not recreate diagnosis logic in the Console.
-
-Family 2 only needs to make real current Admin work visible and navigable from the Console.
-
-Admin Slice B remains a downstream family for compact summaries + exact hidden detail + contextual deep links. The Console should be designed to consume those improved fields later without another redesign.
-
-## 6. Report integration
-
-Do not create a second report renderer.
-
-Because the report implementation is already in private Apps Script source, the Console should reuse it inside the same staff surface if practical:
-
-- preferred: render/report view within the same Console shell or route;
-- acceptable temporary bridge: a Console action that opens the existing report view inside the same Apps Script deployment/navigation model.
-
-Family 3 still owns the report product closeout: numeric P-range, separate PNGs, privacy, bars, reference group, date/label semantics.
-
-Do not spend Family-2 quota re-auditing report science.
-
-## 7. MRI integration
-
-Family 2 should expose one `MRI 預約` entry from the Console.
-
-The real Participant MRIadmin -> WAITING / PREFERENCE_MISSING / BOOKED producer remains Family 5. Do not fake those states in Family 2.
-
-If the existing UBSN helper is currently reached from the public SPA, the Console may temporarily open that existing operational view; Family 5 will consolidate the final MRI workflow/state into the staff surface.
-
-## 8. Existing public SPA remains useful
-
-Do not delete or broadly refactor the public `app.js` merely because Staff Console moves private.
-
-Existing public/staff-assisted flows remain useful for:
-
-- Screening
-- Stage 2
-- Backfill
-- MRI visit
-- Clinical
-- UBSN helper entry during transition
-
-Later contextual deep links can open the appropriate existing form/section from Staff Console.
-
-## 9. Automatic refresh / maintenance
-
-Do not expose ordinary rebuild controls in Family 2.
-
-No ordinary Staff Console read action should run Full.
-
-When later write workflows are integrated, use the existing participant-scoped Incremental / targeted downstream path rather than asking staff to run rebuild menus.
-
-Advanced maintenance can remain in spreadsheet/menu for now; it does not need to be migrated just to ship the Console shell.
-
-## 10. Codex boundary after this pre-op
-
-This is necessarily a multi-file private-source surgery, so it belongs to Codex under the current role split.
-
-Codex should NOT redo architecture research. It only needs to:
-
-1. fresh-pull current private Apps Script project;
-2. inspect only the current HTML entry/launcher (`doGet` / menu / report launcher) enough to attach one staff-console route without breaking receiver behavior;
-3. add the small Staff Console HTML + backend service;
-4. reuse existing report launcher/view, not report science;
-5. expose MRI entry truthfully without implementing Family 5;
-6. deploy;
-7. perform one minimal smoke check: Console loads and one participant search returns JSON/object data;
-8. stop.
-
-ChatGPT owns read-only Production acceptance afterward.
-
-## 11. Quota rule
-
-If Codex spends meaningful time reading broad handoffs, auditing unrelated source, or running fixture matrices before editing, stop it and return to ChatGPT.
-
-Expected Codex work should be dominated by edit + deploy, not review.
-
-## 12. Global dependency impact
-
-Family 2 = Staff Console shell/home.
-
-Still open afterward:
-
-- Family 3 Report full PNG product
-- Family 4 Admin Slice B + action/deep-link UX
-- Family 5 MRIadmin -> UBSN -> BOOKED
-- Family 6 Frontend payload ownership
-- Family 7 JSON exact-field recovery
-- Family 8 current contamination patterns
-- Family 9 performance/helper/materialization contraction
-
-Do not mark those complete just because their entry cards exist in the Console.
+- Family 3 Report full PNG product;
+- Family 4 Admin Slice B + contextual actions;
+- Family 5 MRIadmin -> UBSN -> BOOKED;
+- Family 6 route-owned frontend payload hygiene;
+- Family 7 JSON exact-field recovery;
+- Family 8 current contamination patterns;
+- Family 9 performance/helper/materialization contraction.

@@ -42,7 +42,7 @@ Raw is preserved by default and must not be rewritten merely to fix downstream i
 - Backfill is formal evidence only for fields it actually evidences.
 - Historical broad data-loss diagnosis is complete; most apparent loss was downstream authority/promotion/publication rather than Raw loss. Do not reopen without new contradictory evidence.
 - A real participant-scoped Incremental path is deployed and reuses the existing scientific engines.
-- Boss remains the 90-column scientific output contract.
+- Boss is the current 89-column scientific output contract after retiring the unused `Sequence_Recorded` projection; MRI sequence evidence remains upstream.
 - Diagnosis/Trace/Admin are explanatory/operations layers, not scientific-data authorities.
 
 ## VERIFIED 2026-09-03 FAST-PATCH CLOSEOUT
@@ -66,7 +66,7 @@ Post-rebuild acceptance:
 - `TRACE_ONLY_NO_ACTION` is 0;
 - `NON_INCLUDED_CONTACT_CLOSEOUT` is 0;
 - non-identity rows with `执行` checkbox validation are 0;
-- Boss remains exactly 90 columns;
+- Boss now remains exactly 89 columns;
 - no Full or participant Incremental was required for this slice.
 
 This closes **Admin admission/actionability Slice A**. It does not close Admin readability. Slice B remains: compact the visible staff task wording while retaining exact item/lineage detail through Trace/hidden technical evidence.
@@ -85,15 +85,15 @@ Admin != developer/system repair queue
 
 Technical lineage columns remain useful and should be preserved/hidden rather than deleted.
 
-## BOSS PRODUCT ACCEPTANCE — SCIENTIFIC PUBLICATION PROVISIONALLY OK, DIAGNOSIS/PRESENTATION OPEN
+## BOSS FAMILY 1 — PRODUCTION ACCEPTED
 
-- Boss retains the 90-column scientific output contract.
-- The targeted recovered MRI date now publishes through the current pipeline.
-- Current positive control: non-applicable PD-specific fields for an HC participant can be rendered grey with `NON_APPLICABLE` / no staff action.
-- Current diagnosis coverage/first-break semantics still require reconciliation on a small set of hostile fixtures; do not infer diagnosis from blankness alone.
-- MRI-date display is not normalized across all rows: date objects/strings can render in different textual formats. Treat this as representation normalization, not a scientific-data rewrite.
-
-Do not reopen the historical 108-participant migration audit to fix Boss presentation. Obtain the exact current diagnosis source and reconcile current first-break/applicability/publication semantics narrowly.
+- Boss has 138 rows and exactly 89 columns. `Sequence_Recorded` was retired after confirming no active Boss consumer; source MRI sequence evidence remains intact upstream.
+- Applicability is enforced before Boss publication. Across 46 current HC rows, PD duration, HY, UPDRS III, Apathy-UPDRS and LEDD have zero non-applicable nonblank leaks.
+- Applicable PD medication evidence remains published: 77 PD rows retain LEDD values, including 51 legitimate numeric-zero LEDD cells.
+- Negative QUIP and QUIP-RS cases keep blank Positive Domains without QA warnings; every current positive case retains its published domain value.
+- QA is sparse and current: 40 formal-source gaps are yellow, 135 review/authority cases orange and 73 downstream breaks red. No QA note is attached to a nonblank value, and stale technical-first-line QA notes are gone.
+- All 118 nonblank Boss MRI dates display as `yyyy-mm-dd`; Raw/source evidence was not rewritten or reinterpreted.
+- Output/Admin postwrite verification passed with 27 Admin rows. No Full rebuild was used for this family.
 
 ## FULL STEP 3/4 — PRODUCTION PASS
 
@@ -209,13 +209,12 @@ The previously deployed two-line print-button fix can remain; it is no longer su
 
 ## CURRENT MAINLINE
 
-1. Reconcile Boss diagnosis/color/action presentation and normalize date display without changing scientific values.
-2. Participant-report PNG batch redesign: numeric range selector, name/phone header, no participant PID exposure, visible bars, separate PNG downloads; bounded packet prepared.
-3. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
-4. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
-5. Fix frontend route-owned payload hygiene.
-6. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.
-7. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
+1. Participant-report PNG batch redesign: numeric range selector, name/phone header, no participant PID exposure, visible bars, separate PNG downloads; bounded packet prepared.
+2. Admin acceptance Slice B: compact visible Stage 2/Clinical wording while preserving complete exact detail in hidden technical evidence; bounded implementation packet prepared.
+3. MRIadmin Patch 0: adopt only unambiguous existing MRI Time bookings into durable APATHY BOOKED evidence; reconcile ambiguous rows without changing legacy rows. Then implement Participant-state -> Admin/UBSN waiting producer and booking writeback.
+4. Fix frontend route-owned payload hygiene.
+5. Add structured JSON recovery + contextual deep links for genuine exact-field source gaps.
+6. Optimize Incremental / technical contraction only after correctness and daily operations are stable.
 
 ## OPERATING RULES
 

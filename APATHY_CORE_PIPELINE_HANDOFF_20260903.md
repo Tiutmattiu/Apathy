@@ -140,7 +140,7 @@ Admin Slice A is deployed and Production-verified:
 - `TRACE_ONLY_NO_ACTION` is 0;
 - `NON_INCLUDED_CONTACT_CLOSEOUT` is 0;
 - non-identity rows with `执行` checkbox validation are 0;
-- Boss remains exactly 90 columns.
+- Boss now remains exactly 89 columns after the verified retirement of the unused `Sequence_Recorded` projection.
 
 This closes admission/actionability Slice A. Admin readability remains open: exact-item detail is still too verbose for ordinary staff use and should be compacted in Slice B while preserving Trace/lineage detail.
 
@@ -156,18 +156,20 @@ Admin != developer/system repair queue
 
 Technical lineage columns are useful and should remain available/hidden, not be deleted.
 
-### Boss acceptance finding
+### Boss Family 1 Production acceptance
 
-- Boss retains the 90-column contract.
-- Targeted recovered evidence can now publish through the current pipeline.
-- Applicability handling has at least one current positive control where a non-applicable blank is grey and explicitly no-action.
-- Diagnosis/first-break coverage is not yet product-accepted across all current blank fields; reconcile the exact current diagnosis source against current Participant/Result evidence on a small hostile fixture set rather than rerunning the historical migration audit.
-- MRI-date representation is inconsistent across rows because values may arrive/render as different date/string types. Normalize display representation separately; do not reinterpret or rewrite scientific evidence merely for formatting.
-- `_Candidate_Output_Audit` contains legacy-style aggregate metrics such as linking thousands of Boss blanks to Admin gaps; treat this as an implementation/audit artifact, not current product authority, because the accepted product contract explicitly rejects blank-cell→Admin generation.
+- Boss contains 138 rows and exactly 89 columns. `Sequence_Recorded` had no active Boss consumer and was retired; MRI sequence evidence remains available in upstream evidence/state.
+- Boss projection now applies PD/medication applicability before publishing PD duration, HY, UPDRS III, Apathy-UPDRS and LEDD. All 46 current HC rows have zero non-applicable nonblank leaks. Applicable PD output remains intact: 77 rows retain LEDD evidence and 51 legitimate numeric-zero LEDD cells remain zero.
+- QUIP and QUIP-RS negative cases with positive flag 0 treat blank Positive Domains as expected and receive no warning. All current positive cases retain real domain values.
+- QA clears stale APATHY notes/backgrounds before applying current findings to data rows only. Current semantic notes: 40 source gaps (yellow), 135 review/authority cases (orange), 73 downstream breaks (red); no QA note is attached to a nonblank value and no stale technical-first-line note remains.
+- Human-facing QA note titles are `缺资料｜需要补资料`, `待人工审核`, `身份待确认`, or `系统断点｜不要重填`; technical codes remain below the first line.
+- All 118 nonblank MRI dates display as `yyyy-mm-dd`; this is Boss-only display normalization and does not rewrite Raw or source evidence.
+- Direct Result/Decision-to-Boss rebuild and Output/Admin verification both passed in Production. Output verified 138 Boss rows, 89 columns, unique/legal PIDs and 27 complete Admin rows. Full was not run.
+- `_Candidate_Output_Audit` remains comparison evidence rather than product authority; the accepted product contract still rejects arbitrary blank-cell-to-Admin generation.
 
 ### Full Step 3/4 runtime acceptance
 
-The recurrent pre-Result snapshot timeout is closed in Production. Snapshot capture now uses native sheet cloning instead of range copying plus 90-column width/hidden-state reconstruction on the normal path. The existing Full run then completed Step 3 Result/Medication/Decision, Step 4 Boss/Admin verification, and checkpoint commit. Runner state is `COMPLETE`. The exceptional rollback path still restores values, formatting, widths, hidden columns, frozen panes and gridline state from the cloned backup and verifies fingerprints before cleanup. No scientific or source-data contract changed.
+The recurrent pre-Result snapshot timeout is closed in Production. Snapshot capture now uses native sheet cloning instead of range copying plus per-column width/hidden-state reconstruction on the normal path. The existing Full run then completed Step 3 Result/Medication/Decision, Step 4 Boss/Admin verification, and checkpoint commit. Runner state is `COMPLETE`. The exceptional rollback path still restores values, formatting, widths, hidden columns, frozen panes and gridline state from the cloned backup and verifies fingerprints before cleanup. No scientific or source-data contract changed.
 
 ## 6. Admin interaction/action contract
 
@@ -334,8 +336,7 @@ Owns genuine research/identity authority decisions, approval of Raw corrections,
 ### P1 — backend/runtime correctness
 
 5. Stabilize the Step-3 runtime bottleneck without redesigning scientific semantics.
-6. Reconcile Boss diagnosis/color/action presentation and normalize date display separately from scientific-value semantics.
-7. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata; keep Participant ownership defense.
+6. Fix frontend payload hygiene so each route emits only owned/applicable evidence plus shared identity/metadata; keep Participant ownership defense.
 
 ### Later
 

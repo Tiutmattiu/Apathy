@@ -4,11 +4,11 @@ Purpose: durable global roadmap so active workstreams and side branches are not 
 
 Current operating model:
 - ChatGPT = sheepdog / read-only diagnosis / integration mapping / acceptance / sequencing.
-- Codex = surgeon / private-source edit / deploy / minimum private-runtime smoke check.
+- Codex = surgeon / multi-file private-source edit / deploy / minimum private-runtime smoke check.
 - Human = mechanical UI actions only when unavoidable.
 - Copilot = not used for now.
 
-Quota rule: `CODEX_QUOTA_EFFICIENCY_PROTOCOL_20260903.md` is active. Codex should spend most of its quota editing/deploying, not rereading broad docs, re-auditing known facts, or duplicating ChatGPT Production acceptance.
+Quota rule: `CODEX_QUOTA_EFFICIENCY_PROTOCOL_20260903.md` is active. Codex should spend most quota editing/deploying, not rereading broad docs, re-auditing known facts, or duplicating ChatGPT acceptance.
 
 ## COMPLETED / DO NOT REOPEN WITHOUT NEW EVIDENCE
 
@@ -24,30 +24,29 @@ Quota rule: `CODEX_QUOTA_EFFICIENCY_PROTOCOL_20260903.md` is active. Codex shoul
 
 ### Unified APATHY Staff Console
 
-ChatGPT read-only pre-op/integration mapping is complete.
+ChatGPT pre-op/integration mapping is complete and refined in `STAFF_CONSOLE_INTEGRATION_MAP_20260903.md`.
 
-Read: `STAFF_CONSOLE_INTEGRATION_MAP_20260903.md`.
+Current architecture decision:
 
-Key implementation finding: reuse the existing public APATHY single-page frontend (`index.html` + `app.js`) as the one staff shell. Do **not** create another standalone Staff Console web app.
+- ordinary staff gets one **private Apps Script Staff Console**;
+- do not expose searchable participant/Admin data through the public questionnaire SPA just to centralize UI;
+- do not create a new data authority/table;
+- use current `_Candidate_Participant_State` + `Admin` directly through a thin private service;
+- reuse existing private report implementation and existing MRI/UBSN entry rather than duplicate engines;
+- public questionnaire SPA remains the participant/data-entry surface and later receives contextual deep links from the Console;
+- normal staff never sees Step 1/2/3/4, Full, Incremental, Boss rebuild, candidate sheets or helper functions.
 
-Current frontend already has:
-- `home()` / `start(flow)` / `staffGate()` SPA routing;
-- staff flows for Screening, Backfill, MRI visit, Clinical and UBSN;
-- receiver GET/POST bridge;
-- `renderUBSNAssistant()` inside the same interface.
+Expected bounded implementation:
+- private `staff_console.html` (or live-project equivalent);
+- small `staff_console_backend` service;
+- one minimal attachment point in current Apps Script HTML/menu/doGet launcher;
+- participant search + participant workspace + live task count/list;
+- `生成報告` entry reusing current report view;
+- `MRI 預約` entry reusing current operational view honestly;
+- no new persistent table;
+- no helper.js dumping-ground expansion.
 
-Family-2 surgical target:
-- replace ordinary staff dropdown with one `工作台` entry;
-- add `staff_console` flow;
-- add bounded receiver reads: `staff_search`, `staff_tasks`, `staff_participant`;
-- use current `_Candidate_Participant_State` and Admin as read models; no new persistent table;
-- participant workspace shows truthful current summary/tasks;
-- wire the existing report launcher/tool without duplicating report scoring;
-- wire current UBSN/MRI entry internally;
-- do not expose pipeline/rebuild buttons in ordinary staff UX;
-- keep helper out of this unless absolutely necessary.
-
-Codex should do only edit/deploy/minimal smoke. ChatGPT owns post-deploy data/UX acceptance.
+Codex is used only because this is necessarily multi-file/private-source work. Codex should do edit/deploy/one smoke check; ChatGPT owns read-only acceptance.
 
 ## FOLLOWING FEATURE FAMILIES
 
@@ -62,7 +61,7 @@ Codex should do only edit/deploy/minimal smoke. ChatGPT owns post-deploy data/UX
 - remove unjustified coarse labels if no accepted threshold contract;
 - risk adjustment remains TBD unless accepted mapping exists;
 - real HC + PD acceptance;
-- live under the Staff Console rather than as a remembered standalone URL.
+- live under Staff Console rather than as a remembered standalone URL.
 
 ### Family 4 — Admin Slice B + action UX
 - compact visible task summaries;

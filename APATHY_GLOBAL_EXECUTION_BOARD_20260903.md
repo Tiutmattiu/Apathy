@@ -3,14 +3,14 @@
 Purpose: durable global roadmap so active workstreams and side branches are not forgotten while one family is being implemented.
 
 Current operating model:
-- ChatGPT = sheepdog / read-only diagnosis / integration mapping / acceptance / sequencing.
-- Codex = surgeon / multi-file private-source edit / deploy / minimum private-runtime smoke check.
-- Human = mechanical UI actions only when unavoidable.
+- ChatGPT = sheepdog / read-only diagnosis / integration mapping / acceptance / sequencing / single-file implementation when practical.
+- Codex = surgeon only for genuinely multi-file/private-source edits that are not practical for ChatGPT + human commit.
+- Human = commit/test/mechanical UI actions when needed.
 - Copilot = not used for now.
 
-Quota rule: `CODEX_QUOTA_EFFICIENCY_PROTOCOL_20260903.md` is active. Codex should spend most quota editing/deploying, not rereading broad docs, re-auditing known facts, or duplicating ChatGPT acceptance.
+Quota rule: do not spend Codex quota on read-only inspection, repeated review, broad re-audits, or work ChatGPT can prepare directly.
 
-## COMPLETED / DO NOT REOPEN WITHOUT NEW EVIDENCE
+## COMPLETED / DO NOT REOPEN WITHOUT NEW CURRENT EVIDENCE
 
 - Historical 108-participant Boss forensic audit.
 - Six exact historical source-gap recoveries.
@@ -18,100 +18,59 @@ Quota rule: `CODEX_QUOTA_EFFICIENCY_PROTOCOL_20260903.md` is active. Codex shoul
 - Admin Slice A false system-maintenance admission cleanup.
 - Step-3 snapshot/runtime blocker; later Full completed through Step 4 with checkpoint committed.
 - Boss Family 1: applicability-aware PD-only publication, HC placeholder pollution fixed, legitimate zeros preserved, QUIP/QUIP-RS expected blanks fixed, sparse QA, `Sequence_Recorded` retired, Boss=89 columns, MRI date display normalized.
-- Broad claim that BACKEND_REPAIR means data needs rescue: disproven; always compare current Participant/Result/Boss.
+- Broad historical/current contamination investigation and the associated mechanism-level cleanup already performed in prior work. Do not reopen as a standing family; investigate only a new concrete regression.
+- Structured JSON/exact-field recovery work previously implemented in the project. Do not recreate it as a new product family; only repair a concrete current regression or connect existing recovery into the Staff Console when needed.
+- Performance/materialization/helper contraction work previously performed. Do not schedule another broad contraction campaign. Only optimize a concrete current hot path with evidence.
+
+### Regression watch only — not an active family
+
+Current public `app.js` still contains the broad shared `ST.answers` serializer pattern associated with the old payload-ownership defect. Treat this as a possible regression/current-source contradiction, not a new roadmap family. Do not reopen broad payload-hygiene work unless current behavior/evidence shows the defect is active; if active, repair the narrow regression in place.
 
 ## ACTIVE NOW — FAMILY 2
 
 ### Unified APATHY Staff Console
 
-ChatGPT pre-op/integration mapping is complete and refined in `STAFF_CONSOLE_INTEGRATION_MAP_20260903.md`.
+Current target: one ordinary staff workbench with minimal buttons and no routine spreadsheet/tab navigation.
 
-Current architecture decision:
+Latest concrete implementation truth:
+- existing receiver already has real `ADMIN_TOKEN` authentication;
+- existing authenticated read actions already include `participant_lookup`, `participant_detail`, `participant_events`, and `latest_moca`;
+- public `app.js` receiver GET helper currently references missing `adminTokenPhase2_()`;
+- old public `080` check is only a client-side UX gate and must not be treated as receiver authentication;
+- therefore continue the existing public-SPA Staff Console path rather than rebuilding a second private HTMLService console;
+- add only the missing bounded Admin-task read to receiver, then compose participant search/detail/tasks in the existing SPA;
+- no new identity model or persistent table;
+- no pipeline/rebuild buttons in ordinary staff UI.
 
-- ordinary staff gets one **private Apps Script Staff Console**;
-- do not expose searchable participant/Admin data through the public questionnaire SPA just to centralize UI;
-- do not create a new data authority/table;
-- use current `_Candidate_Participant_State` + `Admin` directly through a thin private service;
-- reuse existing private report implementation and existing MRI/UBSN entry rather than duplicate engines;
-- public questionnaire SPA remains the participant/data-entry surface and later receives contextual deep links from the Console;
-- normal staff never sees Step 1/2/3/4, Full, Incremental, Boss rebuild, candidate sheets or helper functions.
+Implementation ownership for the current two-file slice:
+- ChatGPT prepares `app.js` + `receiver.js` final edits;
+- user commits and tests;
+- Codex is not needed unless a third/private source dependency is proven.
 
-Expected bounded implementation:
-- private `staff_console.html` (or live-project equivalent);
-- small `staff_console_backend` service;
-- one minimal attachment point in current Apps Script HTML/menu/doGet launcher;
-- participant search + participant workspace + live task count/list;
-- `生成報告` entry reusing current report view;
-- `MRI 預約` entry reusing current operational view honestly;
-- no new persistent table;
-- no helper.js dumping-ground expansion.
+## NEXT PRODUCT WORK AFTER STAFF CONSOLE
 
-Codex is used only because this is necessarily multi-file/private-source work. Codex should do edit/deploy/one smoke check; ChatGPT owns read-only acceptance.
+### Participant report product
+- numeric P-range;
+- separate PNG per participant;
+- no participant-visible PID/SID;
+- name + phone;
+- visible bars;
+- correct report date/label semantics;
+- current reference-group verification.
 
-## FOLLOWING FEATURE FAMILIES
+### Admin ordinary-staff UX
+- compact visible summaries;
+- exact detail preserved behind details/Trace;
+- contextual actions from Staff Console;
+- no fake Execute controls.
 
-### Family 3 — Participant report complete product
-- numeric P-range input;
-- one separate PNG per participant;
-- no PID/SID participant-facing exposure;
-- name + phone header;
-- no MRI date masquerading as generic assessment date;
-- visible comparative bars;
-- verify actual reference group;
-- remove unjustified coarse labels if no accepted threshold contract;
-- risk adjustment remains TBD unless accepted mapping exists;
-- real HC + PD acceptance;
-- live under Staff Console rather than as a remembered standalone URL.
-
-### Family 4 — Admin Slice B + action UX
-- compact visible task summaries;
-- exact missing-item detail preserved in Trace/hidden evidence;
-- no fake Execute on ordinary missing-data tasks;
-- contextual participant/form/section actions;
-- recovery entry point;
-- ordinary workflow through Staff Console, not direct Admin-sheet use.
-
-### Family 5 — MRIadmin -> operational state -> UBSN -> BOOKED
-- adopt exact legacy MRI Time bookings idempotently;
-- ambiguous rows -> reconciliation;
+### MRIadmin -> UBSN -> BOOKED
+- reconcile/adopt exact legacy bookings;
 - WAITING / PREFERENCE_MISSING / BOOKED / NOT_ACTIONABLE;
-- preserve submitted scheduling windows;
-- Admin + UBSN waiting producer;
-- human final booking/CAPTCHA;
-- durable APATHY BOOKED writeback;
-- stop routine MRI Time duplication.
-
-### Family 6 — Frontend payload ownership + route-safe deep links
-- stop shared `ST.answers` / global-derived leakage;
-- route-owned applicable payload fields;
-- valid zero preserved;
-- contextual participant/form/section navigation;
-- historical Raw untouched.
-
-### Family 7 — Structured JSON exact-field recovery
-- partial JSON recovery;
-- validate participant/form/field/type/range/conflicts;
-- preview exact changes;
-- preserve stronger evidence;
-- audited recovery/backfill path;
-- targeted refresh;
-- Staff Console/Admin integration.
-
-### Family 8 — Current-data contamination patterns
-- only current concrete default/promotion anomalies;
-- formal evidence -> Participant -> Result -> Boss;
-- mechanism-wide fixes only;
-- no broad 108-person re-audit.
-
-### Family 9 — Performance / materialization / helper contraction
-Only after ordinary workflow correctness stabilizes:
-- repeated full-sheet reads;
-- huge fingerprints/materializations;
-- oversized technical sheets on hot paths;
-- dead code/output projections;
-- helper responsibility contraction;
-- no architecture rewrite for aesthetics;
-- never delete Raw.
+- same waiting state for Admin + UBSN;
+- human CAPTCHA/final confirmation;
+- durable booking writeback;
+- remove routine MRI Time duplication.
 
 ## Human-interface destination
 
@@ -121,10 +80,8 @@ ONE APATHY STAFF CONSOLE
   -> process tasks
   -> generate reports
   -> handle MRI
-  -> contextual recovery/data completion
+  -> contextual recovery/data completion using existing recovery capability
 ```
-
-Spreadsheet tabs and pipeline rebuild controls become backend/advanced-maintenance surfaces, not routine staff interfaces.
 
 ## Preservation rules
 

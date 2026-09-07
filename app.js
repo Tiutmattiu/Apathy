@@ -7,7 +7,7 @@ const FRONTEND_RELEASE='FE-CLEAN-2026-08-21-R8.12-DIRECT-FETCH-COMPLETE';
 
 if(!B||!C) throw new Error('Question Bank或Config未載入。');
 
-const ST={flow:'home',step:0,answers:{},error:'',submission:uuid(),sectionOpen:false,meds:[],submitting:false,staffUnlocked:false,staffToken:''};
+const ST={flow:'home',step:0,answers:{},error:'',submission:uuid(),sectionOpen:false,meds:[],submitting:false,staffUnlocked:false};
 
 const q=(s,p=document)=>p.querySelector(s), qa=(s,p=document)=>Array.from(p.querySelectorAll(s));
 
@@ -31,11 +31,11 @@ function nowHK(){return new Date().toLocaleString('zh-HK',{hour12:false})}
 
 function appShell(){ROOT.innerHTML='';ROOT.append(el('div','topline'));const m=el('main','app');ROOT.append(m);return m}
 
-function toolbar(title,homeButton=true){const b=el('header','toolbar');b.append(el('h1','',title));const a=el('div','tool-actions');if(ST.flow!=='staff_console')a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'));if(!['home','staff_console'].includes(ST.flow))a.append(btn('清除此裝置資料',confirmClear,'linkbtn'));if(homeButton)a.append(btn(ST.staffUnlocked?'返回工作台':'返回首頁',()=>ST.staffUnlocked?start('staff_console'):home(),'linkbtn'));b.append(a);return b}
+function toolbar(title,homeButton=true){const b=el('header','toolbar');b.append(el('h1','',title));const a=el('div','tool-actions');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'));if(ST.flow!=='home')a.append(btn('清除此裝置資料',confirmClear,'linkbtn'));if(homeButton)a.append(btn('返回首頁',home,'linkbtn'));b.append(a);return b}
 
-function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);t.lastChild.append(btn('工作台',()=>staffGate('staff_console','APATHY 工作台'),'linkbtn'));m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
+function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
 
-function start(flow){ST.flow=flow;ST.error='';if(flow==='staff_console')return ST.staffUnlocked?renderStaffConsole():staffGate(flow,'APATHY 工作台');loadDraft(flow);if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='ubsn')return renderUBSNAssistant();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
+function start(flow){ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='ubsn')return renderUBSNAssistant();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
 
 async function ubsnFetch(path,options){const r=await fetch(String(C.ubsnHelperUrl||'http://127.0.0.1:8765')+path,options);const data=await r.json();if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);return data}
 
@@ -47,49 +47,7 @@ async function renderUBSNAssistant(){
  await refresh()
 }
 
-function adminTokenPhase2_(){return String(ST.staffToken||'')}
-
-function staffGate(flow,title){
- if(ST.staffUnlocked&&adminTokenPhase2_())return start(flow);
- const m=appShell();m.append(toolbar('工作人員登入'));const s=el('section','staff-password');
- s.append(el('h2','',title),el('p','hint','請輸入工作人員存取碼。此存取碼只保存在本頁記憶體，重新整理後需要重新登入。'));
- const i=el('input','text');i.type='password';i.placeholder='工作人員存取碼';const e=el('div','error');
- const go=async()=>{const token=String(i.value||'').trim();if(!token){e.textContent='請輸入存取碼。';return}ST.staffToken=token;e.textContent='正在驗證……';try{await receiverGetPhase2_('staff_auth',{});ST.staffUnlocked=true;e.textContent='';start(flow)}catch(err){ST.staffToken='';ST.staffUnlocked=false;e.textContent='存取碼不正確或後端暫時無法連線。'}};
- i.onkeydown=x=>{if(x.key==='Enter'){x.preventDefault();go()}};s.append(i,e,btn('進入',go,'primary'));m.append(s);setTimeout(()=>i.focus(),20)
-}
-
-async function renderStaffConsole(){
- ST.flow='staff_console';const m=appShell();const t=toolbar('APATHY 工作台',false);t.lastChild.append(btn('退出工作台',()=>{ST.staffUnlocked=false;ST.staffToken='';home()},'linkbtn'));m.append(t);
- const s=el('section','summary'),searchBox=el('div','field'),input=el('input','text'),searchStatus=el('div','hint'),results=el('div'),taskArea=el('div'),reportStatus=el('div','hint');
- s.append(el('h2','section-title','工作台'),el('p','hint','搜尋參與者，或直接處理目前待辦。'));
- searchBox.append(el('label','','搜尋：姓名 / 電話 / PID / SID'));input.placeholder='例如 P188、S108、電話或姓名';searchBox.append(input);s.append(searchBox);
- const searchButton=btn('搜尋',async()=>{await staffConsoleSearch_(input.value,searchStatus,results)},'primary');input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchButton.click()}};s.append(searchButton,searchStatus,results);
- const actions=el('div','direct'),taskButton=btn('處理待辦',async()=>{await staffConsoleLoadTasks_(taskButton,taskArea)},'primary'),reportButton=btn('生成報告',()=>staffConsoleOpenReport_(reportStatus),'choice'),mriButton=btn('MRI預約',()=>start('ubsn'),'choice');actions.append(taskButton,reportButton,mriButton);s.append(el('h3','','常用工作'),actions,reportStatus,taskArea);m.append(s);
- try{const o=await receiverGetPhase2_('staff_tasks',{});taskButton.textContent=`處理待辦 (${Number(o.count||0)})`}catch(e){taskButton.textContent='處理待辦（載入失敗）'}
-}
-
-async function staffConsoleSearch_(query,status,container){
- const text=String(query||'').trim();container.innerHTML='';if(!text){status.textContent='請輸入搜尋內容。';return}status.textContent='搜尋中……';
- try{const o=await receiverGetPhase2_('staff_search',{q:text}),rows=o.matches||[];status.textContent=rows.length?`找到 ${rows.length} 位`:'沒有找到符合的參與者。';rows.forEach(p=>{const card=el('div','result');card.append(el('strong','',p.name||p.pid||'未命名參與者'),el('p','',`${p.pid||''}${p.sid?' ｜ '+p.sid:''}${p.pd_hc?' ｜ '+p.pd_hc:''}${p.phone?' ｜ '+p.phone:''}`),btn('查看',()=>renderStaffParticipant_(p.pid),'primary'));container.append(card)})}catch(e){status.textContent='搜尋失敗：'+e.message}
-}
-
-async function staffConsoleLoadTasks_(button,container,pid){
- container.innerHTML='';container.append(el('p','hint','正在載入待辦……'));
- try{const o=await receiverGetPhase2_('staff_tasks',pid?{pid}:{}) ;button&&(button.textContent=`處理待辦 (${Number(o.count||0)})`);renderStaffTaskCards_(container,o.tasks||[])}catch(e){container.innerHTML='';container.append(el('div','error','待辦載入失敗：'+e.message))}
-}
-
-function renderStaffTaskCards_(container,tasks){
- container.innerHTML='';if(!tasks.length){container.append(el('div','result good','目前沒有待辦。'));return}tasks.forEach(task=>{const card=el('div','result');card.append(el('strong','',task.problem||'待處理事項'));if(task.name||task.pid||task.clue)card.append(el('p','',`${task.name||''}${task.pid?' ｜ '+task.pid:task.clue?' ｜ '+task.clue:''}`));if(task.next_action)card.append(el('p','',`下一步：${task.next_action}`));if(task.location)card.append(el('p','hint',`位置：${task.location}`));if(task.status)card.append(el('p','hint',`狀態：${task.status}`));if(task.pid&&/^[PY]\d{3,6}$/.test(task.pid))card.append(btn('查看Participant',()=>renderStaffParticipant_(task.pid),'linkbtn'));container.append(card)})
-}
-
-async function renderStaffParticipant_(pid){
- ST.flow='staff_console';const m=appShell();m.append(toolbar('Participant'));const s=el('section','summary'),body=el('div');s.append(el('h2','section-title','Participant'),body);m.append(s);body.append(el('p','hint','正在載入……'));
- try{const o=await receiverGetPhase2_('staff_participant',{pid});body.innerHTML='';if(!o.found){body.append(el('div','error','找不到此Participant。'));return}const p=o.participant||{};body.append(el('h3','',p.name||p.pid||'Participant'),el('p','',`${p.pid||''}${p.sid?' ｜ '+p.sid:''}${p.pd_hc?' ｜ '+p.pd_hc:''}${p.phone?' ｜ '+p.phone:''}`));const actions=el('div','direct');actions.append(btn('MRI預約',()=>start('ubsn'),'choice'),btn('生成報告',()=>staffConsoleOpenReport_(body),'choice'));[['backfill','歷史資料補錄'],['mri_visit','MRI到訪記錄'],...(p.pd_hc==='PD'?[['clinical','PD臨床資料']]:[])].forEach(([flow,label])=>actions.append(btn(label,()=>{start(flow);set('p_id',p.pid);set('s_id',p.sid||'');set('participant_name',p.name||'');if(flow==='backfill')backfill();else identityGate(label)},'choice')));body.append(actions,el('h3','','目前待辦'));const tasks=el('div');body.append(tasks);renderStaffTaskCards_(tasks,o.tasks||[])}catch(e){body.innerHTML='';body.append(el('div','error','Participant載入失敗：'+e.message))}
-}
-
-async function staffConsoleOpenReport_(status){
- const target=el('div','hint');status.append(target);try{const o=await receiverGetPhase2_('staff_config',{}),url=new URL(o.report_url||C.reportUrl||'');if(url.protocol!=='https:')throw new Error('報告網址無效');const link=el('a','primary',o.report_in_sheet?'開啟研究表格':'開啟報告工具');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';target.append(link);if(o.report_in_sheet)target.append(el('p','','在表格的 APATHY 選單選擇參與者報告。'))}catch(e){target.textContent='無法開啟報告工具：'+e.message}
-}
+function staffGate(flow,title){if(ST.staffUnlocked)return start(flow);const m=appShell();m.append(toolbar('工作人員登入'));const s=el('section','staff-password');s.append(el('h2','',title),el('p','hint','請輸入工作人員密碼。'));const i=el('input','text');i.type='password';i.inputMode='numeric';i.placeholder='工作人員密碼';const e=el('div','error');const go=()=>{if(i.value===String(C.staffPassword||'080')){ST.staffUnlocked=true;start(flow)}else e.textContent='密碼不正確。'};i.onkeydown=x=>{if(x.key==='Enter')go()};s.append(i,e,btn('進入',go,'primary'));m.append(s);setTimeout(()=>i.focus(),20)}
 
 function normalizeId(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
 
@@ -1143,8 +1101,7 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
  s.append(el('h3','','Medication'),btn('＋新增藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',times:'',units:''});saveDraft();renderClinical()},'primary'));renderMedicationRows(s);renderLeddPanel(s);if(!ST.meds.length)s.append(el('div','result','尚未加入藥物；LEDD暫不可計算。'));
  const total=updrsTotal();s.append(el('div','result',`UPDRS完成：${total.count}/33${total.count===33?'；總分：'+total.total:'/132'}`));const sb=el('div','submitbar');sb.append(btn('正式提交Clinical資料',()=>validateClinical(s),'primary'));s.append(sb);m.append(s)}
 
-const requestedFlow=new URLSearchParams(location.search).get('flow'),requestedStaff=C.staffFlows.find(x=>x[0]===requestedFlow);
-if(requestedFlow==='staff_console')staffGate('staff_console','APATHY 工作台');else if(requestedStaff)staffGate(requestedStaff[0],requestedStaff[1]);else home();
+home();
 
 const SUBMISSION_TRANSPORT_BUILD='2026-08-21-direct-fetch-v7';
 async function receiverPostDirectFinal_(submissionPayload){

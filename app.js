@@ -1333,6 +1333,861 @@ function handleGlobalKeydown(e){
   if(ST.flow==='stage2'&&pg.kind==='iorScenario'&&n>=1&&n<=5){const id=String(pg.scenario).padStart(2,'0'),missing=['frequency','conviction','distress'].find(k=>!present(`ior${id}_${k}`))||'distress';e.preventDefault();set(`ior${id}_${missing}`,n);ST.error='';return player()}
   if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);ST.error='';player()}}
 }
+/* =========================================================
+   APATHY GUIDED SELF-ASSESSMENT
+   2026-09-10
+   Hidden entry: ?flow=guided
+   Dry-run entry: ?flow=guided&dry=1
 
+   Existing home / Stage 2 / staff Screening are left intact.
+   Guided UI feels continuous, but backend submissions stay split:
+   1) screening_core: identity + HADS
+   2) screening_core: remaining participant-safe screening (no MoCA)
+   3) stage_2_questionnaires: Stage 2
+   ========================================================= */
+
+const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V1';
+
+const _apathyStartBase=start;
+const _apathyPlayerBase=player;
+const _apathyPlayerPagesBase=playerPages;
+const _apathyRenderPageBase=renderPage;
+const _apathyPageCompleteBase=pageComplete;
+const _apathyManualNextBase=manualNext;
+const _apathyRenderScaleBase=renderScale;
+
+function guidedParam_(name){
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function guidedDryRun_(){
+  return guidedParam_('dry')==='1';
+}
+
+function guidedUnique_(items){
+  return Array.from(new Set((items||[]).filter(Boolean)));
+}
+
+function guidedIdentityKeys_(){
+  return [
+    'p_id','s_id',
+    'participant_name',
+    'dob_d','dob_m','dob_y','date_of_birth','age_years',
+    'gender',
+    'contact_phone',
+    'pd_status_self_report','pd_hc_status',
+    'education_level','education_years'
+  ];
+}
+
+function guidedHadsKeys_(){
+  return guidedUnique_(
+    guidedIdentityKeys_()
+      .concat(B.hads.items.map(x=>x.name))
+      .concat([
+        'hads_anxiety_total',
+        'hads_depression_total',
+        'hads_complete',
+        'hads_anxiety_review',
+        'hads_depression_review',
+        'hads_mood_review'
+      ])
+  );
+}
+
+function guidedScreeningKeys_(){
+  const keys=guidedIdentityKeys_().slice();
+
+  quipKeys().forEach(k=>keys.push(k));
+  ['quip_group_0_confirmed','quip_group_1_confirmed','quip_group_2_confirmed'].forEach(k=>keys.push(k));
+  (B.quip.additionalItems||[]).forEach(x=>{
+    if(x.name)keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+
+  (B.quiprs.matrixCells||[]).forEach(x=>keys.push(x.name));
+  keys.push(
+    'quiprs_section_confirmed',
+    'quiprs_a_total','quiprs_b_total','quiprs_c_total','quiprs_d_total',
+    'quiprs_e1_total','quiprs_e2_total','quiprs_f_total',
+    'quiprs_e_total','quiprs_ad_total','quiprs_af_total',
+    'quiprs_complete','quiprs_cutoff_domains','quiprs_icd_exclusion_flag'
+  );
+
+  (B.sas.items||[]).forEach(x=>keys.push(x.name));
+  keys.push('sas_total','sas_complete','sas_apathy_flag');
+
+  if(B.rbdsq&&B.rbdsq.sourceField)keys.push(B.rbdsq.sourceField);
+  (B.rbdsq.items||[]).forEach(x=>{
+    keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+  (B.rbdsq.diseaseItems||[]).forEach(x=>{
+    keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+  keys.push(
+    'rbdsq_section_confirmed','rbq10_none_confirmed',
+    'rbdsq_total','rbdsq_complete','rbdsq_cutoff_value','rbdsq_positive_flag'
+  );
+
+  (C.mriSafety||[]).forEach(x=>keys.push(x[0]));
+  keys.push('mri_safety_none_confirmed','mri_safety_detail');
+
+  return guidedUnique_(keys);
+}
+
+function guidedStage2Keys_(){
+  const keys=guidedIdentityKeys_().slice();
+
+  (B.gas.items||[]).forEach(x=>keys.push(x.name));
+  keys.push(
+    'gas_cognitive_social_total','gas_emotion_reaction_total',
+    'gas_autonomy_total','gas_total','gas_complete','gas_apathy_flag'
+  );
+
+  (B.ami18.items||[]).forEach(x=>keys.push(x.name));
+  keys.push(
+    'ami_social_mean','ami_emotional_mean',
+    'ami_behavioural_mean','ami_overall_mean','ami_complete'
+  );
+
+  (B.cdars.items||[]).forEach(x=>keys.push(x.name));
+  (B.cdars.domains||[]).forEach(d=>{
+    keys.push(d.example1Field||`cdars_${d.key}_example_1`);
+    keys.push(d.example2Field||`cdars_${d.key}_example_2`);
+    keys.push(`cdars_${d.key}_total`);
+  });
+  keys.push('cdars_overall_total','cdars_complete');
+
+  (B.rgpts.items||[]).forEach(x=>keys.push(x.name));
+  keys.push(
+    'rgpts_reference_total','rgpts_persecutory_total',
+    'rgpts_total','rgpts_complete','rgpts_review'
+  );
+
+  (B.pdi21.items||[]).forEach(x=>{
+    keys.push(x.yesField);
+    Object.values(x.dimensions||{}).forEach(d=>keys.push(d.name));
+  });
+  keys.push(
+    'pdi_yes_count','pdi_distress_total','pdi_preoccupation_total',
+    'pdi_conviction_total','pdi_total_severity','pdi_total',
+    'pdi_complete','pdi_page1_confirmed','pdi_page2_confirmed'
+  );
+
+  for(let i=1;i<=15;i++){
+    const n=String(i).padStart(2,'0');
+    ['frequency','conviction','distress'].forEach(k=>keys.push(`ior${n}_${k}`));
+  }
+  ['frequency','conviction','distress'].forEach(k=>{
+    keys.push(`ior_${k}_total`);
+    keys.push(`ior_${k}_ge3_count`);
+  });
+  keys.push('ior_overall_total','ior_complete');
+
+  return guidedUnique_(keys);
+}
+
+function guidedSubmissionId_(phase){
+  const key=`_guided_${phase}_submission_id`;
+  let id=val(key);
+  if(!id){
+    id=uuid();
+    ST.answers[key]=id;
+    saveDraft();
+  }
+  return String(id);
+}
+
+function guidedPayloadSubset_(phase,event,allowedKeys){
+  calculateAllDerived();
+
+  /* Build through the current canonical payload function, then KEEP only
+     the envelope plus fields owned by this guided checkpoint. */
+  const source=payload('screening',event,'submitted');
+  const out={};
+
+  [
+    'schema_version',
+    'frontend_release',
+    'receiver_contract_expected',
+    'form_type',
+    'event_type',
+    'workflow_stage',
+    'record_status',
+    'p_id',
+    's_id',
+    'visit_number',
+    'participant_id',
+    'submitted_at',
+    'contact_phone_normalized'
+  ].forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(source,k))out[k]=source[k];
+  });
+
+  (allowedKeys||[]).forEach(k=>{
+    if(
+      Object.prototype.hasOwnProperty.call(source,k) &&
+      source[k]!==undefined
+    ){
+      out[k]=source[k];
+    }
+  });
+
+  out.submission_id=guidedSubmissionId_(phase);
+  out.workflow_part=`guided_${phase}`;
+  out.data_source='participant_remote';
+
+  /* Identity remains the existing receiver-compatible identity contract. */
+  const phone=String(out.contact_phone_normalized||out.contact_phone||'')
+    .replace(/\D/g,'')
+    .replace(/^852(?=\d{8}$)/,'');
+  out.participant_id=
+    out.p_id||
+    out.s_id||
+    (phone.length===8?`PHONE-${phone}`:`TEMP-${out.submission_id}`);
+
+  return out;
+}
+
+async function guidedPostPhase_(phase,event,keys){
+  const snapshot=guidedPayloadSubset_(phase,event,keys);
+
+  if(guidedDryRun_()){
+    console.info('GUIDED_DRY_RUN',phase,snapshot);
+    await new Promise(resolve=>setTimeout(resolve,250));
+    return{
+      ok:true,
+      dry_run:true,
+      sheet:event==='stage_2_questionnaires'?'stage2_raw':'screening_raw'
+    };
+  }
+
+  return receiverPostDirectFinal_(snapshot);
+}
+
+function guidedFriendlyStage2Pages_(){
+  const names={
+    'GAS':'日常動機與感受',
+    'AMI-18':'活動與興趣',
+    'C-DARS':'日常活動體驗',
+    'R-GPTS':'想法與感受',
+    'PDI-21':'日常想法',
+    'IOR':'社交情境'
+  };
+
+  return stage2Pages()
+    .filter((pg,index)=>index>=2&&pg.kind!=='stage2Summary')
+    .map(pg=>Object.assign({},pg,{
+      section:names[pg.section]||pg.section
+    }));
+}
+
+function guidedPages_(){
+  const p=[];
+
+  p.push(inputPage('基本資料','姓名','participant_name','請輸入姓名'));
+  p.push({section:'基本資料',kind:'dob',label:'出生日期'});
+  p.push(choicePage('基本資料','性別','gender',[['M','男'],['F','女']]));
+  p.push(choicePage(
+    '基本資料',
+    '您是否已被醫生診斷為帕金森病？',
+    'pd_status_self_report',
+    [[1,'是'],[0,'否']]
+  ));
+  p.push(inputPage('基本資料','聯絡電話','contact_phone','例：9123 4567'));
+  p.push({
+    section:'基本資料',
+    kind:'guidedEducation',
+    label:'教育程度及實際受教育年數'
+  });
+
+  p.push({
+    section:'情緒問卷',
+    kind:'scaleIntro',
+    label:'HADS作答說明',
+    introTitle:'情緒問卷',
+    introText:'請回想過去一星期的感受。每題只選擇一個最符合實際情況的答案；沒有正確或錯誤答案。'
+  });
+  addScalePages(p,'情緒問卷',B.hads.items);
+  p.push({
+    section:'情緒問卷',
+    kind:'guidedHadsGate',
+    label:'完成情緒問卷'
+  });
+
+  p.push({
+    section:'行為與衝動',
+    kind:'guidedInfo',
+    label:'開始下一部分前',
+    title:'為甚麼會問這些問題？',
+    body:'這組問題用來了解衝動控制或重複行為的變化。有些帕金遜病患者在使用多巴胺能藥物後，可能會發現自己比以前更難控制某些行為，例如進食、購物、賭博、性衝動，或反覆進行某些活動。這些問題沒有對錯，也不代表您一定有問題。請按照自己的真實情況回答。'
+  });
+  p.push({section:'行為與衝動',kind:'quipGroup',group:0,label:'相關行為'});
+  p.push({section:'行為與衝動',kind:'quipGroup',group:1,label:'帕金遜病藥物使用'});
+  p.push({section:'行為與衝動',kind:'quipGroup',group:2,label:'其他重複或過度行為'});
+
+  p.push({
+    section:'行為頻率',
+    kind:'guidedInfo',
+    label:'下一組問題',
+    title:'接下來會再問得仔細一些',
+    body:'前一部分主要了解這些行為有沒有出現。接下來的問題會進一步了解這些行為出現的頻率和程度，幫助研究人員判斷是否需要進一步了解。請按照最近的實際情況回答。'
+  });
+  p.push({section:'行為頻率',kind:'quipRsMatrix',label:'行為頻率問卷'});
+
+  addScalePages(
+    p,
+    '日常動機',
+    B.sas.items.map((x,n)=>({
+      name:x.name,
+      fullLabel:x.fullLabel,
+      options:x.responseOptions.map((o,j)=>({
+        label:o.label,
+        value:B.sas.scoring.displayOrderByItem[n+1][j]
+      }))
+    }))
+  );
+
+  p.push({section:'睡眠情況',kind:'rbMain',label:'睡眠情況'});
+  p.push({section:'睡眠情況',kind:'rbQ10',label:B.rbdsq.diseaseQuestion});
+  p.push({section:'MRI安全資料',kind:'mriSafety',label:'MRI安全資料'});
+
+  p.push({
+    section:'第一部分完成',
+    kind:'guidedScreeningCheckpoint',
+    label:'第一部分已完成'
+  });
+
+  guidedFriendlyStage2Pages_().forEach(pg=>p.push(pg));
+
+  p.push({
+    section:'完成',
+    kind:'guidedFinal',
+    label:'問卷完成'
+  });
+
+  return p;
+}
+
+function guidedSpeak_(text,status){
+  if(!('speechSynthesis' in window)){
+    status.textContent='此瀏覽器不支援語音播放，請閱讀上方文字。';
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(String(text||''));
+  u.lang='zh-HK';
+  u.rate=0.92;
+  status.textContent='正在播放語音解釋……';
+  u.onend=()=>{status.textContent='語音播放完成。'};
+  u.onerror=()=>{status.textContent='語音播放失敗，請閱讀上方文字。'};
+  window.speechSynthesis.speak(u);
+}
+
+function guidedRenderInfo_(pg,a){
+  const box=el('div','plain-block');
+  box.append(
+    el('h3','',pg.title||'說明'),
+    el('p','',pg.body||'')
+  );
+  const status=el('p','hint','');
+  box.append(
+    btn('🔊 聽語音解釋',()=>guidedSpeak_(pg.body,status),'secondary'),
+    status
+  );
+  a.append(box);
+}
+
+function guidedRenderEducation_(a){
+  const g=el('div','direct');
+
+  C.education.forEach(o=>{
+    g.append(btn(
+      o[1],
+      ()=>{
+        const changed=val('education_level')!==o[0];
+        set('education_level',o[0]);
+        if(changed&&!present('education_years')&&o[2]!==null){
+          set('education_years',o[2]);
+        }
+        player();
+      },
+      'choice'+(val('education_level')===o[0]?' selected':'')
+    ));
+  });
+
+  a.append(g);
+
+  if(present('education_level')){
+    const f=el('div','field');
+    f.append(el('label','','實際受教育年數'));
+    const i=el('input','text');
+    i.type='number';
+    i.min='0';
+    i.max='40';
+    i.inputMode='numeric';
+    i.placeholder='請輸入實際年數';
+    i.value=val('education_years')??'';
+    i.oninput=()=>set(
+      'education_years',
+      i.value===''?null:Number(i.value)
+    );
+    f.append(
+      i,
+      el('p','hint','請填寫實際接受全日制教育的年數。')
+    );
+    a.append(f);
+  }
+}
+
+function guidedResetDryRun_(){
+  currentFlowDraftKeys_('guided').forEach(k=>localStorage.removeItem(k));
+  resetFlow();
+  ST.flow='guided';
+  ST.error='';
+  player();
+}
+
+function guidedRenderStopped_(){
+  const m=appShell();
+  const t=el('header','toolbar');
+  t.append(el('h1','','研究問卷'));
+  m.append(t);
+
+  const s=el('section','summary');
+  s.append(
+    el('h2','','這部分已完成'),
+    el(
+      'div',
+      'result warn',
+      '根據本研究的篩選規則，我們需要先由研究人員跟您進一步確認，因此暫時不需要繼續填寫後面的問卷。'
+    ),
+    el(
+      'p',
+      '',
+      '請聯絡邀請您參與研究的研究人員。研究人員會再向您說明下一步。'
+    )
+  );
+
+  if(guidedDryRun_()){
+    s.append(
+      el('p','hint','目前是測試模式，以上資料沒有送到後端。'),
+      btn('重新開始測試',guidedResetDryRun_,'secondary')
+    );
+  }
+
+  m.append(s);
+}
+
+async function guidedSubmitHads_(button,status){
+  calculateAllDerived();
+
+  if(Number(val('hads_complete'))!==1){
+    status.className='error';
+    status.textContent='情緒問卷尚未完整，請返回完成所有題目。';
+    return;
+  }
+
+  button.disabled=true;
+  status.className='hint';
+  status.textContent=guidedDryRun_()?'測試提交中……':'正在安全保存這部分答案……';
+
+  try{
+    await guidedPostPhase_('hads','screening_core',guidedHadsKeys_());
+
+    ST.answers._guided_hads_submitted=1;
+
+    if(Number(val('hads_mood_review'))===1){
+      ST.answers._guided_hads_blocked=1;
+      ST.answers._guided_hads_passed=0;
+      saveDraft();
+      return guidedRenderStopped_();
+    }
+
+    ST.answers._guided_hads_passed=1;
+    ST.answers._guided_hads_blocked=0;
+    ST.step++;
+    ST.error='';
+    saveDraft();
+    player();
+  }catch(err){
+    button.disabled=false;
+    status.className='error';
+    status.textContent='暫時未能保存資料，請保持此頁開啟並重試。'+
+      (err&&err.message?' '+err.message:'');
+  }
+}
+
+function guidedRenderHadsGate_(a){
+  if(Number(val('_guided_hads_blocked'))===1){
+    return guidedRenderStopped_();
+  }
+
+  if(Number(val('_guided_hads_passed'))===1){
+    a.append(
+      el('div','result good','情緒問卷已安全保存，可以繼續下一部分。')
+    );
+    a.append(btn('繼續',()=>{
+      ST.step++;
+      saveDraft();
+      player();
+    },'primary'));
+    return;
+  }
+
+  const status=el('div','hint','');
+  const go=btn(
+    '提交這部分並繼續',
+    ()=>guidedSubmitHads_(go,status),
+    'primary'
+  );
+
+  a.append(
+    el(
+      'p',
+      '',
+      '您已完成情緒問卷。請先安全提交這部分答案，系統會告訴您是否需要繼續。'
+    ),
+    go,
+    status
+  );
+}
+
+async function guidedSubmitScreening_(button,status){
+  button.disabled=true;
+  status.className='hint';
+  status.textContent=guidedDryRun_()?'測試提交中……':'正在安全保存第一部分……';
+
+  try{
+    await guidedPostPhase_(
+      'screening_self',
+      'screening_core',
+      guidedScreeningKeys_()
+    );
+    ST.answers._guided_screening_submitted=1;
+    ST.step++;
+    ST.error='';
+    saveDraft();
+    player();
+  }catch(err){
+    button.disabled=false;
+    status.className='error';
+    status.textContent='暫時未能保存資料，請保持此頁開啟並重試。'+
+      (err&&err.message?' '+err.message:'');
+  }
+}
+
+function guidedRenderScreeningCheckpoint_(a){
+  if(Number(val('_guided_screening_submitted'))===1){
+    a.append(el('div','result good','第一部分已安全保存。'));
+    a.append(btn('開始下一部分',()=>{
+      ST.step++;
+      saveDraft();
+      player();
+    },'primary'));
+    return;
+  }
+
+  const status=el('div','hint','');
+  const go=btn(
+    '保存第一部分並繼續',
+    ()=>guidedSubmitScreening_(go,status),
+    'primary'
+  );
+
+  a.append(
+    el(
+      'p',
+      '',
+      '第一部分已完成。這次保存不包括 MoCA；MoCA 會由研究人員另行處理。'
+    ),
+    go,
+    status
+  );
+}
+
+async function guidedSubmitStage2_(button,status){
+  button.disabled=true;
+  status.className='hint';
+  status.textContent=guidedDryRun_()?'測試提交中……':'正在提交最後一部分……';
+
+  try{
+    await guidedPostPhase_(
+      'stage2',
+      'stage_2_questionnaires',
+      guidedStage2Keys_()
+    );
+    ST.answers._guided_stage2_submitted=1;
+    ST.error='';
+    saveDraft();
+    player();
+  }catch(err){
+    button.disabled=false;
+    status.className='error';
+    status.textContent='暫時未能提交，您的答案仍保存在此裝置。請重試。'+
+      (err&&err.message?' '+err.message:'');
+  }
+}
+
+function guidedRenderFinal_(a){
+  if(Number(val('_guided_stage2_submitted'))===1){
+    a.append(
+      el('div','result good','所有需要您自行填寫的問卷已完成並安全提交。'),
+      el('p','','謝謝您的參與。MoCA 或其他需要研究人員完成的部分會由研究團隊另行安排。')
+    );
+
+    if(guidedDryRun_()){
+      a.append(
+        el('p','hint','測試模式：沒有資料送到後端。'),
+        btn('重新開始測試',guidedResetDryRun_,'secondary')
+      );
+    }
+    return;
+  }
+
+  const status=el('div','hint','');
+  const go=btn(
+    '提交全部剩餘問卷',
+    ()=>guidedSubmitStage2_(go,status),
+    'primary'
+  );
+
+  a.append(
+    el('p','','您已完成所有需要自行填寫的題目。'),
+    go,
+    status
+  );
+}
+
+function guidedMinStep_(pages){
+  const hadsGate=pages.findIndex(x=>x.kind==='guidedHadsGate');
+  const screeningGate=pages.findIndex(x=>x.kind==='guidedScreeningCheckpoint');
+
+  if(Number(val('_guided_screening_submitted'))===1){
+    return Math.min(pages.length-1,screeningGate+1);
+  }
+
+  if(Number(val('_guided_hads_submitted'))===1){
+    return Math.min(pages.length-1,hadsGate+1);
+  }
+
+  return 0;
+}
+
+function guidedOwnNavigation_(pg){
+  return [
+    'guidedHadsGate',
+    'guidedScreeningCheckpoint',
+    'guidedFinal'
+  ].includes(pg.kind);
+}
+
+function guidedPlayer_(){
+  if(Number(val('_guided_hads_blocked'))===1){
+    return guidedRenderStopped_();
+  }
+
+  const pages=guidedPages_();
+  if(!pages.length)return;
+
+  const hadsGate=pages.findIndex(x=>x.kind==='guidedHadsGate');
+  const screeningGate=pages.findIndex(x=>x.kind==='guidedScreeningCheckpoint');
+  const finalIndex=pages.findIndex(x=>x.kind==='guidedFinal');
+
+  if(
+    Number(val('_guided_hads_passed'))!==1 &&
+    ST.step>hadsGate
+  ){
+    ST.step=hadsGate;
+  }
+
+  if(
+    Number(val('_guided_hads_passed'))===1 &&
+    Number(val('_guided_screening_submitted'))!==1 &&
+    ST.step>screeningGate
+  ){
+    ST.step=screeningGate;
+  }
+
+  if(Number(val('_guided_stage2_submitted'))===1){
+    ST.step=finalIndex;
+  }
+
+  const minStep=guidedMinStep_(pages);
+  if(ST.step<minStep)ST.step=minStep;
+  if(ST.step<0)ST.step=0;
+  if(ST.step>=pages.length)ST.step=pages.length-1;
+
+  const pg=pages[ST.step];
+  const m=appShell();
+
+  const t=el('header','toolbar');
+  t.append(el('h1','','研究問卷'));
+  m.append(t);
+
+  const h=el('div','flow-head');
+  h.append(el('h2','',pg.section));
+  const pct=Math.round((ST.step/Math.max(1,pages.length-1))*100);
+  h.append(el('div','progress',`整體進度：約 ${pct}%`));
+  m.append(h);
+
+  if(guidedDryRun_()){
+    m.append(el('div','result warn','測試模式：不會把資料送到後端。'));
+  }
+
+  const qbox=el('section','question');
+  if(pg.context)qbox.append(el('div','context',pg.context));
+  qbox.append(el('h3','',pg.label));
+  renderPage(pg,qbox);
+  if(ST.error)qbox.append(el('div','error',ST.error));
+  m.append(qbox);
+
+  if(!guidedOwnNavigation_(pg)){
+    const nav=el('div','nav');
+
+    if(ST.step>minStep){
+      nav.append(btn('返回上一個',()=>{
+        ST.step--;
+        ST.error='';
+        saveDraft();
+        player();
+      },'secondary'));
+    }
+
+    nav.append(btn(
+      ST.step===pages.length-1?'完成':'下一題',
+      ()=>manualNext(pg,pages),
+      'next'
+    ));
+
+    m.append(nav);
+  }
+
+  setTimeout(()=>{
+    const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');
+    if(first)first.focus({preventScroll:true});
+  },30);
+}
+
+/* ----- Bind guided mode into the existing app without changing old flows. ----- */
+
+playerPages=function(){
+  if(ST.flow==='guided')return guidedPages_();
+  return _apathyPlayerPagesBase();
+};
+
+renderPage=function(pg,a){
+  if(ST.flow==='guided'){
+    if(pg.kind==='guidedInfo')return guidedRenderInfo_(pg,a);
+    if(pg.kind==='guidedEducation')return guidedRenderEducation_(a);
+    if(pg.kind==='guidedHadsGate')return guidedRenderHadsGate_(a);
+    if(pg.kind==='guidedScreeningCheckpoint')return guidedRenderScreeningCheckpoint_(a);
+    if(pg.kind==='guidedFinal')return guidedRenderFinal_(a);
+  }
+  return _apathyRenderPageBase(pg,a);
+};
+
+pageComplete=function(pg){
+  if(ST.flow==='guided'){
+    if(pg.kind==='guidedInfo')return true;
+    if(pg.kind==='guidedEducation'){
+      return present('education_level')&&present('education_years');
+    }
+    if(pg.kind==='guidedHadsGate'){
+      return Number(val('_guided_hads_submitted'))===1;
+    }
+    if(pg.kind==='guidedScreeningCheckpoint'){
+      return Number(val('_guided_screening_submitted'))===1;
+    }
+    if(pg.kind==='guidedFinal'){
+      return Number(val('_guided_stage2_submitted'))===1;
+    }
+  }
+  return _apathyPageCompleteBase(pg);
+};
+
+renderScale=function(pg,a){
+  if(ST.flow!=='guided')return _apathyRenderScaleBase(pg,a);
+
+  const opts=pg.options||[];
+  const g=el('div',opts.length===5?'scale-buttons':'options');
+
+  opts.forEach((o,n)=>{
+    const keyText=opts.length===5?String(o.value):String(n+1);
+    const b=btn(
+      '',
+      ()=>{
+        set(pg.key,o.value);
+        ST.error='';
+        b.classList.add('selected');
+        b.style.backgroundColor='#145a96';
+        b.style.borderColor='#145a96';
+        b.style.color='#ffffff';
+        setTimeout(autoNext,220);
+      },
+      (opts.length===5?'':'choice')+
+        (sameValue(val(pg.key),o.value)?' selected':'')
+    );
+
+    b.dataset.answerKey=pg.key;
+    b.dataset.answerValue=String(o.value);
+    b.dataset.answerPosition=String(n+1);
+    b.append(
+      el('strong','',keyText),
+      document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,''))
+    );
+    g.append(b);
+  });
+
+  a.append(g);
+};
+
+manualNext=function(pg,pages){
+  if(ST.flow!=='guided')return _apathyManualNextBase(pg,pages);
+
+  if(!pageComplete(pg)){
+    ST.error='此題尚未完成，請先完成目前內容。';
+    return player();
+  }
+
+  if(pg.kind==='quipGroup'){
+    completeQuipGroup(pg);
+    if(val(`quip_group_${pg.group}_confirmed`)!=='none'){
+      set(`quip_group_${pg.group}_confirmed`,'selected');
+    }
+  }
+
+  if(ST.step<pages.length-1){
+    ST.step++;
+    ST.error='';
+    saveDraft();
+    return player();
+  }
+};
+
+player=function(){
+  if(ST.flow==='guided')return guidedPlayer_();
+  return _apathyPlayerBase();
+};
+
+start=function(flow){
+  if(flow!=='guided')return _apathyStartBase(flow);
+
+  ST.flow='guided';
+  loadDraft('guided');
+  ST.error='';
+  return player();
+};
+
+/* The existing home() has already rendered by this point.
+   Only the special invited URL replaces it with guided mode. */
+if(guidedParam_('flow')==='guided'){
+  start('guided');
+}
+
+ 
 document.addEventListener('keydown',handleGlobalKeydown);
 })();

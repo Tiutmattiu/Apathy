@@ -1334,8 +1334,8 @@ function handleGlobalKeydown(e){
   if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);ST.error='';player()}}
 }
 
- /* =========================================================
-   APATHY GUIDED SELF-ASSESSMENT — V2
+/* =========================================================
+   APATHY GUIDED SELF-ASSESSMENT — V3
    2026-09-10
    Hidden participant entry: ?flow=guided
    Safe dry-run entry:       ?flow=guided&dry=1
@@ -1351,7 +1351,7 @@ function handleGlobalKeydown(e){
    - Each checkpoint uses a field whitelist. It does NOT submit all ST.answers.
    ========================================================= */
 
-const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V2-ELDER-MOBILE';
+const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V3-ELDER-MOBILE-NOSKIP';
 
 const _apathyStartBase=start;
 const _apathyPlayerBase=player;
@@ -1443,6 +1443,28 @@ function guidedInjectStyles_(){
 
 function guidedScrollTop_(){
   requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}));
+}
+
+
+/* Prevent rapid key presses from skipping pages.
+   Guided mode also has to coexist with the legacy global key handler. */
+function guidedTransitionPending_(){
+  return Boolean(ST._guidedTransitionPending);
+}
+
+function guidedScheduleForward_(delay=150){
+  if(guidedTransitionPending_())return false;
+  ST._guidedTransitionPending=true;
+  setTimeout(()=>{
+    ST._guidedTransitionPending=false;
+    guidedGoForward_();
+  },delay);
+  return true;
+}
+
+function guidedConsumeKey_(e){
+  e.preventDefault();
+  e.stopImmediatePropagation();
 }
 
 function guidedLatestStep_(){
@@ -1669,6 +1691,101 @@ async function guidedPostPhase_(phase,event,keys){
   }
 
   return receiverPostDirectFinal_(snapshot);
+}
+
+
+/* Guided backup contains actual participant-entered fields + local progress.
+   It does NOT call calculateAllDerived(), so untouched later questionnaires
+   do not appear as misleading complete=0/default output fields. */
+function guidedBackupAnswerKeys_(){
+  const keys=guidedIdentityKeys_().slice();
+
+  (B.hads.items||[]).forEach(x=>keys.push(x.name));
+
+  quipKeys().forEach(k=>keys.push(k));
+  (B.quip.additionalItems||[]).forEach(x=>{
+    if(x.name)keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+
+  (B.quiprs.matrixCells||[]).forEach(x=>keys.push(x.name));
+  (B.sas.items||[]).forEach(x=>keys.push(x.name));
+
+  if(B.rbdsq&&B.rbdsq.sourceField)keys.push(B.rbdsq.sourceField);
+  (B.rbdsq.items||[]).forEach(x=>{
+    keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+  (B.rbdsq.diseaseItems||[]).forEach(x=>{
+    keys.push(x.name);
+    if(x.detailField)keys.push(x.detailField);
+  });
+
+  (C.mriSafety||[]).forEach(x=>keys.push(x[0]));
+  keys.push('mri_safety_detail');
+
+  (B.gas.items||[]).forEach(x=>keys.push(x.name));
+  (B.ami18.items||[]).forEach(x=>keys.push(x.name));
+
+  (B.cdars.items||[]).forEach(x=>keys.push(x.name));
+  (B.cdars.domains||[]).forEach(d=>{
+    keys.push(d.example1Field||`cdars_${d.key}_example_1`);
+    keys.push(d.example2Field||`cdars_${d.key}_example_2`);
+  });
+
+  (B.rgpts.items||[]).forEach(x=>keys.push(x.name));
+
+  (B.pdi21.items||[]).forEach(x=>{
+    keys.push(x.yesField);
+    Object.values(x.dimensions||{}).forEach(d=>keys.push(d.name));
+  });
+
+  for(let i=1;i<=15;i++){
+    const n=String(i).padStart(2,'0');
+    ['frequency','conviction','distress'].forEach(k=>keys.push(`ior${n}_${k}`));
+  }
+
+  return guidedUnique_(keys);
+}
+
+function guidedDownloadBackup_(){
+  const answers={};
+
+  guidedBackupAnswerKeys_().forEach(k=>{
+    const v=ST.answers[k];
+    if(v!==undefined&&v!==null&&v!=='')answers[k]=v;
+  });
+
+  const localState={
+    workflow:ST.flow,
+    downloaded_at:new Date().toISOString(),
+    guided_build:GUIDED_FLOW_BUILD,
+    question_bank_version:B.version||'',
+    step:ST.step,
+    latest_step:guidedLatestStep_(),
+    submission:ST.submission,
+    checkpoints:{
+      hads_submitted:Number(val('_guided_hads_submitted'))===1,
+      hads_passed:Number(val('_guided_hads_passed'))===1,
+      hads_blocked:Number(val('_guided_hads_blocked'))===1,
+      screening_submitted:Number(val('_guided_screening_submitted'))===1,
+      stage2_submitted:Number(val('_guided_stage2_submitted'))===1
+    },
+    answers
+  };
+
+  const blob=new Blob(
+    [JSON.stringify(localState,null,2)],
+    {type:'application/json;charset=utf-8'}
+  );
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`apathy_guided_backup_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 /* ---------- Plain-language / voice guidance ---------- */
@@ -2070,6 +2187,26 @@ function guidedRenderVoiceInfo_(pg,a){
 }
 
 
+
+function guidedRenderInput_(pg,a){
+  const i=el('input','text');
+  i.placeholder=pg.placeholder||'';
+  i.value=val(pg.key)??'';
+  if(pg.key==='contact_phone')i.inputMode='tel';
+
+  i.oninput=()=>set(pg.key,i.value);
+
+  i.onkeydown=e=>{
+    if(e.key==='Enter'&&String(i.value||'').trim()){
+      e.preventDefault();
+      e.stopPropagation();
+      guidedScheduleForward_(100);
+    }
+  };
+
+  a.append(i);
+}
+
 function guidedRenderChoice_(pg,a){
   const g=el('div','direct');
   a.append(el('p','guided-scale-hint',`電腦可按 1–${pg.options.length}。`));
@@ -2083,7 +2220,7 @@ function guidedRenderChoice_(pg,a){
           if(Number(o[0])===0)set('pd_duration_years_self_report',null);
         }
         ST.error='';
-        setTimeout(guidedGoForward_,150);
+        guidedScheduleForward_(150);
       },
       'choice'+(sameValue(val(pg.key),o[0])?' selected':'')
     ));
@@ -2112,7 +2249,8 @@ function guidedRenderPdYears_(a){
   i.onkeydown=e=>{
     if(e.key==='Enter'&&i.value!==''){
       e.preventDefault();
-      guidedGoForward_();
+      e.stopPropagation();
+      guidedScheduleForward_(100);
     }
   };
   f.append(i);
@@ -2122,13 +2260,17 @@ function guidedRenderPdYears_(a){
 function guidedRenderEducation_(a){
   const g=el('div','direct');
 
-  C.education.forEach((o,index)=>{
+  C.education.forEach(o=>{
+    const yearNote=o[2]===null
+      ? '請在下方填實際年數'
+      : `系統先填約 ${o[2]} 年；下方可改成實際年數`;
+
     g.append(btn(
-      `${index+1}　${o[1]}`,
+      `${o[1]}　｜　${yearNote}`,
       ()=>{
         const changed=val('education_level')!==o[0];
         set('education_level',o[0]);
-        if(changed&&!present('education_years')&&o[2]!==null){
+        if(changed&&o[2]!==null){
           set('education_years',o[2]);
         }
         player();
@@ -2138,7 +2280,11 @@ function guidedRenderEducation_(a){
   });
 
   a.append(
-    el('p','guided-scale-hint','電腦可按數字鍵選教育程度。'),
+    el(
+      'p',
+      'guided-scale-hint',
+      '請先選最高教育程度，再核對下方「實際受教育年數」。電腦可按鍵盤 1–9 快速選擇；1–9 只是快捷鍵，不是受教育年數。'
+    ),
     g
   );
 
@@ -2152,19 +2298,23 @@ function guidedRenderEducation_(a){
     i.max='40';
     i.placeholder='例如 12';
     i.value=val('education_years')??'';
+
     i.oninput=()=>set(
       'education_years',
       i.value===''?null:Number(i.value)
     );
+
     i.onkeydown=e=>{
       if(e.key==='Enter'&&i.value!==''){
         e.preventDefault();
-        guidedGoForward_();
+        e.stopPropagation();
+        guidedScheduleForward_(100);
       }
     };
+
     f.append(
       i,
-      el('p','guided-mini-hint','可輸入大約年數。完成後按 Enter 或「下一題」。')
+      el('p','guided-mini-hint','這一格才是受教育年數。完成後按 Enter 或「下一題」。')
     );
     a.append(f);
   }
@@ -2211,7 +2361,7 @@ function guidedRenderQuipStem_(pg,a){
       set(key,value);
       ST.error='';
       if(keys.every(present)){
-        setTimeout(guidedGoForward_,180);
+        guidedScheduleForward_(180);
       }else{
         player();
       }
@@ -2240,10 +2390,10 @@ function guidedRenderQuipBinary_(pg,a){
     ST.error='';
     if(value===0){
       if(item.detailField)set(item.detailField,null);
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     if(!item.detailField){
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     player();
   };
@@ -2414,10 +2564,10 @@ function guidedRenderRbBinary_(pg,a){
     ST.error='';
     if(value===0){
       if(item.detailField)set(item.detailField,null);
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     if(!item.detailField){
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     player();
   };
@@ -2477,7 +2627,7 @@ function guidedRenderMriSafety_(pg,a){
     guidedUpdateMriNoneFlag_();
     ST.error='';
     if(value===0){
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     player();
   };
@@ -2561,7 +2711,7 @@ function guidedRenderIorDimension_(pg,a){
       ()=>{
         set(key,value);
         ST.error='';
-        setTimeout(guidedGoForward_,180);
+        guidedScheduleForward_(180);
       },
       val(key)===value?'selected':''
     ));
@@ -2584,7 +2734,7 @@ function guidedRenderPdiItem_(pg,a){
     setPdiAnswer(x,value);
     ST.error='';
     if(value===0){
-      return setTimeout(guidedGoForward_,180);
+      return guidedScheduleForward_(180);
     }
     player();
   };
@@ -2616,7 +2766,7 @@ function guidedRenderPdiItem_(pg,a){
           set(key,value);
           ST.error='';
           const done=dims.every(d=>present(x.dimensions[d[0]].name));
-          if(done)setTimeout(guidedGoForward_,180);
+          if(done)guidedScheduleForward_(180);
           else player();
         },
         val(key)===value?'selected':''
@@ -2642,7 +2792,7 @@ function guidedRenderScale_(pg,a){
       ()=>{
         set(pg.key,o.value);
         ST.error='';
-        setTimeout(guidedGoForward_,180);
+        guidedScheduleForward_(180);
       },
       (opts.length===5?'':'choice')+
         (sameValue(val(pg.key),o.value)?' selected':'')
@@ -2748,7 +2898,7 @@ async function guidedAutoSubmitHads_(status){
     ST.answers._guided_hads_blocked=0;
     saveDraft();
     ST._guidedHadsSubmitting=false;
-    setTimeout(guidedGoForward_,350);
+    guidedScheduleForward_(350);
   }catch(err){
     ST._guidedHadsSubmitting=false;
     status.className='error';
@@ -2761,18 +2911,85 @@ async function guidedAutoSubmitHads_(status){
   }
 }
 
+
+function guidedFirstMissingHadsStep_(){
+  const pages=guidedPages_();
+
+  for(const item of (B.hads.items||[])){
+    if(!present(item.name)){
+      return pages.findIndex(
+        pg=>pg.kind==='scale'&&pg.key===item.name
+      );
+    }
+  }
+
+  return -1;
+}
+
 function guidedRenderHadsGate_(a){
   if(Number(val('_guided_hads_blocked'))===1){
     return guidedRenderStopped_();
   }
 
+  const missingStep=guidedFirstMissingHadsStep_();
+
+  if(missingStep>=0){
+    const pages=guidedPages_();
+    const missing=pages[missingStep];
+
+    a.append(
+      el(
+        'div',
+        'error',
+        `剛才有一題未收到答案：${missing&&missing.label?missing.label:'情緒問卷其中一題'}。不完整的 HADS 不會被提交。`
+      ),
+      btn(
+        '返回未完成題目',
+        ()=>{
+          ST.step=missingStep;
+          ST.error='請補答這一題。完成後會按原順序繼續。';
+          saveDraft();
+          guidedScrollTop_();
+          player();
+        },
+        'primary'
+      ),
+      btn(
+        '返回上一題',
+        ()=>{
+          ST.step=Math.max(guidedMinStep_(pages),ST.step-1);
+          ST.error='';
+          saveDraft();
+          guidedScrollTop_();
+          player();
+        },
+        'secondary'
+      )
+    );
+    return;
+  }
+
   if(Number(val('_guided_hads_passed'))===1){
-    a.append(el('div','result good','情緒問卷已安全保存。正在進入下一部分……'));
-    return setTimeout(guidedGoForward_,250);
+    a.append(
+      el('div','result good','情緒問卷已安全保存。正在進入下一部分……')
+    );
+    return guidedScheduleForward_(250);
   }
 
   const status=el('div','result','正在檢查並保存情緒問卷……');
-  a.append(status);
+  const back=btn(
+    '返回上一題檢查',
+    ()=>{
+      ST.step=Math.max(0,ST.step-1);
+      ST.error='';
+      saveDraft();
+      guidedScrollTop_();
+      player();
+    },
+    'secondary'
+  );
+
+  a.append(status,back);
   setTimeout(()=>guidedAutoSubmitHads_(status),80);
 }
 
@@ -2793,7 +3010,7 @@ async function guidedAutoSubmitScreening_(status){
     ST.answers._guided_screening_submitted=1;
     saveDraft();
     ST._guidedScreeningSubmitting=false;
-    setTimeout(guidedGoForward_,350);
+    guidedScheduleForward_(350);
   }catch(err){
     ST._guidedScreeningSubmitting=false;
     status.className='error';
@@ -2809,7 +3026,7 @@ async function guidedAutoSubmitScreening_(status){
 function guidedRenderScreeningCheckpoint_(a){
   if(Number(val('_guided_screening_submitted'))===1){
     a.append(el('div','result good','第一部分已安全保存。正在進入下一部分……'));
-    return setTimeout(guidedGoForward_,250);
+    return guidedScheduleForward_(250);
   }
 
   const status=el('div','result','第一部分完成。正在安全保存……');
@@ -2970,7 +3187,7 @@ function guidedPlayer_(){
   const t=el('header','toolbar');
   t.append(el('h1','','研究問卷'));
   const actions=el('div','tool-actions');
-  actions.append(btn('下載備份',downloadCurrent,'linkbtn'));
+  actions.append(btn('下載備份',guidedDownloadBackup_,'linkbtn'));
   t.append(actions);
   m.append(t);
 
@@ -3041,7 +3258,7 @@ function guidedKeyboardBinary_(pg,n){
     if(!key)return false;
     set(key,value);
     const done=guidedQuipStemKeys_(pg.stem.index).every(present);
-    done?setTimeout(guidedGoForward_,150):player();
+    done?guidedScheduleForward_(150):player();
     return true;
   }
 
@@ -3049,7 +3266,7 @@ function guidedKeyboardBinary_(pg,n){
     const item=pg.item;
     set(item.name,value);
     if(value===0&&item.detailField)set(item.detailField,null);
-    if(value===0||!item.detailField)setTimeout(guidedGoForward_,150);
+    if(value===0||!item.detailField)guidedScheduleForward_(150);
     else player();
     return true;
   }
@@ -3058,7 +3275,7 @@ function guidedKeyboardBinary_(pg,n){
     const item=pg.item;
     set(item.name,value);
     if(value===0&&item.detailField)set(item.detailField,null);
-    if(value===0||!item.detailField)setTimeout(guidedGoForward_,150);
+    if(value===0||!item.detailField)guidedScheduleForward_(150);
     else player();
     return true;
   }
@@ -3066,7 +3283,7 @@ function guidedKeyboardBinary_(pg,n){
   if(pg.kind==='guidedMriSafetyBinary'){
     set(pg.key,value);
     guidedUpdateMriNoneFlag_();
-    if(value===0)setTimeout(guidedGoForward_,150);
+    if(value===0)guidedScheduleForward_(150);
     else player();
     return true;
   }
@@ -3075,7 +3292,7 @@ function guidedKeyboardBinary_(pg,n){
     const x=pg.pdi;
     if(!present(x.yesField)){
       setPdiAnswer(x,value);
-      if(value===0)setTimeout(guidedGoForward_,150);
+      if(value===0)guidedScheduleForward_(150);
       else player();
       return true;
     }
@@ -3089,17 +3306,27 @@ function guidedHandleKeydown_(e){
   if(e.altKey||e.ctrlKey||e.metaKey||e.isComposing)return;
 
   const active=document.activeElement;
-  if(active&&(['INPUT','TEXTAREA','SELECT'].includes(active.tagName)||active.isContentEditable)){
+  if(active&&(
+    ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)||
+    active.isContentEditable
+  )){
     return;
   }
 
   const pg=guidedPages_()[ST.step];
   if(!pg)return;
 
+  if(guidedTransitionPending_()){
+    if(e.key==='Enter'||/^\d$/.test(e.key)){
+      guidedConsumeKey_(e);
+    }
+    return;
+  }
+
   if(e.key==='Enter'){
     if(pageComplete(pg)&&!guidedOwnNavigation_(pg)){
-      e.preventDefault();
-      return guidedGoForward_();
+      guidedConsumeKey_(e);
+      guidedGoForward_();
     }
     return;
   }
@@ -3108,60 +3335,86 @@ function guidedHandleKeydown_(e){
   const n=Number(e.key);
 
   if(guidedKeyboardBinary_(pg,n)){
-    e.preventDefault();
+    guidedConsumeKey_(e);
     return;
   }
 
-  if(pg.kind==='guidedPdiItem'&&Number(val(pg.pdi.yesField))===1&&n>=1&&n<=5){
+  if(
+    pg.kind==='guidedPdiItem'&&
+    Number(val(pg.pdi.yesField))===1&&
+    n>=1&&n<=5
+  ){
     const missing=['distress','preoccupation','conviction']
       .find(k=>!present(pg.pdi.dimensions[k].name));
+
     if(missing){
-      e.preventDefault();
+      guidedConsumeKey_(e);
       set(pg.pdi.dimensions[missing].name,n);
+
       const done=['distress','preoccupation','conviction']
         .every(k=>present(pg.pdi.dimensions[k].name));
-      done?setTimeout(guidedGoForward_,150):player();
+
+      if(done)guidedScheduleForward_(150);
+      else player();
       return;
     }
   }
 
   if(pg.kind==='guidedIorDimension'&&n>=1&&n<=5){
-    e.preventDefault();
+    guidedConsumeKey_(e);
     const id=String(pg.scenario).padStart(2,'0');
     set(`ior${id}_${pg.dimension}`,n);
-    return setTimeout(guidedGoForward_,150);
+    guidedScheduleForward_(150);
+    return;
   }
 
   if(pg.kind==='scale'||pg.kind==='cdarsScale'){
     const opts=pg.options||[];
+
     if(n>=1&&n<=opts.length){
-      e.preventDefault();
+      guidedConsumeKey_(e);
       set(pg.key,opts[n-1].value);
       ST.error='';
-      return setTimeout(guidedGoForward_,150);
+      guidedScheduleForward_(150);
+      return;
     }
   }
 
-  if(pg.kind==='guidedEducation'&&n>=1&&n<=C.education.length){
-    e.preventDefault();
+  if(
+    pg.kind==='guidedEducation'&&
+    n>=1&&n<=C.education.length
+  ){
+    guidedConsumeKey_(e);
     const o=C.education[n-1];
     const changed=val('education_level')!==o[0];
     set('education_level',o[0]);
-    if(changed&&!present('education_years')&&o[2]!==null){
+
+    if(changed&&o[2]!==null){
       set('education_years',o[2]);
     }
-    return player();
+
+    player();
+    return;
   }
 
-  if(pg.kind==='choice'&&Array.isArray(pg.options)&&n>=1&&n<=pg.options.length){
-    e.preventDefault();
+  if(
+    pg.kind==='choice'&&
+    Array.isArray(pg.options)&&
+    n>=1&&n<=pg.options.length
+  ){
+    guidedConsumeKey_(e);
     const o=pg.options[n-1];
     set(pg.key,o[0]);
+
     if(pg.key==='pd_status_self_report'){
       set('pd_hc_status',Number(o[0])===1?'PD':'HC');
-      if(Number(o[0])===0)set('pd_duration_years_self_report',null);
+      if(Number(o[0])===0){
+        set('pd_duration_years_self_report',null);
+      }
     }
-    return setTimeout(guidedGoForward_,150);
+
+    guidedScheduleForward_(150);
+    return;
   }
 }
 
@@ -3174,6 +3427,7 @@ playerPages=function(){
 
 renderPage=function(pg,a){
   if(isGuidedFlow_()){
+    if(pg.kind==='input')return guidedRenderInput_(pg,a);
     if(pg.kind==='choice')return guidedRenderChoice_(pg,a);
     if(pg.kind==='guidedVoiceInfo')return guidedRenderVoiceInfo_(pg,a);
     if(pg.kind==='guidedPdYears')return guidedRenderPdYears_(a);
@@ -3292,8 +3546,6 @@ document.addEventListener('keydown',guidedHandleKeydown_,true);
 if(guidedParam_('flow')==='guided'){
   start(guidedParam_('dry')==='1'?'guided_test':'guided');
 }
-
-
  
 document.addEventListener('keydown',handleGlobalKeydown);
 })();

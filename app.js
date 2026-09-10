@@ -1333,20 +1333,25 @@ function handleGlobalKeydown(e){
   if(ST.flow==='stage2'&&pg.kind==='iorScenario'&&n>=1&&n<=5){const id=String(pg.scenario).padStart(2,'0'),missing=['frequency','conviction','distress'].find(k=>!present(`ior${id}_${k}`))||'distress';e.preventDefault();set(`ior${id}_${missing}`,n);ST.error='';return player()}
   if(ST.flow==='stage2'&&pg.kind==='pdiItem'&&val(pg.pdi.yesField)===1&&n>=1&&n<=5){const missing=['distress','preoccupation','conviction'].find(k=>!present(pg.pdi.dimensions[k].name));if(missing){e.preventDefault();set(pg.pdi.dimensions[missing].name,n);ST.error='';player()}}
 }
-/* =========================================================
-   APATHY GUIDED SELF-ASSESSMENT
-   2026-09-10
-   Hidden entry: ?flow=guided
-   Dry-run entry: ?flow=guided&dry=1
 
-   Existing home / Stage 2 / staff Screening are left intact.
-   Guided UI feels continuous, but backend submissions stay split:
-   1) screening_core: identity + HADS
-   2) screening_core: remaining participant-safe screening (no MoCA)
-   3) stage_2_questionnaires: Stage 2
+ /* =========================================================
+   APATHY GUIDED SELF-ASSESSMENT — V2
+   2026-09-10
+   Hidden participant entry: ?flow=guided
+   Safe dry-run entry:       ?flow=guided&dry=1
+
+   IMPORTANT:
+   - Existing home / Stage 2 / staff Screening stay unchanged.
+   - Guided flow keeps its own local draft on this device.
+   - Guided flow never asks identity twice.
+   - Guided UI is continuous, but backend events stay split:
+       1) screening_core          identity + HADS
+       2) screening_core          remaining self-screening, no MoCA
+       3) stage_2_questionnaires  Stage 2
+   - Each checkpoint uses a field whitelist. It does NOT submit all ST.answers.
    ========================================================= */
 
-const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V1';
+const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V2-ELDER-MOBILE';
 
 const _apathyStartBase=start;
 const _apathyPlayerBase=player;
@@ -1355,17 +1360,132 @@ const _apathyRenderPageBase=renderPage;
 const _apathyPageCompleteBase=pageComplete;
 const _apathyManualNextBase=manualNext;
 const _apathyRenderScaleBase=renderScale;
+const _apathyAutoNextBase=autoNext;
+
+function isGuidedFlow_(){
+  return ST.flow==='guided'||ST.flow==='guided_test';
+}
 
 function guidedParam_(name){
   return new URLSearchParams(window.location.search).get(name);
 }
 
 function guidedDryRun_(){
-  return guidedParam_('dry')==='1';
+  return ST.flow==='guided_test'||guidedParam_('dry')==='1';
 }
 
 function guidedUnique_(items){
   return Array.from(new Set((items||[]).filter(Boolean)));
+}
+
+function guidedInjectStyles_(){
+  if(document.getElementById('apathy-guided-v2-style'))return;
+  const s=document.createElement('style');
+  s.id='apathy-guided-v2-style';
+  s.textContent=`
+    body.guided-mode{font-size:18px}
+    body.guided-mode .app{max-width:900px}
+    body.guided-mode .toolbar{padding-top:10px;padding-bottom:10px}
+    body.guided-mode .toolbar h1{font-size:1.25rem}
+    body.guided-mode .question{padding:18px 16px;margin-top:10px;min-height:0}
+    body.guided-mode .flow-head{padding:10px 16px 6px}
+    body.guided-mode .flow-head h2{margin:0 0 8px}
+    body.guided-mode .nav{position:sticky;bottom:0;background:rgba(255,255,255,.97);
+      padding:10px 12px;border-top:1px solid #d9dee8;z-index:20}
+    body.guided-mode button{min-height:48px;font-size:1rem}
+    body.guided-mode .guided-binary-row{border:1px solid #d7dee8;border-radius:12px;
+      padding:12px;margin:10px 0;background:#fff}
+    body.guided-mode .guided-binary-row strong{display:block;font-size:1.05rem;margin-bottom:4px}
+    body.guided-mode .guided-example{font-size:.92rem;line-height:1.45;color:#445}
+    body.guided-mode .guided-keyword{display:inline-block;font-weight:800;padding:4px 9px;
+      border-radius:999px;background:#eef4ff;margin:2px 4px 6px 0}
+    body.guided-mode .guided-help{border-left:5px solid #5b78a8;padding:10px 12px;
+      margin:10px 0;background:#f7f9fc;border-radius:8px}
+    body.guided-mode .guided-voice-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    body.guided-mode .guided-voice-status{font-size:.9rem;margin-top:5px;color:#556}
+    body.guided-mode .guided-mini-hint{font-size:.9rem;color:#556;margin-top:6px}
+    body.guided-mode .guided-scale-hint{font-size:.9rem;color:#556;margin:0 0 8px}
+    body.guided-mode .guided-rs-wrap{overflow:auto;max-width:100%;
+      border:1px solid #d7dee8;border-radius:12px;-webkit-overflow-scrolling:touch}
+    body.guided-mode .guided-rs-table{display:grid;grid-template-columns:minmax(190px,1.5fr)
+      repeat(7,minmax(105px,1fr));min-width:980px;background:#fff}
+    body.guided-mode .guided-rs-cell{padding:9px;border-right:1px solid #e3e7ee;
+      border-bottom:1px solid #e3e7ee;min-height:66px}
+    body.guided-mode .guided-rs-head{position:sticky;top:0;z-index:6;background:#f1f5fb;
+      font-weight:800}
+    body.guided-mode .guided-rs-stem{position:sticky;left:0;z-index:5;background:#f8fafc}
+    body.guided-mode .guided-rs-head.guided-rs-stem{z-index:8}
+    body.guided-mode .guided-rs-domain small,
+    body.guided-mode .guided-rs-stem small{display:block;font-weight:400;line-height:1.3;margin-top:4px}
+    body.guided-mode .guided-rs-input{width:64px;height:52px;text-align:center;font-size:1.25rem;
+      font-weight:800}
+    body.guided-mode .guided-score-legend{position:sticky;top:0;z-index:15;
+      background:#fff8dc;border:2px solid #d9b84c;border-radius:10px;padding:9px 10px;
+      margin:8px 0 10px;font-weight:700;line-height:1.45}
+    body.guided-mode .guided-scenario{position:sticky;top:0;z-index:10;background:#eef4ff;
+      border:2px solid #8ca8d0;border-radius:12px;padding:12px;margin-bottom:12px}
+    body.guided-mode .guided-scenario strong{display:block;margin-bottom:5px}
+    body.guided-mode .guided-success{font-size:1.12rem;line-height:1.6;padding:16px}
+    @media(max-width:600px){
+      body.guided-mode{font-size:18px}
+      body.guided-mode .app{padding-left:0;padding-right:0}
+      body.guided-mode .question{border-radius:0;border-left:0;border-right:0}
+      body.guided-mode .toolbar{padding-left:12px;padding-right:12px}
+      body.guided-mode .tool-actions{gap:4px}
+      body.guided-mode .tool-actions button{font-size:.85rem;min-height:42px}
+      body.guided-mode .options,
+      body.guided-mode .scale-buttons,
+      body.guided-mode .direct{gap:8px}
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+function guidedScrollTop_(){
+  requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}));
+}
+
+function guidedLatestStep_(){
+  const n=Number(val('_guided_latest_step'));
+  return Number.isFinite(n)&&n>=0?n:0;
+}
+
+function guidedRememberReached_(step){
+  const n=Math.max(guidedLatestStep_(),Number(step)||0);
+  ST.answers._guided_latest_step=n;
+  saveDraft();
+}
+
+function guidedGoForward_(){
+  const pages=guidedPages_();
+  if(ST.step<pages.length-1){
+    ST.step++;
+    guidedRememberReached_(ST.step);
+    ST.error='';
+    saveDraft();
+    guidedScrollTop_();
+    return player();
+  }
+}
+
+function guidedGoBack_(){
+  const min=guidedMinStep_(guidedPages_());
+  if(ST.step>min){
+    ST.step--;
+    ST.error='';
+    saveDraft();
+    guidedScrollTop_();
+    player();
+  }
+}
+
+function guidedGoLatest_(){
+  const pages=guidedPages_();
+  ST.step=Math.min(guidedLatestStep_(),pages.length-1);
+  ST.error='';
+  saveDraft();
+  guidedScrollTop_();
+  player();
 }
 
 function guidedIdentityKeys_(){
@@ -1375,7 +1495,7 @@ function guidedIdentityKeys_(){
     'dob_d','dob_m','dob_y','date_of_birth','age_years',
     'gender',
     'contact_phone',
-    'pd_status_self_report','pd_hc_status',
+    'pd_status_self_report','pd_hc_status','pd_duration_years_self_report',
     'education_level','education_years'
   ];
 }
@@ -1385,12 +1505,8 @@ function guidedHadsKeys_(){
     guidedIdentityKeys_()
       .concat(B.hads.items.map(x=>x.name))
       .concat([
-        'hads_anxiety_total',
-        'hads_depression_total',
-        'hads_complete',
-        'hads_anxiety_review',
-        'hads_depression_review',
-        'hads_mood_review'
+        'hads_anxiety_total','hads_depression_total','hads_complete',
+        'hads_anxiety_review','hads_depression_review','hads_mood_review'
       ])
   );
 }
@@ -1399,11 +1515,11 @@ function guidedScreeningKeys_(){
   const keys=guidedIdentityKeys_().slice();
 
   quipKeys().forEach(k=>keys.push(k));
-  ['quip_group_0_confirmed','quip_group_1_confirmed','quip_group_2_confirmed'].forEach(k=>keys.push(k));
   (B.quip.additionalItems||[]).forEach(x=>{
     if(x.name)keys.push(x.name);
     if(x.detailField)keys.push(x.detailField);
   });
+  keys.push('quip_complete');
 
   (B.quiprs.matrixCells||[]).forEach(x=>keys.push(x.name));
   keys.push(
@@ -1503,24 +1619,13 @@ function guidedSubmissionId_(phase){
 function guidedPayloadSubset_(phase,event,allowedKeys){
   calculateAllDerived();
 
-  /* Build through the current canonical payload function, then KEEP only
-     the envelope plus fields owned by this guided checkpoint. */
   const source=payload('screening',event,'submitted');
   const out={};
 
   [
-    'schema_version',
-    'frontend_release',
-    'receiver_contract_expected',
-    'form_type',
-    'event_type',
-    'workflow_stage',
-    'record_status',
-    'p_id',
-    's_id',
-    'visit_number',
-    'participant_id',
-    'submitted_at',
+    'schema_version','frontend_release','receiver_contract_expected',
+    'form_type','event_type','workflow_stage','record_status',
+    'p_id','s_id','visit_number','participant_id','submitted_at',
     'contact_phone_normalized'
   ].forEach(k=>{
     if(Object.prototype.hasOwnProperty.call(source,k))out[k]=source[k];
@@ -1539,7 +1644,6 @@ function guidedPayloadSubset_(phase,event,allowedKeys){
   out.workflow_part=`guided_${phase}`;
   out.data_source='participant_remote';
 
-  /* Identity remains the existing receiver-compatible identity contract. */
   const phone=String(out.contact_phone_normalized||out.contact_phone||'')
     .replace(/\D/g,'')
     .replace(/^852(?=\d{8}$)/,'');
@@ -1556,7 +1660,7 @@ async function guidedPostPhase_(phase,event,keys){
 
   if(guidedDryRun_()){
     console.info('GUIDED_DRY_RUN',phase,snapshot);
-    await new Promise(resolve=>setTimeout(resolve,250));
+    await new Promise(resolve=>setTimeout(resolve,220));
     return{
       ok:true,
       dry_run:true,
@@ -1567,21 +1671,287 @@ async function guidedPostPhase_(phase,event,keys){
   return receiverPostDirectFinal_(snapshot);
 }
 
-function guidedFriendlyStage2Pages_(){
-  const names={
-    'GAS':'日常動機與感受',
-    'AMI-18':'活動與興趣',
-    'C-DARS':'日常活動體驗',
-    'R-GPTS':'想法與感受',
-    'PDI-21':'日常想法',
-    'IOR':'社交情境'
-  };
+/* ---------- Plain-language / voice guidance ---------- */
 
-  return stage2Pages()
-    .filter((pg,index)=>index>=2&&pg.kind!=='stage2Summary')
-    .map(pg=>Object.assign({},pg,{
+function guidedVoiceState_(){
+  if(!ST._guidedVoiceSession)ST._guidedVoiceSession={};
+  return ST._guidedVoiceSession;
+}
+
+function guidedStopVoice_(){
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
+}
+
+function guidedSpeak_(text,status){
+  if(!('speechSynthesis' in window)){
+    if(status)status.textContent='此瀏覽器不支援語音播放。請閱讀上方說明。';
+    return;
+  }
+
+  guidedStopVoice_();
+  const u=new SpeechSynthesisUtterance(String(text||''));
+  u.lang='zh-HK';
+  u.rate=0.88;
+  if(status)status.textContent='正在播放語音提示……';
+  u.onend=()=>{if(status)status.textContent='語音提示播放完成。';};
+  u.onerror=()=>{if(status)status.textContent='未能自動播放。可按「再聽一次」。';};
+  window.speechSynthesis.speak(u);
+}
+
+function guidedVoiceBox_(id,title,text,a,autoPlay=true){
+  const box=el('div','guided-help');
+  box.append(el('strong','',title),el('p','',text));
+  const status=el('div','guided-voice-status','');
+  const actions=el('div','guided-voice-actions');
+  actions.append(
+    btn('▶ 再聽一次',()=>guidedSpeak_(text,status),'secondary'),
+    btn('■ 停止語音',()=>{guidedStopVoice_();status.textContent='語音已停止。';},'secondary')
+  );
+  box.append(actions,status);
+  a.append(box);
+
+  if(autoPlay){
+    const state=guidedVoiceState_();
+    if(!state[id]){
+      state[id]=1;
+      setTimeout(()=>guidedSpeak_(text,status),180);
+    }
+  }
+}
+
+const GUIDED_QUIP_STEM_HELP={
+  1:{
+    word:'問題',
+    text:'這一題只問：這件事有沒有變成一個問題。可以是你自己覺得，也可以是家人或醫生覺得。口訣：有沒有問題。'
+  },
+  2:{
+    word:'常想',
+    text:'這一題問的是腦中常常想到，不是問你實際做了多少次。比如一直想買東西，或一直想吃東西。口訣：常不常想。'
+  },
+  3:{
+    word:'衝動',
+    text:'這一題問的是很想去做，或者不能做時會難受、煩躁。口訣：想不想做，忍不忍得住。'
+  },
+  4:{
+    word:'難停',
+    text:'這一題問的是開始後難不難停下來。比如本來只想買一件，結果一直買。口訣：停不停得下。'
+  },
+  5:{
+    word:'設法繼續',
+    text:'這一題問的是會不會為了繼續這件事，特別想辦法。比如隱瞞、借錢、囤東西。口訣：會不會想辦法繼續。'
+  }
+};
+
+function guidedQuipExtraHelp_(item){
+  const code=String(item.code||'').toUpperCase();
+  const map={
+    F1:['過量','問的是有沒有吃得比醫生處方更多。不是問偶爾忘記吃藥。'],
+    F2:['加量','問的是有沒有自己把藥加多，為了身體或心情的效果。'],
+    F3:['難減','問的是想減藥時，是否很難減下來，或減少後很不舒服。'],
+    F4:['找更多藥','問的是會不會為了繼續多吃藥，囤藥、找更多來源。'],
+    E1:['一個任務做太久','問的是一件有目的的活動做得太久，例如修東西、園藝、寫作。'],
+    E2:['重複小動作','問的是簡單動作反覆做，例如整理、檢查、分類、清潔。'],
+    E3:['漫無目的走很久','問的是沒有明確目的，卻走路或開車很長時間。']
+  };
+  const hit=map[code]||['重點','請按題目字面意思回答。'];
+  return{word:hit[0],text:hit[1]};
+}
+
+function guidedRsStemHelp_(index){
+  const map={
+    1:'想法：腦中有多常想到。',
+    2:'衝動：有多常很想去做，或不能做時很難受。',
+    3:'控制：有多常停不下來、減不下來。',
+    4:'設法繼續：有多常為了繼續而隱瞞、借錢、囤積或找方法。'
+  };
+  return map[index]||'';
+}
+
+/* ---------- Page composition ---------- */
+
+function guidedRbSelfValue_(){
+  const opts=(B.rbdsq&&B.rbdsq.sourceOptions)||[];
+  const self=opts.find(o=>/本人|自己|participant|self/i.test(String(o.label||'')));
+  return self?self.value:(opts[0]?opts[0].value:1);
+}
+
+function guidedMakeQuipPages_(p){
+  B.quip.sharedStems.forEach(st=>{
+    p.push({
+      section:'行為與衝動',
+      kind:'guidedQuipStem',
+      label:`第 ${st.index} 題：${st.shortLabel}`,
+      stem:st
+    });
+  });
+
+  const f=(B.quip.additionalItems||[]).filter(x=>String(x.code||'').startsWith('F'));
+  const e=(B.quip.additionalItems||[]).filter(x=>String(x.code||'').startsWith('E'));
+
+  f.forEach(item=>p.push({
+    section:'藥物使用',
+    kind:'guidedQuipBinary',
+    label:item.backfillLabel||item.fullLabel,
+    item
+  }));
+
+  e.forEach(item=>p.push({
+    section:'重複行為',
+    kind:'guidedQuipBinary',
+    label:item.backfillLabel||item.fullLabel,
+    item
+  }));
+}
+
+function guidedMakeRbPages_(p){
+  p.push({
+    section:'睡眠情況',
+    kind:'guidedVoiceInfo',
+    voiceId:'rb-intro',
+    label:'睡眠問卷說明',
+    title:'請想「過去一個月」',
+    body:'接下來問睡眠中的情況。請想過去一個月。至少出現三次，才選「是」。如果只是偶爾一兩次，選「否」。每題都要選是或否。'
+  });
+
+  (B.rbdsq.items||[]).forEach((item,index)=>{
+    p.push({
+      section:'睡眠情況',
+      kind:'guidedRbBinary',
+      label:`睡眠 ${index+1}/${B.rbdsq.items.length}`,
+      item,
+      disease:false
+    });
+  });
+
+  (B.rbdsq.diseaseItems||[]).forEach((item,index)=>{
+    p.push({
+      section:'健康情況',
+      kind:'guidedRbBinary',
+      label:`健康情況 ${index+1}/${B.rbdsq.diseaseItems.length}`,
+      item,
+      disease:true
+    });
+  });
+}
+
+function guidedMakeMriPages_(p){
+  p.push({
+    section:'MRI安全資料',
+    kind:'guidedVoiceInfo',
+    voiceId:'mri-intro',
+    label:'MRI安全資料說明',
+    title:'每一項都請選「是」或「否」',
+    body:'這部分只用來幫研究人員核對 MRI 安全。選「是」不代表一定不能掃描。研究人員會再問清楚數量、材料、型號或手術資料，再決定是否適合掃描。請不要自己判斷。'
+  });
+
+  (C.mriSafety||[]).forEach((x,index)=>{
+    p.push({
+      section:'MRI安全資料',
+      kind:'guidedMriSafetyBinary',
+      label:`MRI安全 ${index+1}/${C.mriSafety.length}`,
+      key:x[0],
+      text:x[1]
+    });
+  });
+}
+
+function guidedFriendlyStage2Pages_(){
+  const pages=[];
+
+  pages.push({
+    section:'第二部分',
+    kind:'guidedVoiceInfo',
+    voiceId:'stage2-intro',
+    label:'第二部分說明',
+    title:'接下來問日常生活',
+    body:'這部分沒有對錯。請想你平時最近的情況。不要花很久找完美答案。選最接近你的那一個就可以。'
+  });
+
+  const original=stage2Pages().filter((pg,index)=>index>=2&&pg.kind!=='stage2Summary');
+
+  let cdIntroAdded=false;
+  let pdiIntroAdded=false;
+  let iorIntroAdded=false;
+
+  original.forEach(pg=>{
+    if(pg.section==='C-DARS'&&!cdIntroAdded){
+      cdIntroAdded=true;
+      pages.push({
+        section:'日常活動體驗',
+        kind:'guidedVoiceInfo',
+        voiceId:'cdars-intro',
+        label:'日常活動體驗怎樣填',
+        title:'先想兩件你真的會做的事',
+        body:'先填兩個真實活動，例如煮飯和散步。後面的題目都用這兩件事來回答。重點不是做得好不好，而是你想不想做、開始難不難、做的時候有沒有投入。'
+      });
+    }
+
+    if(pg.section==='PDI-21'&&!pdiIntroAdded){
+      pdiIntroAdded=true;
+      pages.push({
+        section:'日常想法',
+        kind:'guidedVoiceInfo',
+        voiceId:'pdi-intro',
+        label:'這部分怎樣填',
+        title:'先選有沒有，再問程度',
+        body:'每題先選「是」或「否」。如果選否，會直接到下一題。如果選是，會再問三個程度。請按你自己的真實感受回答。'
+      });
+    }
+
+    if(pg.section==='IOR'&&!iorIntroAdded){
+      iorIntroAdded=true;
+      pages.push({
+        section:'社交情境',
+        kind:'guidedVoiceInfo',
+        voiceId:'ior-intro',
+        label:'社交情境怎樣填',
+        title:'每個情境會分三小題',
+        body:'先看清楚上面的情境。之後分別問三件事：出現多常、你有多相信、你有多不安。每一小題都會再顯示同一個情境，所以不用靠記憶。'
+      });
+    }
+
+    if(pg.section==='IOR'&&pg.kind==='iorScenario'){
+      const scenarioText=pg.scenarioText;
+      [
+        ['frequency','出現頻率','這件事出現得多不多。不是問你相信不相信。'],
+        ['conviction','相信程度','如果這件事發生，你有多相信這個想法是真的。不是問出現次數。'],
+        ['distress','不安程度','這個情境令你有多不安或難受。不是問你有多相信。']
+      ].forEach(d=>{
+        pages.push({
+          section:'社交情境',
+          kind:'guidedIorDimension',
+          label:`情境 ${pg.scenario}｜${d[1]}`,
+          scenario:pg.scenario,
+          scenarioText,
+          dimension:d[0],
+          dimensionLabel:d[1],
+          explanation:d[2]
+        });
+      });
+      return;
+    }
+
+    if(pg.section==='PDI-21'&&pg.kind==='pdiItem'){
+      pages.push(Object.assign({},pg,{
+        section:'日常想法',
+        kind:'guidedPdiItem'
+      }));
+      return;
+    }
+
+    const names={
+      'GAS':'日常動機與感受',
+      'AMI-18':'活動與興趣',
+      'C-DARS':'日常活動體驗',
+      'R-GPTS':'想法與感受'
+    };
+
+    pages.push(Object.assign({},pg,{
       section:names[pg.section]||pg.section
     }));
+  });
+
+  return pages;
 }
 
 function guidedPages_(){
@@ -1592,10 +1962,19 @@ function guidedPages_(){
   p.push(choicePage('基本資料','性別','gender',[['M','男'],['F','女']]));
   p.push(choicePage(
     '基本資料',
-    '您是否已被醫生診斷為帕金森病？',
+    '您是否已被醫生診斷為帕金遜病？',
     'pd_status_self_report',
     [[1,'是'],[0,'否']]
   ));
+
+  if(Number(val('pd_status_self_report'))===1){
+    p.push({
+      section:'基本資料',
+      kind:'guidedPdYears',
+      label:'大約患帕金遜病多少年？'
+    });
+  }
+
   p.push(inputPage('基本資料','聯絡電話','contact_phone','例：9123 4567'));
   p.push({
     section:'基本資料',
@@ -1605,38 +1984,52 @@ function guidedPages_(){
 
   p.push({
     section:'情緒問卷',
-    kind:'scaleIntro',
-    label:'HADS作答說明',
-    introTitle:'情緒問卷',
-    introText:'請回想過去一星期的感受。每題只選擇一個最符合實際情況的答案；沒有正確或錯誤答案。'
+    kind:'guidedVoiceInfo',
+    voiceId:'hads-intro',
+    label:'情緒問卷說明',
+    title:'請想「過去一星期」',
+    body:'這部分問過去一星期的感受。每題選最接近你的答案。沒有對錯。不要想太久，第一個覺得合適的答案通常就可以。'
   });
   addScalePages(p,'情緒問卷',B.hads.items);
   p.push({
     section:'情緒問卷',
     kind:'guidedHadsGate',
-    label:'完成情緒問卷'
+    label:'正在保存情緒問卷'
   });
 
   p.push({
     section:'行為與衝動',
-    kind:'guidedInfo',
-    label:'開始下一部分前',
-    title:'為甚麼會問這些問題？',
-    body:'這組問題用來了解衝動控制或重複行為的變化。有些帕金遜病患者在使用多巴胺能藥物後，可能會發現自己比以前更難控制某些行為，例如進食、購物、賭博、性衝動，或反覆進行某些活動。這些問題沒有對錯，也不代表您一定有問題。請按照自己的真實情況回答。'
+    kind:'guidedVoiceInfo',
+    voiceId:'quip-intro',
+    label:'行為與衝動問卷說明',
+    title:'這部分問「病後有沒有更難控制」',
+    body:'這部分問衝動和重複行為。沒有對錯，也不是批評你。想一想帕金遜病發作後，或使用相關藥物後，有沒有更難停下來。比如以前吃一碗就夠，後來常常想繼續吃。每一行都要選「是」或「否」。'
   });
-  p.push({section:'行為與衝動',kind:'quipGroup',group:0,label:'相關行為'});
-  p.push({section:'行為與衝動',kind:'quipGroup',group:1,label:'帕金遜病藥物使用'});
-  p.push({section:'行為與衝動',kind:'quipGroup',group:2,label:'其他重複或過度行為'});
+
+  guidedMakeQuipPages_(p);
 
   p.push({
     section:'行為頻率',
-    kind:'guidedInfo',
-    label:'下一組問題',
-    title:'接下來會再問得仔細一些',
-    body:'前一部分主要了解這些行為有沒有出現。接下來的問題會進一步了解這些行為出現的頻率和程度，幫助研究人員判斷是否需要進一步了解。請按照最近的實際情況回答。'
+    kind:'guidedVoiceInfo',
+    voiceId:'quiprs-intro',
+    label:'行為頻率問卷說明',
+    title:'四行看起來很像，重點不同',
+    body:'接下來看過去四星期。第一行問常不常想到。第二行問衝動和難受。第三行問控制困難。第四行問會不會想辦法繼續。每格輸入零到四。零是從不，四是非常頻繁。'
   });
-  p.push({section:'行為頻率',kind:'quipRsMatrix',label:'行為頻率問卷'});
+  p.push({
+    section:'行為頻率',
+    kind:'guidedQuipRsMatrix',
+    label:'過去4星期的行為頻率'
+  });
 
+  p.push({
+    section:'日常動機',
+    kind:'guidedVoiceInfo',
+    voiceId:'sas-intro',
+    label:'日常動機問卷說明',
+    title:'請按最近平時的情況',
+    body:'這部分問做事的興趣和動力。不是考試。請選最接近你最近平時情況的答案。'
+  });
   addScalePages(
     p,
     '日常動機',
@@ -1650,14 +2043,13 @@ function guidedPages_(){
     }))
   );
 
-  p.push({section:'睡眠情況',kind:'rbMain',label:'睡眠情況'});
-  p.push({section:'睡眠情況',kind:'rbQ10',label:B.rbdsq.diseaseQuestion});
-  p.push({section:'MRI安全資料',kind:'mriSafety',label:'MRI安全資料'});
+  guidedMakeRbPages_(p);
+  guidedMakeMriPages_(p);
 
   p.push({
     section:'第一部分完成',
     kind:'guidedScreeningCheckpoint',
-    label:'第一部分已完成'
+    label:'正在保存第一部分'
   });
 
   guidedFriendlyStage2Pages_().forEach(pg=>p.push(pg));
@@ -1665,48 +2057,74 @@ function guidedPages_(){
   p.push({
     section:'完成',
     kind:'guidedFinal',
-    label:'問卷完成'
+    label:'正在提交'
   });
 
   return p;
 }
 
-function guidedSpeak_(text,status){
-  if(!('speechSynthesis' in window)){
-    status.textContent='此瀏覽器不支援語音播放，請閱讀上方文字。';
-    return;
-  }
+/* ---------- Renderers ---------- */
 
-  window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(String(text||''));
-  u.lang='zh-HK';
-  u.rate=0.92;
-  status.textContent='正在播放語音解釋……';
-  u.onend=()=>{status.textContent='語音播放完成。'};
-  u.onerror=()=>{status.textContent='語音播放失敗，請閱讀上方文字。'};
-  window.speechSynthesis.speak(u);
+function guidedRenderVoiceInfo_(pg,a){
+  guidedVoiceBox_(pg.voiceId,pg.title,pg.body,a,true);
 }
 
-function guidedRenderInfo_(pg,a){
-  const box=el('div','plain-block');
-  box.append(
-    el('h3','',pg.title||'說明'),
-    el('p','',pg.body||'')
+
+function guidedRenderChoice_(pg,a){
+  const g=el('div','direct');
+  a.append(el('p','guided-scale-hint',`電腦可按 1–${pg.options.length}。`));
+  pg.options.forEach((o,index)=>{
+    g.append(btn(
+      `${index+1}　${o[1]}`,
+      ()=>{
+        set(pg.key,o[0]);
+        if(pg.key==='pd_status_self_report'){
+          set('pd_hc_status',Number(o[0])===1?'PD':'HC');
+          if(Number(o[0])===0)set('pd_duration_years_self_report',null);
+        }
+        ST.error='';
+        setTimeout(guidedGoForward_,150);
+      },
+      'choice'+(sameValue(val(pg.key),o[0])?' selected':'')
+    ));
+  });
+  a.append(g);
+}
+
+function guidedRenderPdYears_(a){
+  const f=el('div','field');
+  f.append(
+    el('label','','大約年數'),
+    el('p','guided-mini-hint','例如：5 年、8.5 年。大約即可。')
   );
-  const status=el('p','hint','');
-  box.append(
-    btn('🔊 聽語音解釋',()=>guidedSpeak_(pg.body,status),'secondary'),
-    status
-  );
-  a.append(box);
+  const i=el('input','text');
+  i.type='number';
+  i.inputMode='decimal';
+  i.min='0';
+  i.max='80';
+  i.step='0.5';
+  i.placeholder='例如 5';
+  i.value=val('pd_duration_years_self_report')??'';
+  i.oninput=()=>{
+    const n=i.value===''?null:Number(i.value);
+    set('pd_duration_years_self_report',n);
+  };
+  i.onkeydown=e=>{
+    if(e.key==='Enter'&&i.value!==''){
+      e.preventDefault();
+      guidedGoForward_();
+    }
+  };
+  f.append(i);
+  a.append(f);
 }
 
 function guidedRenderEducation_(a){
   const g=el('div','direct');
 
-  C.education.forEach(o=>{
+  C.education.forEach((o,index)=>{
     g.append(btn(
-      o[1],
+      `${index+1}　${o[1]}`,
       ()=>{
         const changed=val('education_level')!==o[0];
         set('education_level',o[0]);
@@ -1719,85 +2137,604 @@ function guidedRenderEducation_(a){
     ));
   });
 
-  a.append(g);
+  a.append(
+    el('p','guided-scale-hint','電腦可按數字鍵選教育程度。'),
+    g
+  );
 
   if(present('education_level')){
     const f=el('div','field');
-    f.append(el('label','','實際受教育年數'));
+    f.append(el('label','','實際接受全日制教育多少年？'));
     const i=el('input','text');
     i.type='number';
+    i.inputMode='numeric';
     i.min='0';
     i.max='40';
-    i.inputMode='numeric';
-    i.placeholder='請輸入實際年數';
+    i.placeholder='例如 12';
     i.value=val('education_years')??'';
     i.oninput=()=>set(
       'education_years',
       i.value===''?null:Number(i.value)
     );
+    i.onkeydown=e=>{
+      if(e.key==='Enter'&&i.value!==''){
+        e.preventDefault();
+        guidedGoForward_();
+      }
+    };
     f.append(
       i,
-      el('p','hint','請填寫實際接受全日制教育的年數。')
+      el('p','guided-mini-hint','可輸入大約年數。完成後按 Enter 或「下一題」。')
     );
     a.append(f);
   }
 }
 
-function guidedResetDryRun_(){
-  currentFlowDraftKeys_('guided').forEach(k=>localStorage.removeItem(k));
-  resetFlow();
-  ST.flow='guided';
-  ST.error='';
+function guidedBinaryButtons_(key,onAnswer){
+  const g=el('div','direct');
+  g.append(
+    btn('1　是',()=>onAnswer(1),'choice'+(val(key)===1?' selected':'')),
+    btn('2　否',()=>onAnswer(0),'choice'+(val(key)===0?' selected':''))
+  );
+  return g;
+}
+
+function guidedQuipStemKeys_(stemIndex){
+  return B.quip.domains.map(d=>`quip_${d.key}${stemIndex}_yes`);
+}
+
+function guidedRenderQuipStem_(pg,a){
+  const help=GUIDED_QUIP_STEM_HELP[pg.stem.index];
+  a.append(
+    el('span','guided-keyword','這題重點：'+help.word),
+    el('p','',pg.stem.fullText)
+  );
+  guidedVoiceBox_(
+    `quip-stem-${pg.stem.index}`,
+    '簡單說',
+    help.text,
+    a,
+    true
+  );
+  a.append(el('p','guided-scale-hint','每一行都要選「是」或「否」。電腦：1＝是，2＝否。'));
+
+  const keys=guidedQuipStemKeys_(pg.stem.index);
+
+  B.quip.domains.forEach(d=>{
+    const key=`quip_${d.key}${pg.stem.index}_yes`;
+    const row=el('div','guided-binary-row');
+    row.append(
+      el('strong','',d.fullLabel),
+      el('div','guided-example',d.description||'')
+    );
+    row.append(guidedBinaryButtons_(key,value=>{
+      set(key,value);
+      ST.error='';
+      if(keys.every(present)){
+        setTimeout(guidedGoForward_,180);
+      }else{
+        player();
+      }
+    }));
+    a.append(row);
+  });
+}
+
+function guidedRenderQuipBinary_(pg,a){
+  const item=pg.item;
+  const help=guidedQuipExtraHelp_(item);
+  a.append(
+    el('span','guided-keyword','重點：'+help.word),
+    el('p','',item.fullLabel||'')
+  );
+  guidedVoiceBox_(
+    `quip-extra-${item.code||item.name}`,
+    '簡單說',
+    help.text,
+    a,
+    true
+  );
+
+  const choose=value=>{
+    set(item.name,value);
+    ST.error='';
+    if(value===0){
+      if(item.detailField)set(item.detailField,null);
+      return setTimeout(guidedGoForward_,180);
+    }
+    if(!item.detailField){
+      return setTimeout(guidedGoForward_,180);
+    }
+    player();
+  };
+
+  a.append(
+    el('p','guided-scale-hint','電腦：1＝是，2＝否。'),
+    guidedBinaryButtons_(item.name,choose)
+  );
+
+  if(item.detailField&&val(item.name)===1){
+    const f=el('div','field');
+    f.append(el('label','',item.detailPrompt||'請簡單描述'));
+    const t=el('textarea');
+    t.placeholder='一句話也可以';
+    t.value=val(item.detailField)||'';
+    t.oninput=()=>set(item.detailField,t.value);
+    t.onkeydown=e=>{
+      if(e.key==='Enter'&&!e.shiftKey&&String(t.value||'').trim()){
+        e.preventDefault();
+        guidedGoForward_();
+      }
+    };
+    f.append(t,el('p','guided-mini-hint','電腦：輸入後按 Enter 可到下一題。'));
+    a.append(f);
+  }
+}
+
+function guidedRsSetAllZero_(){
+  B.quiprs.matrixCells.forEach(x=>ST.answers[x.name]=0);
+  ST.answers.quiprs_section_confirmed='none';
+  saveDraft();
   player();
 }
 
+function guidedRsCommitCell_(input,cell,value){
+  ST.answers[cell.name]=value;
+  const complete=B.quiprs.matrixCells.every(x=>present(x.name));
+  ST.answers.quiprs_section_confirmed=complete?'answered':'grid_pending';
+  saveDraft();
+  input.value=String(value);
+  input.classList.add('selected');
+
+  const all=qa('.guided-rs-input');
+  const next=all[all.indexOf(input)+1];
+  if(next){
+    requestAnimationFrame(()=>next.focus({preventScroll:true}));
+  }
+}
+
+function guidedRenderQuipRs_(a){
+  const legend=el('div','guided-score-legend',
+    '分數一直看這裡：0＝從不　1＝極少　2＝有時　3＝經常　4＝非常頻繁');
+  a.append(legend);
+
+  const voiceText='看過去四星期。零是從不，一是極少，二是有時，三是經常，四是非常頻繁。表格四行分別問：想到、衝動、控制、設法繼續。';
+  guidedVoiceBox_('quiprs-grid-help','填表口訣',voiceText,a,true);
+
+  const wrap=el('div','guided-rs-wrap');
+  const grid=el('div','guided-rs-table');
+
+  const corner=el('div','guided-rs-cell guided-rs-head guided-rs-stem','問題重點');
+  corner.append(el('small','','向右滑可以看其他行為'));
+  grid.append(corner);
+
+  B.quiprs.domains.forEach(d=>{
+    const h=el('div','guided-rs-cell guided-rs-head guided-rs-domain');
+    h.append(el('strong','',d.fullLabel));
+    if(d.description)h.append(el('small','',d.description));
+    grid.append(h);
+  });
+
+  B.quiprs.sharedStems.forEach(st=>{
+    const stem=el('div','guided-rs-cell guided-rs-stem');
+    stem.append(
+      el('strong','',`${st.index}. ${st.shortLabel}`),
+      el('small','',guidedRsStemHelp_(st.index)),
+      el('small','',st.fullText)
+    );
+    grid.append(stem);
+
+    B.quiprs.domains.forEach(d=>{
+      const cell=B.quiprs.matrixCells.find(
+        x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase()
+      );
+      const box=el('div','guided-rs-cell');
+      const i=el('input','guided-rs-input');
+      i.inputMode='numeric';
+      i.pattern='[0-4]';
+      i.maxLength=1;
+      i.placeholder='0–4';
+      i.dataset.key=cell.name;
+      i.value=val(cell.name)??'';
+      if(i.value!=='')i.classList.add('selected');
+
+      i.onkeydown=e=>{
+        if(/^[0-4]$/.test(e.key)){
+          e.preventDefault();
+          guidedRsCommitCell_(i,cell,Number(e.key));
+        }else if(e.key==='Enter'){
+          e.preventDefault();
+          const all=qa('.guided-rs-input');
+          const next=all[all.indexOf(i)+1];
+          if(next)next.focus({preventScroll:true});
+        }else if(![
+          'Tab','Shift','Backspace','Delete',
+          'ArrowLeft','ArrowRight','ArrowUp','ArrowDown'
+        ].includes(e.key)){
+          e.preventDefault();
+        }
+      };
+
+      i.oninput=()=>{
+        const raw=String(i.value||'').replace(/[^0-4]/g,'').slice(-1);
+        if(raw===''){
+          ST.answers[cell.name]=null;
+          ST.answers.quiprs_section_confirmed='grid_pending';
+          i.value='';
+          saveDraft();
+          return;
+        }
+        guidedRsCommitCell_(i,cell,Number(raw));
+      };
+
+      box.append(i);
+      grid.append(box);
+    });
+  });
+
+  wrap.append(grid);
+  a.append(wrap);
+
+  const count=B.quiprs.matrixCells.filter(x=>present(x.name)).length;
+  a.append(
+    el('div','result',`已明確填寫：${count}/28。空白＝還沒有回答；0＝你明確回答「從不」。`)
+  );
+
+  a.append(
+    btn(
+      '28格全部都是「從不」',
+      guidedRsSetAllZero_,
+      'secondary'
+    )
+  );
+
+  if(count===28&&val('quiprs_section_confirmed')!=='answered'){
+    ST.answers.quiprs_section_confirmed='answered';
+    saveDraft();
+  }
+}
+
+function guidedRenderRbBinary_(pg,a){
+  const item=pg.item;
+  if(B.rbdsq&&B.rbdsq.sourceField&&!present(B.rbdsq.sourceField)){
+    ST.answers[B.rbdsq.sourceField]=guidedRbSelfValue_();
+    saveDraft();
+  }
+
+  a.append(
+    el('span','guided-keyword',pg.disease?'健康情況':'過去1個月'),
+    el('p','guided-mini-hint',pg.disease
+      ? '每題都要選「是」或「否」。'
+      : '至少出現3次才選「是」；偶爾一兩次選「否」。'),
+    el('p','',item.fullLabel||item.question||item.label||'')
+  );
+
+  const choose=value=>{
+    set(item.name,value);
+    ST.error='';
+    if(value===0){
+      if(item.detailField)set(item.detailField,null);
+      return setTimeout(guidedGoForward_,180);
+    }
+    if(!item.detailField){
+      return setTimeout(guidedGoForward_,180);
+    }
+    player();
+  };
+
+  a.append(guidedBinaryButtons_(item.name,choose));
+
+  if(item.detailField&&val(item.name)===1){
+    const f=el('div','field');
+    f.append(el('label','','請簡單說明'));
+    const t=el('textarea');
+    t.placeholder='一句話也可以';
+    t.value=val(item.detailField)||'';
+    t.oninput=()=>set(item.detailField,t.value);
+    t.onkeydown=e=>{
+      if(e.key==='Enter'&&!e.shiftKey&&String(t.value||'').trim()){
+        e.preventDefault();
+        guidedGoForward_();
+      }
+    };
+    f.append(t);
+    a.append(f);
+  }
+}
+
+function guidedMriMessage_(text){
+  const x=String(text||'');
+  if(/心臟|起搏|pacemaker/i.test(x)){
+    return '如果這一項是「是」，本研究會先暫停掃描安排，由研究人員核對心臟裝置的型號和安全資料。';
+  }
+  if(/刺激|stimulator|神經/i.test(x)){
+    return '如果這一項是「是」，本研究會先暫停掃描安排，由研究人員核對神經刺激裝置的種類和安全資料。';
+  }
+  if(/假牙|牙|denture/i.test(x)){
+    return '如果這一項是「是」，研究人員會再核對假牙數量、材料和固定方式。本研究會特別核對是否有10顆或以上。';
+  }
+  return '如果選「是」，研究人員會再向你核對具體資料，再判斷是否適合 MRI。';
+}
+
+function guidedUpdateMriNoneFlag_(){
+  const keys=(C.mriSafety||[]).map(x=>x[0]);
+  if(!keys.every(present)){
+    ST.answers.mri_safety_none_confirmed=0;
+    return;
+  }
+  ST.answers.mri_safety_none_confirmed=
+    keys.some(k=>Number(val(k))===1)?0:1;
+}
+
+function guidedRenderMriSafety_(pg,a){
+  a.append(
+    el('p','',pg.text),
+    el('p','guided-mini-hint','每題都要選「是」或「否」。')
+  );
+
+  const choose=value=>{
+    set(pg.key,value);
+    guidedUpdateMriNoneFlag_();
+    ST.error='';
+    if(value===0){
+      return setTimeout(guidedGoForward_,180);
+    }
+    player();
+  };
+
+  a.append(guidedBinaryButtons_(pg.key,choose));
+
+  if(Number(val(pg.key))===1){
+    const note=el('div','result warn',guidedMriMessage_(pg.text));
+    a.append(note,btn('我知道了，繼續',guidedGoForward_,'primary'));
+  }
+}
+
+
+function guidedRenderCdarsExamples_(pg,a){
+  const intro=pg.domain&&pg.domain.examplePrompt
+    ? pg.domain.examplePrompt
+    : `請填寫兩項${pg.domain&&pg.domain.title?pg.domain.title:'活動'}例子`;
+  a.append(
+    el('p','instruction',intro),
+    el('p','guided-mini-hint','例子要是你真的會做的活動。短短幾個字也可以。電腦可按 Enter 到下一格。')
+  );
+
+  const fields=[
+    [pg.example1Key,'例子一'],
+    [pg.example2Key,'例子二']
+  ];
+  const inputs=[];
+
+  fields.forEach(([key,label],index)=>{
+    const f=el('div','field');
+    f.append(el('label','',label));
+    const i=el('input','text');
+    i.value=val(key)||'';
+    i.placeholder=index===0?'例如：煮飯':'例如：散步';
+    i.oninput=()=>set(key,i.value);
+    i.onkeydown=e=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        if(index===0){
+          inputs[1]&&inputs[1].focus();
+        }else if(
+          String(val(pg.example1Key)||'').trim() &&
+          String(val(pg.example2Key)||'').trim()
+        ){
+          guidedGoForward_();
+        }
+      }
+    };
+    inputs.push(i);
+    f.append(i);
+    a.append(f);
+  });
+}
+
+function guidedRenderIorDimension_(pg,a){
+  const n=String(pg.scenario).padStart(2,'0');
+  const key=`ior${n}_${pg.dimension}`;
+
+  const scenario=el('div','guided-scenario');
+  scenario.append(
+    el('strong','',`情境 ${pg.scenario}`),
+    el('div','',pg.scenarioText)
+  );
+  a.append(
+    scenario,
+    el('span','guided-keyword','現在只問：'+pg.dimensionLabel),
+    el('p','guided-mini-hint',pg.explanation)
+  );
+
+  const labels={
+    frequency:['1 從不','2 很少','3 有時','4 經常','5 非常頻繁'],
+    conviction:['1 完全不相信','2 有點相信','3 半信半疑','4 相當相信','5 完全相信'],
+    distress:['1 完全沒有不安','2 輕微不安','3 中等不安','4 相當不安','5 非常不安']
+  }[pg.dimension];
+
+  const g=el('div','scale-buttons');
+  labels.forEach((label,index)=>{
+    const value=index+1;
+    g.append(btn(
+      label,
+      ()=>{
+        set(key,value);
+        ST.error='';
+        setTimeout(guidedGoForward_,180);
+      },
+      val(key)===value?'selected':''
+    ));
+  });
+  a.append(
+    el('p','guided-scale-hint','電腦可直接按 1–5。'),
+    g
+  );
+}
+
+function guidedRenderPdiItem_(pg,a){
+  const x=pg.pdi;
+  a.append(
+    el('p','instruction',`${pg.item}/21。先回答有沒有。`),
+    el('h3','',x.fullLabel),
+    el('p','guided-scale-hint','電腦：1＝是，2＝否。')
+  );
+
+  const chooseYesNo=value=>{
+    setPdiAnswer(x,value);
+    ST.error='';
+    if(value===0){
+      return setTimeout(guidedGoForward_,180);
+    }
+    player();
+  };
+
+  a.append(guidedBinaryButtons_(x.yesField,chooseYesNo));
+
+  if(Number(val(x.yesField))!==1)return;
+
+  a.append(
+    el('div','result','你選了「是」。再回答下面3個程度；完成第3個會自動到下一題。')
+  );
+
+  const dims=[
+    ['distress','困擾程度',['1 沒有困擾','2 輕微','3 中等','4 相當','5 十分困擾']],
+    ['preoccupation','反覆想到',['1 幾乎沒有','2 偶爾','3 有時','4 經常','5 一直在想']],
+    ['conviction','相信程度',['1 一點也不真實','2 有點不真實','3 半信半疑','4 相當真實','5 非常真實']]
+  ];
+
+  dims.forEach(([kind,title,labels])=>{
+    const key=x.dimensions[kind].name;
+    const block=el('div','guided-binary-row');
+    block.append(el('strong','',title));
+    const g=el('div','scale-buttons');
+    labels.forEach((label,index)=>{
+      const value=index+1;
+      g.append(btn(
+        label,
+        ()=>{
+          set(key,value);
+          ST.error='';
+          const done=dims.every(d=>present(x.dimensions[d[0]].name));
+          if(done)setTimeout(guidedGoForward_,180);
+          else player();
+        },
+        val(key)===value?'selected':''
+      ));
+    });
+    block.append(g);
+    a.append(block);
+  });
+
+  a.append(el('p','guided-scale-hint','電腦：按 1–5 會填下一個未完成的程度。'));
+}
+
+function guidedRenderScale_(pg,a){
+  const opts=pg.options||[];
+  const g=el('div',opts.length===5?'scale-buttons':'options');
+
+  a.append(el('p','guided-scale-hint',`電腦可按 1–${opts.length}。選完會自動到下一題。`));
+
+  opts.forEach((o,n)=>{
+    const keyText=String(n+1);
+    const b=btn(
+      '',
+      ()=>{
+        set(pg.key,o.value);
+        ST.error='';
+        setTimeout(guidedGoForward_,180);
+      },
+      (opts.length===5?'':'choice')+
+        (sameValue(val(pg.key),o.value)?' selected':'')
+    );
+
+    b.dataset.answerKey=pg.key;
+    b.dataset.answerPosition=String(n+1);
+    b.append(
+      el('strong','',keyText),
+      document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,''))
+    );
+    g.append(b);
+  });
+
+  a.append(g);
+}
+
+/* ---------- Checkpoints ---------- */
+
+function guidedPrepareScreeningDefaults_(){
+  if(B.rbdsq&&B.rbdsq.sourceField){
+    ST.answers[B.rbdsq.sourceField]=guidedRbSelfValue_();
+  }
+
+  const rbItems=(B.rbdsq.items||[]).concat(B.rbdsq.diseaseItems||[]);
+  if(rbItems.every(x=>present(x.name))){
+    ST.answers.rbdsq_section_confirmed=1;
+    ST.answers.rbq10_none_confirmed=
+      (B.rbdsq.diseaseItems||[]).some(x=>Number(val(x.name))===1)?0:1;
+  }
+
+  guidedUpdateMriNoneFlag_();
+
+  if(quipKeys().every(present)){
+    ST.answers.quip_complete=1;
+  }
+
+  if(
+    (B.quip.additionalItems||[]).every(x=>present(x.name)) &&
+    quipKeys().every(present)
+  ){
+    ST.answers.quip_complete=1;
+  }
+
+  saveDraft();
+}
+
 function guidedRenderStopped_(){
+  guidedStopVoice_();
   const m=appShell();
   const t=el('header','toolbar');
   t.append(el('h1','','研究問卷'));
   m.append(t);
 
-  const s=el('section','summary');
+  const s=el('section','summary guided-success');
   s.append(
-    el('h2','','這部分已完成'),
+    el('h2','','這部分已收到'),
     el(
       'div',
       'result warn',
-      '根據本研究的篩選規則，我們需要先由研究人員跟您進一步確認，因此暫時不需要繼續填寫後面的問卷。'
+      '根據本研究的篩選規則，研究人員需要先跟您確認一些資料。請不要繼續填寫後面的問卷。'
     ),
     el(
       'p',
       '',
-      '請聯絡邀請您參與研究的研究人員。研究人員會再向您說明下一步。'
+      '請等待研究人員聯絡您。如研究人員曾提供聯絡方式，也可以直接聯絡研究人員。'
     )
   );
 
   if(guidedDryRun_()){
-    s.append(
-      el('p','hint','目前是測試模式，以上資料沒有送到後端。'),
-      btn('重新開始測試',guidedResetDryRun_,'secondary')
-    );
+    s.append(el('p','hint','測試模式：這次沒有把資料送到後端。'));
   }
 
   m.append(s);
 }
 
-async function guidedSubmitHads_(button,status){
+async function guidedAutoSubmitHads_(status){
+  if(ST._guidedHadsSubmitting)return;
   calculateAllDerived();
 
   if(Number(val('hads_complete'))!==1){
     status.className='error';
-    status.textContent='情緒問卷尚未完整，請返回完成所有題目。';
+    status.textContent='情緒問卷尚未完整。請返回完成所有題目。';
     return;
   }
 
-  button.disabled=true;
-  status.className='hint';
-  status.textContent=guidedDryRun_()?'測試提交中……':'正在安全保存這部分答案……';
+  ST._guidedHadsSubmitting=true;
+  status.className='result';
+  status.textContent=guidedDryRun_()?'測試保存中……':'正在安全保存這部分答案……';
 
   try{
     await guidedPostPhase_('hads','screening_core',guidedHadsKeys_());
-
     ST.answers._guided_hads_submitted=1;
 
     if(Number(val('hads_mood_review'))===1){
@@ -1809,15 +2746,18 @@ async function guidedSubmitHads_(button,status){
 
     ST.answers._guided_hads_passed=1;
     ST.answers._guided_hads_blocked=0;
-    ST.step++;
-    ST.error='';
     saveDraft();
-    player();
+    ST._guidedHadsSubmitting=false;
+    setTimeout(guidedGoForward_,350);
   }catch(err){
-    button.disabled=false;
+    ST._guidedHadsSubmitting=false;
     status.className='error';
-    status.textContent='暫時未能保存資料，請保持此頁開啟並重試。'+
-      (err&&err.message?' '+err.message:'');
+    status.textContent=
+      '暫時未能保存資料。答案仍保存在這部裝置。請保持此頁開啟，稍後再試。 '+
+      (err&&err.message?err.message:'');
+    status.parentElement.append(
+      btn('重新嘗試保存',()=>guidedAutoSubmitHads_(status),'primary')
+    );
   }
 }
 
@@ -1827,39 +2767,22 @@ function guidedRenderHadsGate_(a){
   }
 
   if(Number(val('_guided_hads_passed'))===1){
-    a.append(
-      el('div','result good','情緒問卷已安全保存，可以繼續下一部分。')
-    );
-    a.append(btn('繼續',()=>{
-      ST.step++;
-      saveDraft();
-      player();
-    },'primary'));
-    return;
+    a.append(el('div','result good','情緒問卷已安全保存。正在進入下一部分……'));
+    return setTimeout(guidedGoForward_,250);
   }
 
-  const status=el('div','hint','');
-  const go=btn(
-    '提交這部分並繼續',
-    ()=>guidedSubmitHads_(go,status),
-    'primary'
-  );
-
-  a.append(
-    el(
-      'p',
-      '',
-      '您已完成情緒問卷。請先安全提交這部分答案，系統會告訴您是否需要繼續。'
-    ),
-    go,
-    status
-  );
+  const status=el('div','result','正在檢查並保存情緒問卷……');
+  a.append(status);
+  setTimeout(()=>guidedAutoSubmitHads_(status),80);
 }
 
-async function guidedSubmitScreening_(button,status){
-  button.disabled=true;
-  status.className='hint';
-  status.textContent=guidedDryRun_()?'測試提交中……':'正在安全保存第一部分……';
+async function guidedAutoSubmitScreening_(status){
+  if(ST._guidedScreeningSubmitting)return;
+  guidedPrepareScreeningDefaults_();
+  ST._guidedScreeningSubmitting=true;
+
+  status.className='result';
+  status.textContent=guidedDryRun_()?'測試保存中……':'正在安全保存第一部分……';
 
   try{
     await guidedPostPhase_(
@@ -1868,50 +2791,37 @@ async function guidedSubmitScreening_(button,status){
       guidedScreeningKeys_()
     );
     ST.answers._guided_screening_submitted=1;
-    ST.step++;
-    ST.error='';
     saveDraft();
-    player();
+    ST._guidedScreeningSubmitting=false;
+    setTimeout(guidedGoForward_,350);
   }catch(err){
-    button.disabled=false;
+    ST._guidedScreeningSubmitting=false;
     status.className='error';
-    status.textContent='暫時未能保存資料，請保持此頁開啟並重試。'+
-      (err&&err.message?' '+err.message:'');
+    status.textContent=
+      '暫時未能保存第一部分。答案仍保存在這部裝置。 '+
+      (err&&err.message?err.message:'');
+    status.parentElement.append(
+      btn('重新嘗試保存',()=>guidedAutoSubmitScreening_(status),'primary')
+    );
   }
 }
 
 function guidedRenderScreeningCheckpoint_(a){
   if(Number(val('_guided_screening_submitted'))===1){
-    a.append(el('div','result good','第一部分已安全保存。'));
-    a.append(btn('開始下一部分',()=>{
-      ST.step++;
-      saveDraft();
-      player();
-    },'primary'));
-    return;
+    a.append(el('div','result good','第一部分已安全保存。正在進入下一部分……'));
+    return setTimeout(guidedGoForward_,250);
   }
 
-  const status=el('div','hint','');
-  const go=btn(
-    '保存第一部分並繼續',
-    ()=>guidedSubmitScreening_(go,status),
-    'primary'
-  );
-
-  a.append(
-    el(
-      'p',
-      '',
-      '第一部分已完成。這次保存不包括 MoCA；MoCA 會由研究人員另行處理。'
-    ),
-    go,
-    status
-  );
+  const status=el('div','result','第一部分完成。正在安全保存……');
+  a.append(status);
+  setTimeout(()=>guidedAutoSubmitScreening_(status),80);
 }
 
-async function guidedSubmitStage2_(button,status){
-  button.disabled=true;
-  status.className='hint';
+async function guidedAutoSubmitStage2_(status){
+  if(ST._guidedStage2Submitting)return;
+  ST._guidedStage2Submitting=true;
+
+  status.className='result';
   status.textContent=guidedDryRun_()?'測試提交中……':'正在提交最後一部分……';
 
   try{
@@ -1921,45 +2831,73 @@ async function guidedSubmitStage2_(button,status){
       guidedStage2Keys_()
     );
     ST.answers._guided_stage2_submitted=1;
-    ST.error='';
     saveDraft();
+    ST._guidedStage2Submitting=false;
     player();
   }catch(err){
-    button.disabled=false;
+    ST._guidedStage2Submitting=false;
     status.className='error';
-    status.textContent='暫時未能提交，您的答案仍保存在此裝置。請重試。'+
-      (err&&err.message?' '+err.message:'');
+    status.textContent=
+      '暫時未能提交。答案仍保存在這部裝置。 '+
+      (err&&err.message?err.message:'');
+    status.parentElement.append(
+      btn('重新嘗試提交',()=>guidedAutoSubmitStage2_(status),'primary')
+    );
   }
 }
 
 function guidedRenderFinal_(a){
+  guidedStopVoice_();
+
   if(Number(val('_guided_stage2_submitted'))===1){
     a.append(
-      el('div','result good','所有需要您自行填寫的問卷已完成並安全提交。'),
-      el('p','','謝謝您的參與。MoCA 或其他需要研究人員完成的部分會由研究團隊另行安排。')
+      el('div','result good guided-success','已收到提交。謝謝您。'),
+      el('p','guided-success','請等待工作人員通知您下一步。')
     );
-
     if(guidedDryRun_()){
-      a.append(
-        el('p','hint','測試模式：沒有資料送到後端。'),
-        btn('重新開始測試',guidedResetDryRun_,'secondary')
-      );
+      a.append(el('p','hint','測試模式：這次沒有把資料送到後端。'));
     }
     return;
   }
 
-  const status=el('div','hint','');
-  const go=btn(
-    '提交全部剩餘問卷',
-    ()=>guidedSubmitStage2_(go,status),
-    'primary'
-  );
+  const status=el('div','result','所有需要您自行填寫的題目已完成。正在提交……');
+  a.append(status);
+  setTimeout(()=>guidedAutoSubmitStage2_(status),80);
+}
 
-  a.append(
-    el('p','','您已完成所有需要自行填寫的題目。'),
-    go,
-    status
-  );
+/* ---------- Completion / navigation ---------- */
+
+function guidedQuipStemComplete_(pg){
+  return guidedQuipStemKeys_(pg.stem.index).every(present);
+}
+
+function guidedQuipBinaryComplete_(pg){
+  if(!present(pg.item.name))return false;
+  if(Number(val(pg.item.name))===1&&pg.item.detailField){
+    return Boolean(String(val(pg.item.detailField)||'').trim());
+  }
+  return true;
+}
+
+function guidedRbComplete_(pg){
+  if(!present(pg.item.name))return false;
+  if(Number(val(pg.item.name))===1&&pg.item.detailField){
+    return Boolean(String(val(pg.item.detailField)||'').trim());
+  }
+  return true;
+}
+
+function guidedPdiComplete_(pg){
+  const x=pg.pdi;
+  if(Number(val(x.yesField))===0)return true;
+  if(Number(val(x.yesField))!==1)return false;
+  return ['distress','preoccupation','conviction']
+    .every(k=>present(x.dimensions[k].name));
+}
+
+function guidedIorComplete_(pg){
+  const n=String(pg.scenario).padStart(2,'0');
+  return present(`ior${n}_${pg.dimension}`);
 }
 
 function guidedMinStep_(pages){
@@ -1986,6 +2924,9 @@ function guidedOwnNavigation_(pg){
 }
 
 function guidedPlayer_(){
+  guidedInjectStyles_();
+  document.body.classList.add('guided-mode');
+
   if(Number(val('_guided_hads_blocked'))===1){
     return guidedRenderStopped_();
   }
@@ -2021,11 +2962,16 @@ function guidedPlayer_(){
   if(ST.step<0)ST.step=0;
   if(ST.step>=pages.length)ST.step=pages.length-1;
 
+  guidedRememberReached_(ST.step);
+
   const pg=pages[ST.step];
   const m=appShell();
 
   const t=el('header','toolbar');
   t.append(el('h1','','研究問卷'));
+  const actions=el('div','tool-actions');
+  actions.append(btn('下載備份',downloadCurrent,'linkbtn'));
+  t.append(actions);
   m.append(t);
 
   const h=el('div','flow-head');
@@ -2049,19 +2995,21 @@ function guidedPlayer_(){
     const nav=el('div','nav');
 
     if(ST.step>minStep){
-      nav.append(btn('返回上一個',()=>{
-        ST.step--;
-        ST.error='';
-        saveDraft();
-        player();
-      },'secondary'));
+      nav.append(btn('返回上一題',guidedGoBack_,'secondary'));
     }
 
-    nav.append(btn(
-      ST.step===pages.length-1?'完成':'下一題',
-      ()=>manualNext(pg,pages),
-      'next'
-    ));
+    if(ST.step<guidedLatestStep_()){
+      nav.append(btn('回到最新進度',guidedGoLatest_,'secondary'));
+    }
+
+    if(!['scale','guidedQuipStem','guidedQuipBinary','guidedRbBinary',
+          'guidedMriSafetyBinary','guidedIorDimension','guidedPdiItem'].includes(pg.kind)){
+      nav.append(btn(
+        '下一題',
+        ()=>manualNext(pg,pages),
+        'next'
+      ));
+    }
 
     m.append(nav);
   }
@@ -2072,30 +3020,206 @@ function guidedPlayer_(){
   },30);
 }
 
-/* ----- Bind guided mode into the existing app without changing old flows. ----- */
+/* ---------- Guided keyboard ---------- */
+
+function guidedFirstUnansweredBinaryKey_(pg){
+  if(pg.kind==='guidedQuipStem'){
+    return guidedQuipStemKeys_(pg.stem.index).find(k=>!present(k))||null;
+  }
+  if(pg.kind==='guidedQuipBinary')return !present(pg.item.name)?pg.item.name:null;
+  if(pg.kind==='guidedRbBinary')return !present(pg.item.name)?pg.item.name:null;
+  if(pg.kind==='guidedMriSafetyBinary')return !present(pg.key)?pg.key:null;
+  return null;
+}
+
+function guidedKeyboardBinary_(pg,n){
+  if(![1,2].includes(n))return false;
+  const value=n===1?1:0;
+
+  if(pg.kind==='guidedQuipStem'){
+    const key=guidedFirstUnansweredBinaryKey_(pg);
+    if(!key)return false;
+    set(key,value);
+    const done=guidedQuipStemKeys_(pg.stem.index).every(present);
+    done?setTimeout(guidedGoForward_,150):player();
+    return true;
+  }
+
+  if(pg.kind==='guidedQuipBinary'){
+    const item=pg.item;
+    set(item.name,value);
+    if(value===0&&item.detailField)set(item.detailField,null);
+    if(value===0||!item.detailField)setTimeout(guidedGoForward_,150);
+    else player();
+    return true;
+  }
+
+  if(pg.kind==='guidedRbBinary'){
+    const item=pg.item;
+    set(item.name,value);
+    if(value===0&&item.detailField)set(item.detailField,null);
+    if(value===0||!item.detailField)setTimeout(guidedGoForward_,150);
+    else player();
+    return true;
+  }
+
+  if(pg.kind==='guidedMriSafetyBinary'){
+    set(pg.key,value);
+    guidedUpdateMriNoneFlag_();
+    if(value===0)setTimeout(guidedGoForward_,150);
+    else player();
+    return true;
+  }
+
+  if(pg.kind==='guidedPdiItem'){
+    const x=pg.pdi;
+    if(!present(x.yesField)){
+      setPdiAnswer(x,value);
+      if(value===0)setTimeout(guidedGoForward_,150);
+      else player();
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function guidedHandleKeydown_(e){
+  if(!isGuidedFlow_())return;
+  if(e.altKey||e.ctrlKey||e.metaKey||e.isComposing)return;
+
+  const active=document.activeElement;
+  if(active&&(['INPUT','TEXTAREA','SELECT'].includes(active.tagName)||active.isContentEditable)){
+    return;
+  }
+
+  const pg=guidedPages_()[ST.step];
+  if(!pg)return;
+
+  if(e.key==='Enter'){
+    if(pageComplete(pg)&&!guidedOwnNavigation_(pg)){
+      e.preventDefault();
+      return guidedGoForward_();
+    }
+    return;
+  }
+
+  if(!/^\d$/.test(e.key))return;
+  const n=Number(e.key);
+
+  if(guidedKeyboardBinary_(pg,n)){
+    e.preventDefault();
+    return;
+  }
+
+  if(pg.kind==='guidedPdiItem'&&Number(val(pg.pdi.yesField))===1&&n>=1&&n<=5){
+    const missing=['distress','preoccupation','conviction']
+      .find(k=>!present(pg.pdi.dimensions[k].name));
+    if(missing){
+      e.preventDefault();
+      set(pg.pdi.dimensions[missing].name,n);
+      const done=['distress','preoccupation','conviction']
+        .every(k=>present(pg.pdi.dimensions[k].name));
+      done?setTimeout(guidedGoForward_,150):player();
+      return;
+    }
+  }
+
+  if(pg.kind==='guidedIorDimension'&&n>=1&&n<=5){
+    e.preventDefault();
+    const id=String(pg.scenario).padStart(2,'0');
+    set(`ior${id}_${pg.dimension}`,n);
+    return setTimeout(guidedGoForward_,150);
+  }
+
+  if(pg.kind==='scale'||pg.kind==='cdarsScale'){
+    const opts=pg.options||[];
+    if(n>=1&&n<=opts.length){
+      e.preventDefault();
+      set(pg.key,opts[n-1].value);
+      ST.error='';
+      return setTimeout(guidedGoForward_,150);
+    }
+  }
+
+  if(pg.kind==='guidedEducation'&&n>=1&&n<=C.education.length){
+    e.preventDefault();
+    const o=C.education[n-1];
+    const changed=val('education_level')!==o[0];
+    set('education_level',o[0]);
+    if(changed&&!present('education_years')&&o[2]!==null){
+      set('education_years',o[2]);
+    }
+    return player();
+  }
+
+  if(pg.kind==='choice'&&Array.isArray(pg.options)&&n>=1&&n<=pg.options.length){
+    e.preventDefault();
+    const o=pg.options[n-1];
+    set(pg.key,o[0]);
+    if(pg.key==='pd_status_self_report'){
+      set('pd_hc_status',Number(o[0])===1?'PD':'HC');
+      if(Number(o[0])===0)set('pd_duration_years_self_report',null);
+    }
+    return setTimeout(guidedGoForward_,150);
+  }
+}
+
+/* ---------- Bind guided mode into current app ---------- */
 
 playerPages=function(){
-  if(ST.flow==='guided')return guidedPages_();
+  if(isGuidedFlow_())return guidedPages_();
   return _apathyPlayerPagesBase();
 };
 
 renderPage=function(pg,a){
-  if(ST.flow==='guided'){
-    if(pg.kind==='guidedInfo')return guidedRenderInfo_(pg,a);
+  if(isGuidedFlow_()){
+    if(pg.kind==='choice')return guidedRenderChoice_(pg,a);
+    if(pg.kind==='guidedVoiceInfo')return guidedRenderVoiceInfo_(pg,a);
+    if(pg.kind==='guidedPdYears')return guidedRenderPdYears_(a);
     if(pg.kind==='guidedEducation')return guidedRenderEducation_(a);
+    if(pg.kind==='guidedQuipStem')return guidedRenderQuipStem_(pg,a);
+    if(pg.kind==='guidedQuipBinary')return guidedRenderQuipBinary_(pg,a);
+    if(pg.kind==='guidedQuipRsMatrix')return guidedRenderQuipRs_(a);
+    if(pg.kind==='guidedRbBinary')return guidedRenderRbBinary_(pg,a);
+    if(pg.kind==='guidedMriSafetyBinary')return guidedRenderMriSafety_(pg,a);
+    if(pg.kind==='guidedIorDimension')return guidedRenderIorDimension_(pg,a);
+    if(pg.kind==='guidedPdiItem')return guidedRenderPdiItem_(pg,a);
+    if(pg.kind==='cdarsExamples')return guidedRenderCdarsExamples_(pg,a);
     if(pg.kind==='guidedHadsGate')return guidedRenderHadsGate_(a);
     if(pg.kind==='guidedScreeningCheckpoint')return guidedRenderScreeningCheckpoint_(a);
     if(pg.kind==='guidedFinal')return guidedRenderFinal_(a);
+    if(pg.kind==='scale'||pg.kind==='cdarsScale'){
+      if(pg.kind==='cdarsScale'){
+        const x=Object.assign({},pg,{label:cdarsStem(pg)});
+        a.append(el('p','context',x.label));
+        return guidedRenderScale_(x,a);
+      }
+      return guidedRenderScale_(pg,a);
+    }
   }
   return _apathyRenderPageBase(pg,a);
 };
 
 pageComplete=function(pg){
-  if(ST.flow==='guided'){
-    if(pg.kind==='guidedInfo')return true;
+  if(isGuidedFlow_()){
+    if(pg.kind==='guidedVoiceInfo')return true;
+    if(pg.kind==='guidedPdYears'){
+      return present('pd_duration_years_self_report');
+    }
     if(pg.kind==='guidedEducation'){
       return present('education_level')&&present('education_years');
     }
+    if(pg.kind==='guidedQuipStem')return guidedQuipStemComplete_(pg);
+    if(pg.kind==='guidedQuipBinary')return guidedQuipBinaryComplete_(pg);
+    if(pg.kind==='guidedQuipRsMatrix'){
+      return B.quiprs.matrixCells.every(x=>present(x.name)) &&
+        ['answered','none'].includes(String(val('quiprs_section_confirmed')||''));
+    }
+    if(pg.kind==='guidedRbBinary')return guidedRbComplete_(pg);
+    if(pg.kind==='guidedMriSafetyBinary')return present(pg.key);
+    if(pg.kind==='guidedIorDimension')return guidedIorComplete_(pg);
+    if(pg.kind==='guidedPdiItem')return guidedPdiComplete_(pg);
     if(pg.kind==='guidedHadsGate'){
       return Number(val('_guided_hads_submitted'))===1;
     }
@@ -2110,83 +3234,65 @@ pageComplete=function(pg){
 };
 
 renderScale=function(pg,a){
-  if(ST.flow!=='guided')return _apathyRenderScaleBase(pg,a);
+  if(isGuidedFlow_())return guidedRenderScale_(pg,a);
+  return _apathyRenderScaleBase(pg,a);
+};
 
-  const opts=pg.options||[];
-  const g=el('div',opts.length===5?'scale-buttons':'options');
-
-  opts.forEach((o,n)=>{
-    const keyText=opts.length===5?String(o.value):String(n+1);
-    const b=btn(
-      '',
-      ()=>{
-        set(pg.key,o.value);
-        ST.error='';
-        b.classList.add('selected');
-        b.style.backgroundColor='#145a96';
-        b.style.borderColor='#145a96';
-        b.style.color='#ffffff';
-        setTimeout(autoNext,220);
-      },
-      (opts.length===5?'':'choice')+
-        (sameValue(val(pg.key),o.value)?' selected':'')
-    );
-
-    b.dataset.answerKey=pg.key;
-    b.dataset.answerValue=String(o.value);
-    b.dataset.answerPosition=String(n+1);
-    b.append(
-      el('strong','',keyText),
-      document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,''))
-    );
-    g.append(b);
-  });
-
-  a.append(g);
+autoNext=function(){
+  if(isGuidedFlow_())return guidedGoForward_();
+  return _apathyAutoNextBase();
 };
 
 manualNext=function(pg,pages){
-  if(ST.flow!=='guided')return _apathyManualNextBase(pg,pages);
+  if(!isGuidedFlow_())return _apathyManualNextBase(pg,pages);
 
   if(!pageComplete(pg)){
-    ST.error='此題尚未完成，請先完成目前內容。';
+    ST.error='這題還沒有完成。請先回答目前這一題。';
     return player();
   }
 
-  if(pg.kind==='quipGroup'){
-    completeQuipGroup(pg);
-    if(val(`quip_group_${pg.group}_confirmed`)!=='none'){
-      set(`quip_group_${pg.group}_confirmed`,'selected');
-    }
-  }
-
-  if(ST.step<pages.length-1){
-    ST.step++;
-    ST.error='';
-    saveDraft();
-    return player();
-  }
+  return guidedGoForward_();
 };
 
 player=function(){
-  if(ST.flow==='guided')return guidedPlayer_();
+  if(isGuidedFlow_())return guidedPlayer_();
+  document.body.classList.remove('guided-mode');
+  guidedStopVoice_();
   return _apathyPlayerBase();
 };
 
 start=function(flow){
-  if(flow!=='guided')return _apathyStartBase(flow);
+  if(flow!=='guided'&&flow!=='guided_test')return _apathyStartBase(flow);
 
-  ST.flow='guided';
-  loadDraft('guided');
+  ST.flow=flow;
+  loadDraft(flow);
   ST.error='';
+
+  if(Number(val('_guided_hads_blocked'))===1){
+    return guidedRenderStopped_();
+  }
+
+  if(Number(val('_guided_stage2_submitted'))===1){
+    const pages=guidedPages_();
+    ST.step=pages.findIndex(x=>x.kind==='guidedFinal');
+  }else{
+    ST.step=Math.min(
+      guidedLatestStep_(),
+      Math.max(0,guidedPages_().length-1)
+    );
+  }
+
+  saveDraft();
   return player();
 };
 
-/* The existing home() has already rendered by this point.
-   Only the special invited URL replaces it with guided mode. */
+document.addEventListener('keydown',guidedHandleKeydown_,true);
+
+/* Special invited URL only. Existing homepage and old flows are untouched. */
 if(guidedParam_('flow')==='guided'){
-  start('guided');
+  start(guidedParam_('dry')==='1'?'guided_test':'guided');
 }
+
 
  
 document.addEventListener('keydown',handleGlobalKeydown);

@@ -1,6 +1,6 @@
 // APATHY guided HADS same-link resume bootstrap.
 // Keeps the existing guided questionnaire code unchanged.
-// It only flips local workflow permission after the Receiver confirms staff approval.
+// It only repairs local workflow state after the Receiver confirms staff approval.
 (function(){
 'use strict';
 
@@ -8,8 +8,10 @@ const params=new URLSearchParams(window.location.search);
 if(params.get('flow')!=='guided'||params.get('dry')==='1')return;
 
 const CONFIG=window.FORM_CONFIG||{};
+const BANK=window.APATHY_QUESTION_BANK||{};
 const RECEIVER_URL=String(CONFIG.receiverUrl||'').trim();
 const DRAFT_KEY='apathy-fe-clean-v2-guided';
+const REPAIR_MARKER='_guided_hads_resume_repaired_v1';
 if(!RECEIVER_URL)return;
 
 function readDraft(){
@@ -57,6 +59,59 @@ function jsonp(params,timeoutMs){
   });
 }
 
+function firstPostHadsStep(answers){
+  // Guided identity pages: name, DOB, gender, PD yes/no, phone, education,
+  // plus PD duration only when PD=yes. Then 14 HADS items and one HADS gate.
+  const identityPages=6+(Number(answers.pd_status_self_report)===1?1:0);
+  const hadsCount=Array.isArray(BANK.hads&&BANK.hads.items)?BANK.hads.items.length:14;
+  return identityPages+hadsCount+1;
+}
+
+function repairAfterApproval(draft,allowedAt){
+  if(!draft||!draft.answers)return false;
+  const answers=draft.answers;
+
+  // A participant stopped at the HADS gate cannot legitimately have current
+  // post-HADS answers. If such values exist, they are stale local state from
+  // an earlier guided run on this device. Keep only identity + HADS evidence.
+  const keep=new Set([
+    'p_id','s_id','participant_name',
+    'dob_d','dob_m','dob_y','date_of_birth','age_years',
+    'gender','contact_phone',
+    'pd_status_self_report','pd_hc_status','pd_duration_years_self_report',
+    'education_level','education_years'
+  ]);
+
+  Object.keys(answers).forEach(function(key){
+    if(keep.has(key))return;
+    if(/^hads/i.test(key))return;
+    if(/^_guided_hads_/i.test(key))return;
+    delete answers[key];
+  });
+
+  answers._guided_hads_blocked=0;
+  answers._guided_hads_passed=1;
+  answers._guided_hads_staff_override=1;
+  answers._guided_hads_staff_override_at=String(allowedAt||answers._guided_hads_staff_override_at||new Date().toISOString());
+  answers[REPAIR_MARKER]=1;
+
+  const nextStep=firstPostHadsStep(answers);
+  answers._guided_latest_step=nextStep;
+  draft.step=nextStep;
+  draft.answers=answers;
+  writeDraft(draft);
+  return true;
+}
+
+function repairAlreadyApprovedIfNeeded(){
+  const draft=readDraft();
+  if(!draft||!draft.answers)return false;
+  const a=draft.answers;
+  if(Number(a._guided_hads_staff_override)!==1)return false;
+  if(Number(a[REPAIR_MARKER])===1)return false;
+  return repairAfterApproval(draft,a._guided_hads_staff_override_at);
+}
+
 let checking=false;
 async function checkResume(){
   if(checking)return;
@@ -78,21 +133,22 @@ async function checkResume(){
 
     if(!(result&&result.ok&&result.allowed))return;
 
-    // Workflow permission only. Never alter submitted HADS answers or scores.
-    answers._guided_hads_blocked=0;
-    answers._guided_hads_passed=1;
-    answers._guided_hads_staff_override=1;
-    answers._guided_hads_staff_override_at=String(result.allowed_at||new Date().toISOString());
-    draft.answers=answers;
-    writeDraft(draft);
-
-    // Reload into the existing guided flow; it will continue after the HADS gate.
-    window.location.reload();
+    if(repairAfterApproval(draft,result.allowed_at)){
+      window.location.reload();
+    }
   }catch(_){
     // Keep the participant safely blocked when the approval check is unavailable.
   }finally{
     checking=false;
   }
+}
+
+// One-time recovery for a browser that was approved by the previous bootstrap
+// but then jumped to a stale final page because old guided completion flags were
+// still in localStorage.
+if(repairAlreadyApprovedIfNeeded()){
+  window.location.reload();
+  return;
 }
 
 checkResume();

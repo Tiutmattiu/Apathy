@@ -1351,7 +1351,7 @@ function handleGlobalKeydown(e){
    - Each checkpoint uses a field whitelist. It does NOT submit all ST.answers.
    ========================================================= */
 
-const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-10-V4-RC-CANTONESE-MOBILE';
+const GUIDED_FLOW_BUILD='GUIDED-SELF-2026-09-12-V5-FINAL';
 
 const _apathyStartBase=start;
 const _apathyPlayerBase=player;

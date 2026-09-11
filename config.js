@@ -2,7 +2,7 @@
 'use strict';
 window.FORM_CONFIG=Object.freeze({
  version:'11.0.0-fe-clean-candidate',receiverVersionExpected:'6.0.0-c2-clean',receiverContractExpected:'APATHY-RECEIVER-C2-2026-08-19',
- receiverUrl:'https://script.google.com/macros/s/AKfycbzK5d_w3IgytNY9XpImHsTr2o0Wyxl52wlymmcAPaFcdL8eE8Bln_pMCT9lUj79EaMG/exec',staffPassword:'080',
+ receiverUrl:'https://script.google.com/macros/s/AKfycbzmt4_piks1uvLz784_phI-5tFRmF1pzBhCXcW_E7WbDp0nZQN37liPX3xkOftTya9r1A/exec',staffPassword:'080',
  rawTables:Object.freeze({screening:'screening_raw',stage2:'stage2_raw',mri:'mri_raw',clinical:'clinical_raw',backfill:'backfill_raw'}),
  receiverContract:Object.freeze({routingAuthority:'event_type',formTypes:Object.freeze(['screening','stage2','mri','clinical','backfill']),eventTypes:Object.freeze(['screening_core','stage_2_questionnaires','first_school_assessment','mri_scan','clinical_supplement','historical_paper_reentry','field_correction']),retryUsesSameSubmissionId:true,payloadJsonSingleSerialization:true}),
  staffFlows:Object.freeze([['screening','首次篩查'],['backfill','歷史資料補錄'],['mri_visit','MRI到訪記錄'],['clinical','PD臨床資料'],['ubsn','MRI Booking Assistant']]),

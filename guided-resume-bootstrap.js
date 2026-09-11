@@ -11,7 +11,7 @@ const CONFIG=window.FORM_CONFIG||{};
 const BANK=window.APATHY_QUESTION_BANK||{};
 const RECEIVER_URL=String(CONFIG.receiverUrl||'').trim();
 const DRAFT_KEY='apathy-fe-clean-v2-guided';
-const REPAIR_MARKER='_guided_hads_resume_repaired_v1';
+const REPAIR_MARKER='_guided_hads_resume_repaired_v2';
 if(!RECEIVER_URL)return;
 
 function readDraft(){
@@ -71,9 +71,9 @@ function repairAfterApproval(draft,allowedAt){
   if(!draft||!draft.answers)return false;
   const answers=draft.answers;
 
-  // A participant stopped at the HADS gate cannot legitimately have current
-  // post-HADS answers. If such values exist, they are stale local state from
-  // an earlier guided run on this device. Keep only identity + HADS evidence.
+  // A participant who was stopped at the HADS gate cannot have legitimate
+  // post-HADS answers yet. Keep identity + HADS only and discard stale local
+  // state from an earlier test/session on the same device.
   const keep=new Set([
     'p_id','s_id','participant_name',
     'dob_d','dob_m','dob_y','date_of_birth','age_years',
@@ -103,26 +103,25 @@ function repairAfterApproval(draft,allowedAt){
   return true;
 }
 
-function repairAlreadyApprovedIfNeeded(){
-  const draft=readDraft();
-  if(!draft||!draft.answers)return false;
-  const a=draft.answers;
-  if(Number(a._guided_hads_staff_override)!==1)return false;
-  if(Number(a[REPAIR_MARKER])===1)return false;
-  return repairAfterApproval(draft,a._guided_hads_staff_override_at);
-}
-
 let checking=false;
 async function checkResume(){
   if(checking)return;
+
   const draft=readDraft();
   if(!draft||!draft.answers)return;
 
   const answers=draft.answers;
-  if(Number(answers._guided_hads_blocked)!==1)return;
-
   const submissionId=String(answers._guided_hads_submission_id||'').trim();
   if(!submissionId)return;
+
+  // Once V2 repair has run and the participant is no longer blocked,
+  // do not touch later legitimate progress or completion.
+  if(
+    Number(answers[REPAIR_MARKER])===1 &&
+    Number(answers._guided_hads_blocked)!==1
+  ){
+    return;
+  }
 
   checking=true;
   try{
@@ -133,22 +132,18 @@ async function checkResume(){
 
     if(!(result&&result.ok&&result.allowed))return;
 
+    // Always do one server-confirmed V2 repair after approval. This also
+    // recovers browsers that were approved by an older bootstrap but still
+    // contain stale final/completion flags from an earlier test run.
     if(repairAfterApproval(draft,result.allowed_at)){
       window.location.reload();
     }
   }catch(_){
-    // Keep the participant safely blocked when the approval check is unavailable.
+    // Keep the participant safely blocked / unchanged when the approval
+    // check is unavailable.
   }finally{
     checking=false;
   }
-}
-
-// One-time recovery for a browser that was approved by the previous bootstrap
-// but then jumped to a stale final page because old guided completion flags were
-// still in localStorage.
-if(repairAlreadyApprovedIfNeeded()){
-  window.location.reload();
-  return;
 }
 
 checkResume();

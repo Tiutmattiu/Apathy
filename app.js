@@ -1335,7 +1335,7 @@ function handleGlobalKeydown(e){
 }
 
 /* =========================================================
-   APATHY GUIDED SELF-ASSESSMENT — V4 RELEASE CANDIDATE
+   APATHY GUIDED SELF-ASSESSMENT — V5 RELEASE CANDIDATE
    2026-09-10
    Hidden participant entry: ?flow=guided
    Safe dry-run entry:       ?flow=guided&dry=1
@@ -1379,13 +1379,13 @@ function guidedUnique_(items){
 }
 
 function guidedInjectStyles_(){
-  if(document.getElementById('apathy-guided-v4-style'))return;
+  if(document.getElementById('apathy-guided-v5-style'))return;
 
   const old=document.getElementById('apathy-guided-v2-style');
   if(old)old.remove();
 
   const s=document.createElement('style');
-  s.id='apathy-guided-v4-style';
+  s.id='apathy-guided-v5-style';
   s.textContent=`
     body.guided-mode{font-size:18px}
     body.guided-mode .app{max-width:900px}
@@ -1416,11 +1416,18 @@ function guidedInjectStyles_(){
       border-radius:999px;background:#eef4ff;margin:2px 4px 6px 0}
     body.guided-mode .guided-context{border-left:5px solid #5b78a8;padding:10px 12px;
       margin:5px 0 12px;background:#f7f9fc;border-radius:8px;line-height:1.55}
-    body.guided-mode .guided-help{padding:3px 0 5px;margin:4px 0}
-    body.guided-mode .guided-help>strong{font-size:.88rem;color:#58697d}
-    body.guided-mode .guided-voice-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:5px}
-    body.guided-mode .guided-voice-actions button{min-height:40px;padding:7px 10px;font-size:.86rem}
-    body.guided-mode .guided-voice-status{font-size:.8rem;margin-top:3px;color:#667}
+    body.guided-mode .guided-help{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+      padding:2px 0;margin:2px 0 7px}
+    body.guided-mode .guided-help>strong{font-size:.82rem;color:#58697d;font-weight:700}
+    body.guided-mode .guided-voice-actions{display:flex;gap:5px;flex-wrap:wrap;margin:0}
+    body.guided-mode .guided-voice-actions button{min-height:30px;padding:3px 8px;font-size:.78rem}
+    body.guided-mode .guided-voice-status{font-size:.76rem;margin:0;color:#667}
+    body.guided-mode .guided-question-callout{background:#eef4ff;border:2px solid #8ca8d0;
+      border-radius:12px;padding:11px 13px;margin:6px 0 10px;font-size:1.08rem;
+      font-weight:750;line-height:1.45}
+    body.guided-mode .guided-answer.selected{background:#145a96!important;
+      border-color:#145a96!important;color:#fff!important}
+    body.guided-mode .guided-answer.selected::before{content:'✓ ';font-weight:900}
     body.guided-mode .guided-mini-hint{font-size:.88rem;color:#596677;margin:5px 0}
     body.guided-mode .guided-scale-hint{font-size:.88rem;color:#596677;margin:0 0 7px}
     body.guided-mode .guided-rs-wrap{overflow:auto;max-width:100%;
@@ -1674,42 +1681,65 @@ function guidedSubmissionId_(phase){
   return String(id);
 }
 
-function guidedPayloadSubset_(phase,event,allowedKeys){
-  calculateAllDerived();
+function guidedDerivedSnapshot_(allowedKeys){
+  const original=ST.answers;
+  const work=JSON.parse(JSON.stringify(original||{}));
+  let snapshot={};
+  ST.answers=work;
+  try{
+    calculateAllDerived();
+    (allowedKeys||[]).forEach(k=>{
+      if(Object.prototype.hasOwnProperty.call(ST.answers,k))snapshot[k]=ST.answers[k];
+    });
+  }finally{
+    ST.answers=original;
+  }
+  return snapshot;
+}
 
-  const source=payload('screening',event,'submitted');
-  const out={};
-
-  [
-    'schema_version','frontend_release','receiver_contract_expected',
-    'form_type','event_type','workflow_stage','record_status',
-    'p_id','s_id','visit_number','participant_id','submitted_at',
-    'contact_phone_normalized'
-  ].forEach(k=>{
-    if(Object.prototype.hasOwnProperty.call(source,k))out[k]=source[k];
+function guidedRefreshDerivedFor_(allowedKeys){
+  const snapshot=guidedDerivedSnapshot_(allowedKeys);
+  Object.keys(snapshot).forEach(k=>{
+    if(
+      Object.prototype.hasOwnProperty.call(ST.answers,k) ||
+      /_(total|mean|complete|flag|review|adjust|domains|count|value)$/.test(k) ||
+      /^hads_(anxiety|depression|mood)/.test(k)
+    )ST.answers[k]=snapshot[k];
   });
+  saveDraft();
+  return snapshot;
+}
+
+function guidedPayloadSubset_(phase,event,allowedKeys){
+  const derived=guidedDerivedSnapshot_(allowedKeys);
+  const answers=ST.answers;
+  const route=event==='stage_2_questionnaires'?'stage2':'screening';
+  const submissionId=guidedSubmissionId_(phase);
+  const phone=String(answers.contact_phone||'').replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
+
+  const out={
+    schema_version:'apathy-event-payload-v1',
+    frontend_release:FRONTEND_RELEASE,
+    receiver_contract_expected:'APATHY-RECEIVER-C2-2026-08-19',
+    submission_id:submissionId,
+    form_type:route,
+    event_type:event,
+    workflow_stage:event==='stage_2_questionnaires'?'stage_2':'stage_1',
+    workflow_part:`guided_${phase}`,
+    record_status:'submitted',
+    p_id:answers.p_id||'',
+    s_id:answers.s_id||'',
+    visit_number:answers.visit_number||1,
+    participant_id:answers.p_id||answers.s_id||(phone.length===8?`PHONE-${phone}`:`TEMP-${submissionId}`),
+    submitted_at:new Date().toISOString(),
+    data_source:'participant_remote',
+    contact_phone_normalized:phone||null
+  };
 
   (allowedKeys||[]).forEach(k=>{
-    if(
-      Object.prototype.hasOwnProperty.call(source,k) &&
-      source[k]!==undefined
-    ){
-      out[k]=source[k];
-    }
+    if(Object.prototype.hasOwnProperty.call(derived,k))out[k]=derived[k];
+    else if(Object.prototype.hasOwnProperty.call(answers,k)&&answers[k]!==undefined)out[k]=answers[k];
   });
-
-  out.submission_id=guidedSubmissionId_(phase);
-  out.workflow_part=`guided_${phase}`;
-  out.data_source='participant_remote';
-
-  const phone=String(out.contact_phone_normalized||out.contact_phone||'')
-    .replace(/\D/g,'')
-    .replace(/^852(?=\d{8}$)/,'');
-  out.participant_id=
-    out.p_id||
-    out.s_id||
-    (phone.length===8?`PHONE-${phone}`:`TEMP-${out.submission_id}`);
-
   return out;
 }
 
@@ -1901,8 +1931,8 @@ function guidedVoiceBox_(id,title,text,a,autoPlay=true){
   const actions=el('div','guided-voice-actions');
 
   actions.append(
-    btn('▶ 再聽一次',()=>guidedSpeak_(text,status),'secondary'),
-    btn('■ 停止語音',()=>{
+    btn('▶ 重播',()=>guidedSpeak_(text,status),'secondary'),
+    btn('■ 停止',()=>{
       guidedStopVoice_();
       status.textContent='語音已停止。';
     },'secondary')
@@ -1918,6 +1948,27 @@ function guidedVoiceBox_(id,title,text,a,autoPlay=true){
       setTimeout(()=>guidedSpeak_(text,status),180);
     }
   }
+}
+
+
+function guidedQuestionCallout_(text){
+  return el('div','guided-question-callout',String(text||''));
+}
+
+function guidedAnswerButton_(label,selected,onClick,extraClass=''){
+  const cls=('guided-answer '+extraClass+(selected?' selected':'')).trim();
+  const b=btn(label,onClick,cls);
+  b.setAttribute('aria-pressed',selected?'true':'false');
+  return b;
+}
+
+function guidedRendererOwnsPrompt_(pg){
+  return [
+    'scale','cdarsScale',
+    'guidedQuipStem','guidedQuipBinary','guidedQuipRsMatrix',
+    'guidedRbBinary','guidedMriSafetyBinary','guidedMriSummary',
+    'guidedIorDimension','guidedPdiItem','cdarsExamples'
+  ].includes(String(pg&&pg.kind||''));
 }
 
 const GUIDED_QUIP_STEM_HELP={
@@ -2190,32 +2241,25 @@ function guidedRenderInput_(pg,a){
 
 function guidedRenderChoice_(pg,a){
   const g=el('div','direct');
-
-  a.append(
-    el('p','guided-scale-hint',`電腦可按 1–${pg.options.length}。`)
-  );
-
+  a.append(el('p','guided-scale-hint',`電腦可按 1–${pg.options.length}。`));
   pg.options.forEach(o=>{
-    g.append(btn(
-      o[1],
-      ()=>{
-        set(pg.key,o[0]);
-
-        if(pg.key==='pd_status_self_report'){
-          set('pd_hc_status',Number(o[0])===1?'PD':'HC');
-
-          if(Number(o[0])===0){
-            set('pd_duration_years_self_report',null);
+    g.append(
+      guidedAnswerButton_(
+        o[1],
+        sameValue(val(pg.key),o[0]),
+        ()=>{
+          set(pg.key,o[0]);
+          if(pg.key==='pd_status_self_report'){
+            set('pd_hc_status',Number(o[0])===1?'PD':'HC');
+            if(Number(o[0])===0)set('pd_duration_years_self_report',null);
           }
-        }
-
-        ST.error='';
-        guidedScheduleForward_(150);
-      },
-      'choice'+(sameValue(val(pg.key),o[0])?' selected':'')
-    ));
+          ST.error='';
+          guidedScheduleForward_(150);
+        },
+        'choice'
+      )
+    );
   });
-
   a.append(g);
 }
 
@@ -2279,20 +2323,19 @@ function guidedRenderEducation_(a){
   C.education.forEach(o=>{
     const meta=guidedEducationMeta_(o[0]);
 
-    g.append(btn(
-      meta.label,
-      ()=>{
-        const changed=val('education_level')!==o[0];
-        set('education_level',o[0]);
-
-        if(changed){
-          set('education_years',meta.min);
-        }
-
-        player();
-      },
-      'choice'+(val('education_level')===o[0]?' selected':'')
-    ));
+    g.append(
+      guidedAnswerButton_(
+        meta.label,
+        val('education_level')===o[0],
+        ()=>{
+          const changed=val('education_level')!==o[0];
+          set('education_level',o[0]);
+          if(changed)set('education_years',meta.min);
+          player();
+        },
+        'choice'
+      )
+    );
   });
 
   a.append(g);
@@ -2331,20 +2374,10 @@ function guidedBinaryButtons_(key,onAnswer){
   const yesSelected=Number(val(key))===1;
   const noSelected=Number(val(key))===0;
   const g=el('div','direct');
-
   g.append(
-    btn(
-      '是',
-      ()=>onAnswer(1),
-      'choice'+(yesSelected?' selected':'')
-    ),
-    btn(
-      '否',
-      ()=>onAnswer(0),
-      'choice'+(noSelected?' selected':'')
-    )
+    guidedAnswerButton_('是',yesSelected,()=>onAnswer(1),'choice'),
+    guidedAnswerButton_('否',noSelected,()=>onAnswer(0),'choice')
   );
-
   return g;
 }
 
@@ -2388,18 +2421,14 @@ function guidedRenderQuipStem_(pg,a){
 
   if(pg.stem.index===1){
     a.append(el('div','guided-context',guidedQuipContextText_()));
-    guidedVoiceBox_(
-      'quip-context',
-      '🔊 廣東話語音提示',
-      guidedQuipVoiceText_(),
-      a,
-      true
-    );
+    guidedVoiceBox_('quip-context','🔊 廣東話提示',guidedQuipVoiceText_(),a,true);
   }
 
+  guidedVoiceBox_(`quip-stem-${pg.stem.index}`,'🔊 本題提示',help.text,a,true);
+
   a.append(
-    el('span','guided-keyword','這題重點：'+help.word),
-    el('p','guided-scale-hint','每一項都選「是」或「否」。電腦可按 1＝是，2＝否。')
+    el('span','guided-keyword','重點：'+help.word),
+    el('p','guided-scale-hint','每一項都要明確選「是」或「否」。電腦可按 1＝是，2＝否。')
   );
 
   const keys=guidedQuipStemKeys_(pg.stem.index);
@@ -2407,69 +2436,37 @@ function guidedRenderQuipStem_(pg,a){
   B.quip.domains.forEach(d=>{
     const key=`quip_${d.key}${pg.stem.index}_yes`;
     const row=el('div','guided-binary-row');
-
-    row.append(
-      el('strong','',guidedQuipQuestion_(pg.stem.index,d.fullLabel))
-    );
-
-    if(d.description){
-      row.append(el('div','guided-example','例如：'+String(d.description).replace(/[。.]$/,'')));
-    }
-
+    row.append(guidedQuestionCallout_(guidedQuipQuestion_(pg.stem.index,d.fullLabel)));
     row.append(guidedBinaryButtons_(key,value=>{
       set(key,value);
       ST.error='';
-
-      if(keys.every(present)){
-        guidedScheduleForward_(180);
-      }else{
-        player();
-      }
+      if(keys.every(present))guidedScheduleForward_(180);
+      else player();
     }));
-
     a.append(row);
   });
-
-  guidedVoiceBox_(
-    `quip-stem-${pg.stem.index}`,
-    '🔊 這一題的語音提示',
-    help.text,
-    a,
-    true
-  );
 }
 
 function guidedRenderQuipBinary_(pg,a){
   const item=pg.item;
   const help=guidedQuipExtraHelp_(item);
 
+  guidedVoiceBox_(`quip-extra-${item.code||item.name}`,'🔊 廣東話提示',help.text,a,true);
+
   a.append(
     el('span','guided-keyword','重點：'+help.word),
-    el('p','',item.fullLabel||''),
+    guidedQuestionCallout_(item.fullLabel||item.backfillLabel||''),
     el('p','guided-scale-hint','電腦可按 1＝是，2＝否。')
-  );
-
-  guidedVoiceBox_(
-    `quip-extra-${item.code||item.name}`,
-    '🔊 廣東話語音提示',
-    help.text,
-    a,
-    true
   );
 
   const choose=value=>{
     set(item.name,value);
     ST.error='';
-
     if(value===0){
       if(item.detailField)set(item.detailField,null);
       return guidedScheduleForward_(180);
     }
-
-    if(!item.detailField){
-      return guidedScheduleForward_(180);
-    }
-
+    if(!item.detailField)return guidedScheduleForward_(180);
     player();
   };
 
@@ -2478,12 +2475,10 @@ function guidedRenderQuipBinary_(pg,a){
   if(item.detailField&&val(item.name)===1){
     const f=el('div','field');
     f.append(el('label','',item.detailPrompt||'請簡單描述'));
-
     const t=el('textarea');
     t.placeholder='簡單寫幾個字即可';
     t.value=val(item.detailField)||'';
     t.oninput=()=>set(item.detailField,t.value);
-
     t.onkeydown=e=>{
       if(guidedEnterKey_(e)&&!e.shiftKey&&String(t.value||'').trim()){
         e.preventDefault();
@@ -2491,7 +2486,6 @@ function guidedRenderQuipBinary_(pg,a){
         guidedScheduleForward_(100);
       }
     };
-
     f.append(t);
     a.append(f);
   }
@@ -2527,14 +2521,16 @@ function guidedRenderQuipRs_(a){
   );
   a.append(legend);
 
-  const voiceText='請看過去四星期。零是從不，一是極少，二是有時，三是經常，四是非常頻繁。第一行問想到的頻率；第二行問衝動和難受；第三行問控制困難；第四行問為了繼續而採取行動。藥物使用的例子：醫生處方每天二百毫克，你自己決定服用二百五十毫克。';
+  const voiceText='請看過去四星期。零是從不，一是極少，二是有時，三是經常，四是非常頻繁。第一行問想到的頻率；第二行問衝動和難受；第三行問控制困難；第四行問為了繼續而採取行動。';
   guidedVoiceBox_(
     'quiprs-grid-help',
-    '🔊 廣東話填表提示',
+    '🔊 廣東話提示',
     voiceText,
     a,
     true
   );
+
+  a.append(guidedQuestionCallout_('過去4星期，各種行為出現得有多頻繁？'));
 
   const wrap=el('div','guided-rs-wrap');
   const grid=el('div','guided-rs-table');
@@ -2666,49 +2662,28 @@ function guidedRenderRbBinary_(pg,a){
   }
 
   if(!pg.disease&&item===(B.rbdsq.items||[])[0]){
-    a.append(
-      el(
-        'div',
-        'guided-context',
-        '請想過去一個月。至少出現3次才選「是」；偶爾1–2次選「否」。'
-      )
-    );
-
-    guidedVoiceBox_(
-      'rb-inline-help',
-      '🔊 廣東話填寫提示',
-      '接下來問過去一個月的睡眠情況。至少出現三次才選是。偶爾一兩次選否。每一題都選是或否。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','請想過去一個月。至少出現3次才選「是」；偶爾1–2次選「否」。'));
+    guidedVoiceBox_('rb-inline-help','🔊 廣東話提示',
+      '接下來問過去一個月的睡眠情況。至少出現三次才選是。偶爾一兩次選否。每一題都選是或否。',a,true);
   }
 
   if(pg.disease&&item===(B.rbdsq.diseaseItems||[])[0]){
-    a.append(
-      el('div','guided-context','接下來是健康情況。每一項都選「是」或「否」。')
-    );
+    a.append(el('div','guided-context','接下來是健康情況。每一項都選「是」或「否」。'));
   }
 
   a.append(
-    el('p','',item.fullLabel||item.question||item.label||''),
+    guidedQuestionCallout_(item.fullLabel||item.question||item.label||''),
     el('p','guided-scale-hint','電腦可按 1＝是，2＝否。')
   );
 
   const choose=value=>{
     set(item.name,value);
     ST.error='';
-
     if(value===0){
       if(item.detailField)set(item.detailField,null);
-      guidedScheduleForward_(180);
-      return;
+      guidedScheduleForward_(180);return;
     }
-
-    if(!item.detailField){
-      guidedScheduleForward_(180);
-      return;
-    }
-
+    if(!item.detailField){guidedScheduleForward_(180);return;}
     player();
   };
 
@@ -2717,22 +2692,16 @@ function guidedRenderRbBinary_(pg,a){
   if(item.detailField&&val(item.name)===1){
     const f=el('div','field');
     f.append(el('label','','請簡單說明'));
-
     const t=el('textarea');
     t.placeholder='簡單寫幾個字即可';
     t.value=val(item.detailField)||'';
     t.oninput=()=>set(item.detailField,t.value);
-
     t.onkeydown=e=>{
       if(guidedEnterKey_(e)&&!e.shiftKey&&String(t.value||'').trim()){
-        e.preventDefault();
-        e.stopPropagation();
-        guidedScheduleForward_(100);
+        e.preventDefault();e.stopPropagation();guidedScheduleForward_(100);
       }
     };
-
-    f.append(t);
-    a.append(f);
+    f.append(t);a.append(f);
   }
 }
 
@@ -2753,7 +2722,7 @@ function guidedMriMessage_(text){
 function guidedUpdateMriNoneFlag_(){
   const keys=(C.mriSafety||[]).map(x=>x[0]);
   if(!keys.every(present)){
-    ST.answers.mri_safety_none_confirmed=0;
+    delete ST.answers.mri_safety_none_confirmed;
     return;
   }
   ST.answers.mri_safety_none_confirmed=
@@ -2769,6 +2738,7 @@ function guidedMriYesItems_(){
 
 function guidedRenderMriSummary_(a){
   const yes=guidedMriYesItems_();
+  a.append(guidedQuestionCallout_('請最後核對 MRI 安全資料'));
   const box=el('div','guided-mri-summary');
 
   if(yes.length){
@@ -2802,25 +2772,13 @@ function guidedRenderMriSummary_(a){
 
 function guidedRenderMriSafety_(pg,a){
   if(pg.key===C.mriSafety[0][0]){
-    a.append(
-      el(
-        'div',
-        'guided-context',
-        '請逐項選「是」或「否」。有回答「是」的項目，工作人員會在最後再跟你核對具體資料。'
-      )
-    );
-
-    guidedVoiceBox_(
-      'mri-inline-help',
-      '🔊 廣東話填寫提示',
-      '接下來是 MRI 安全資料。每一項都選是或否。有回答是的項目，工作人員會在最後再跟你核對具體資料。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','請逐項選「是」或「否」。有回答「是」的項目，工作人員會在最後再跟你核對具體資料。'));
+    guidedVoiceBox_('mri-inline-help','🔊 廣東話提示',
+      '接下來是 MRI 安全資料。每一項都選是或否。有回答是的項目，工作人員會在最後再跟你核對具體資料。',a,true);
   }
 
   a.append(
-    el('p','',pg.text),
+    guidedQuestionCallout_(pg.text),
     el('p','guided-scale-hint','電腦可按 1＝是，2＝否。')
   );
 
@@ -2830,11 +2788,8 @@ function guidedRenderMriSafety_(pg,a){
     ST.error='';
     guidedScheduleForward_(180);
   };
-
   a.append(guidedBinaryButtons_(pg.key,choose));
 }
-
-
 
 function guidedCdarsExamplePlaceholders_(domainKey){
   const map={
@@ -2869,7 +2824,7 @@ function guidedRenderCdarsExamples_(pg,a){
     ? pg.domain.examplePrompt
     : `請填寫兩項${pg.domain&&pg.domain.title?pg.domain.title:'活動'}例子`;
 
-  a.append(el('p','instruction',intro));
+  a.append(guidedQuestionCallout_(intro));
 
   const examples=guidedCdarsExamplePlaceholders_(pg.domain&&pg.domain.key);
   const fields=[
@@ -2946,15 +2901,17 @@ function guidedRenderIorDimension_(pg,a){
   labels.forEach((label,index)=>{
     const value=index+1;
 
-    g.append(btn(
-      label,
-      ()=>{
-        set(key,value);
-        ST.error='';
-        guidedScheduleForward_(180);
-      },
-      val(key)===value?'selected':''
-    ));
+    g.append(
+      guidedAnswerButton_(
+        label,
+        Number(val(key))===value,
+        ()=>{
+          set(key,value);
+          ST.error='';
+          guidedScheduleForward_(180);
+        }
+      )
+    );
   });
 
   a.append(
@@ -2967,43 +2924,25 @@ function guidedRenderPdiItem_(pg,a){
   const x=pg.pdi;
 
   if(pg.item===1){
-    a.append(
-      el(
-        'div',
-        'guided-context',
-        '每題先選「是」或「否」。選「是」後，下面三個程度都要完成。'
-      )
-    );
-
-    guidedVoiceBox_(
-      'pdi-inline-help',
-      '🔊 廣東話填寫提示',
-      '每一題先選是或否。選否就去下一題。選是之後，再回答困擾程度、反覆想到的程度和相信程度。三個都完成才會到下一題。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','每題先選「是」或「否」。選「是」後，下面三個程度都要完成。'));
+    guidedVoiceBox_('pdi-inline-help','🔊 廣東話提示',
+      '每一題先選是或否。選否就去下一題。選是之後，再回答困擾程度、反覆想到的程度和相信程度。三個都完成才會到下一題。',a,true);
   }
 
   a.append(
     el('p','instruction',`${pg.item}/21`),
-    el('h3','',x.fullLabel),
+    guidedQuestionCallout_(x.fullLabel),
     el('p','guided-scale-hint','電腦可按 1＝是，2＝否。')
   );
 
   const chooseYesNo=value=>{
     setPdiAnswer(x,value);
     ST.error='';
-
-    if(value===0){
-      guidedScheduleForward_(180);
-      return;
-    }
-
+    if(value===0){guidedScheduleForward_(180);return;}
     player();
   };
 
   a.append(guidedBinaryButtons_(x.yesField,chooseYesNo));
-
   if(Number(val(x.yesField))!==1)return;
 
   const dims=[
@@ -3016,120 +2955,70 @@ function guidedRenderPdiItem_(pg,a){
     const key=x.dimensions[kind].name;
     const block=el('div','guided-binary-row');
     block.append(el('strong','',title));
-
     const g=el('div','scale-buttons');
-
     labels.forEach((label,index)=>{
       const value=index+1;
-
-      g.append(btn(
-        label,
-        ()=>{
-          set(key,value);
-          ST.error='';
-
-          const done=dims.every(d=>present(x.dimensions[d[0]].name));
-          if(done)guidedScheduleForward_(180);
-          else player();
-        },
-        val(key)===value?'selected':''
-      ));
+      g.append(guidedAnswerButton_(label,Number(val(key))===value,()=>{
+        set(key,value);ST.error='';
+        const done=dims.every(d=>present(x.dimensions[d[0]].name));
+        if(done)guidedScheduleForward_(180);else player();
+      }));
     });
-
-    block.append(g);
-    a.append(block);
+    block.append(g);a.append(block);
   });
 
   const missing=dims.filter(d=>!present(x.dimensions[d[0]].name)).length;
-
-  if(missing){
-    a.append(
-      el('div','result warn',`還有 ${missing} 個程度未回答。`)
-    );
-  }
+  if(missing)a.append(el('div','result warn',`還有 ${missing} 個程度未回答。`));
 }
 
 function guidedRenderScale_(pg,a){
   const opts=pg.options||[];
-
   const firstHads=(B.hads.items||[])[0];
   const firstSas=(B.sas.items||[])[0];
   const firstGas=(B.gas.items||[])[0];
 
   if(firstHads&&pg.key===firstHads.name){
-    a.append(
-      el('div','guided-context','請想過去一星期的感受，選最接近你情況的答案。')
-    );
-    guidedVoiceBox_(
-      'hads-inline-help',
-      '🔊 廣東話填寫提示',
-      '接下來問過去一星期的感受。每題選最接近你情況的一個答案。按下答案後會自動到下一題。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','請想過去一星期的感受，選最接近你情況的答案。'));
+    guidedVoiceBox_('hads-inline-help','🔊 廣東話提示',
+      '接下來問過去一星期的感受。每題選最接近你情況的一個答案。按下答案後會自動到下一題。',a,true);
   }
 
   if(firstSas&&pg.key===firstSas.name){
-    a.append(
-      el('div','guided-context','接下來請按你最近平時的興趣和動力作答。')
-    );
-    guidedVoiceBox_(
-      'sas-inline-help',
-      '🔊 廣東話填寫提示',
-      '接下來問最近平時做事的興趣和動力。每題選最接近你情況的一個答案。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','接下來請按你最近平時的興趣和動力作答。'));
+    guidedVoiceBox_('sas-inline-help','🔊 廣東話提示',
+      '接下來問最近平時做事的興趣和動力。每題選最接近你情況的一個答案。',a,true);
   }
 
   if(firstGas&&pg.key===firstGas.name){
-    a.append(
-      el('div','guided-context','第二部分開始。請按最近平時的日常情況作答。')
-    );
-    guidedVoiceBox_(
-      'stage2-inline-help',
-      '🔊 廣東話填寫提示',
-      '第二部分開始。接下來問最近平時的日常情況。每題選最接近你的一個答案。',
-      a,
-      true
-    );
+    a.append(el('div','guided-context','第二部分開始。請按最近平時的日常情況作答。'));
+    guidedVoiceBox_('stage2-inline-help','🔊 廣東話提示',
+      '第二部分開始。接下來問最近平時的日常情況。每題選最接近你的一個答案。',a,true);
   }
 
-  const g=el('div',opts.length===5?'scale-buttons':'options');
-
   a.append(
+    guidedQuestionCallout_(pg.label),
     el('p','guided-scale-hint',`電腦可按 1–${opts.length}。選完會自動到下一題。`)
   );
 
+  const g=el('div',opts.length===5?'scale-buttons':'options');
   opts.forEach((o,n)=>{
-    const keyText=String(n+1);
-
-    const b=btn(
-      '',
+    const label=String(n+1)+' '+String(o.label).replace(/^\d+\s*/,'');
+    const b=guidedAnswerButton_(
+      label,
+      sameValue(val(pg.key),o.value),
       ()=>{
         set(pg.key,o.value);
         ST.error='';
-        guidedScheduleForward_(180);
+        guidedScheduleForward_(220);
       },
-      (opts.length===5?'':'choice')+
-        (sameValue(val(pg.key),o.value)?' selected':'')
+      opts.length===5?'':'choice'
     );
-
     b.dataset.answerKey=pg.key;
     b.dataset.answerPosition=String(n+1);
-
-    b.append(
-      el('strong','',keyText),
-      document.createTextNode(' '+String(o.label).replace(/^\d+\s*/,''))
-    );
-
     g.append(b);
   });
-
   a.append(g);
 }
-
-/* ---------- Checkpoints ---------- */
 
 function guidedPrepareScreeningDefaults_(){
   if(B.rbdsq&&B.rbdsq.sourceField){
@@ -3190,7 +3079,7 @@ function guidedRenderStopped_(){
 
 async function guidedAutoSubmitHads_(status){
   if(ST._guidedHadsSubmitting)return;
-  calculateAllDerived();
+  guidedRefreshDerivedFor_(guidedHadsKeys_());
 
   if(Number(val('hads_complete'))!==1){
     status.className='error';
@@ -3342,7 +3231,34 @@ async function guidedAutoSubmitScreening_(status){
   }
 }
 
+function guidedFirstIncompleteBetween_(startKind,endKind){
+  const pages=guidedPages_();
+  const start=pages.findIndex(x=>x.kind===startKind);
+  const end=pages.findIndex(x=>x.kind===endKind);
+  if(start<0||end<0||end<=start)return -1;
+  for(let i=start+1;i<end;i++){
+    if(!pageComplete(pages[i]))return i;
+  }
+  return -1;
+}
+
+function guidedRenderIncompleteJump_(a,step,message){
+  a.append(
+    el('div','error',message),
+    btn('返回未完成題目',()=>{
+      ST.step=step;
+      ST.error='請完成這一題。';
+      saveDraft();guidedScrollTop_();player();
+    },'primary')
+  );
+}
+
 function guidedRenderScreeningCheckpoint_(a){
+  const missing=guidedFirstIncompleteBetween_('guidedHadsGate','guidedScreeningCheckpoint');
+  if(missing>=0){
+    guidedRenderIncompleteJump_(a,missing,'第一部分仍有未回答的題目。系統不會用預設的「否」或 0 代替您的答案。');
+    return;
+  }
   if(Number(val('_guided_screening_submitted'))===1){
     a.append(el('div','result good','第一部分已安全保存。正在進入下一部分……'));
     return guidedScheduleForward_(250);
@@ -3353,50 +3269,53 @@ function guidedRenderScreeningCheckpoint_(a){
   setTimeout(()=>guidedAutoSubmitScreening_(status),80);
 }
 
+function guidedSubmittingBeforeUnload_(e){
+  e.preventDefault();
+  e.returnValue='';
+}
+
 async function guidedAutoSubmitStage2_(status){
   if(ST._guidedStage2Submitting)return;
   ST._guidedStage2Submitting=true;
-
-  status.className='result';
-  status.textContent=guidedDryRun_()?'測試提交中……':'正在提交最後一部分……';
+  window.addEventListener('beforeunload',guidedSubmittingBeforeUnload_);
+  status.className='result warn';
+  status.textContent=guidedDryRun_()?'測試提交中……':'正在提交問卷。請勿退出、關閉或重新整理此頁面，通常約需15秒。';
 
   try{
-    await guidedPostPhase_(
-      'stage2',
-      'stage_2_questionnaires',
-      guidedStage2Keys_()
-    );
+    await guidedPostPhase_('stage2','stage_2_questionnaires',guidedStage2Keys_());
     ST.answers._guided_stage2_submitted=1;
     saveDraft();
     ST._guidedStage2Submitting=false;
+    window.removeEventListener('beforeunload',guidedSubmittingBeforeUnload_);
     player();
   }catch(err){
     ST._guidedStage2Submitting=false;
+    window.removeEventListener('beforeunload',guidedSubmittingBeforeUnload_);
     status.className='error';
-    status.textContent=
-      '暫時未能提交。答案仍保存在這部裝置。 '+
-      (err&&err.message?err.message:'');
-    status.parentElement.append(
-      btn('重新嘗試提交',()=>guidedAutoSubmitStage2_(status),'primary')
-    );
+    status.textContent='暫時未能提交。答案仍保存在這部裝置。請保持此頁開啟後重試。 '+(err&&err.message?err.message:'');
+    status.parentElement.append(btn('重新嘗試提交',()=>guidedAutoSubmitStage2_(status),'primary'));
   }
 }
 
 function guidedRenderFinal_(a){
   guidedStopVoice_();
 
+  const missing=guidedFirstIncompleteBetween_('guidedScreeningCheckpoint','guidedFinal');
+  if(missing>=0){
+    guidedRenderIncompleteJump_(a,missing,'第二部分仍有未回答的題目。問卷尚未提交。');
+    return;
+  }
+
   if(Number(val('_guided_stage2_submitted'))===1){
     a.append(
       el('div','result good guided-success','已收到提交。謝謝您。'),
       el('p','guided-success','請等待工作人員通知您下一步。')
     );
-    if(guidedDryRun_()){
-      a.append(el('p','hint','測試模式：這次沒有把資料送到後端。'));
-    }
+    if(guidedDryRun_())a.append(el('p','hint','測試模式：這次沒有把資料送到後端。'));
     return;
   }
 
-  const status=el('div','result','所有需要您自行填寫的題目已完成。正在提交……');
+  const status=el('div','result warn','正在提交問卷。請勿退出、關閉或重新整理此頁面，通常約需15秒。');
   a.append(status);
   setTimeout(()=>guidedAutoSubmitStage2_(status),80);
 }
@@ -3523,7 +3442,7 @@ function guidedPlayer_(){
 
   const qbox=el('section','question');
   if(pg.context)qbox.append(el('div','context',pg.context));
-  qbox.append(el('h3','',pg.label));
+  if(!guidedRendererOwnsPrompt_(pg))qbox.append(el('h3','',pg.label));
   renderPage(pg,qbox);
   if(ST.error)qbox.append(el('div','error',ST.error));
   m.append(qbox);
@@ -3789,7 +3708,6 @@ renderPage=function(pg,a){
     if(pg.kind==='scale'||pg.kind==='cdarsScale'){
       if(pg.kind==='cdarsScale'){
         const x=Object.assign({},pg,{label:cdarsStem(pg)});
-        a.append(el('p','context',x.label));
         return guidedRenderScale_(x,a);
       }
       return guidedRenderScale_(pg,a);

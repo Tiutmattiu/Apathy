@@ -1,0 +1,74 @@
+name: One-time guided clear patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-guided-clear.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch guided stopped screen and cache key
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('app.js')
+          text = app.read_text(encoding='utf-8')
+
+          old = """function guidedRenderStopped_(){
+            guidedStopVoice_();
+            const m=appShell();
+            const t=el('header','toolbar');
+            t.append(el('h1','','研究問卷'));
+            m.append(t);
+          """
+          new = """function guidedRenderStopped_(){
+            guidedStopVoice_();
+            const m=appShell();
+            m.append(toolbar('研究問卷',false));
+          """
+          if old not in text:
+              raise SystemExit('guidedRenderStopped_ target block not found')
+          text = text.replace(old, new, 1)
+
+          old_label = "const label={screening:'首次篩查',stage2:'第二階段問卷',mri_visit:'MRI到訪',clinical:'PD臨床資料',backfill:'歷史資料補錄'}[flow]||flow;"
+          new_label = "const label={screening:'首次篩查',stage2:'第二階段問卷',mri_visit:'MRI到訪',clinical:'PD臨床資料',backfill:'歷史資料補錄',guided:'合併研究問卷'}[flow]||(/^guided_test/.test(flow)?'合併研究問卷（測試）':flow);"
+          if old_label not in text:
+              raise SystemExit('confirmClear label target not found')
+          text = text.replace(old_label, new_label, 1)
+          app.write_text(text, encoding='utf-8')
+
+          index = Path('index.html')
+          html = index.read_text(encoding='utf-8')
+          old_cache = 'app.js?v=11.0.5-guided-v5-20260912'
+          new_cache = 'app.js?v=11.0.6-guided-clear-20260917'
+          if old_cache not in html:
+              raise SystemExit('index app cache key target not found')
+          index.write_text(html.replace(old_cache, new_cache, 1), encoding='utf-8')
+          PY
+
+          node --check app.js
+          grep -F "m.append(toolbar('研究問卷',false));" app.js
+          grep -F "guided:'合併研究問卷'" app.js
+          grep -F "app.js?v=11.0.6-guided-clear-20260917" index.html
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-time-guided-clear.yml
+          git add app.js index.html
+          git commit -m "Add clear control to guided stopped screen"
+          git push origin HEAD:main

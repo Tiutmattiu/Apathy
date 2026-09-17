@@ -452,7 +452,7 @@ function currentFlowDraftKeys_(flow){
 }
 function confirmClear(){
   const flow=ST.flow;
-  const label={screening:'首次篩查',stage2:'第二階段問卷',mri_visit:'MRI到訪',clinical:'PD臨床資料',backfill:'歷史資料補錄'}[flow]||flow;
+  const label={screening:'首次篩查',stage2:'第二階段問卷',mri_visit:'MRI到訪',clinical:'PD臨床資料',backfill:'歷史資料補錄',guided:'合併研究問卷'}[flow]||(/^guided_test/.test(flow)?'合併研究問卷（測試）':flow);
   const m=el('div','modal'),b=el('div','modal-box');
   b.append(el('h2','','只清除此入口的本機資料？'),el('p','',
     '此操作只會清除「'+label+'」入口在此瀏覽器的草稿、目前位置及暫存Submission ID；不會清除其他入口，也不會影響後端已提交資料或已下載JSON。'));
@@ -3051,9 +3051,7 @@ function guidedPrepareScreeningDefaults_(){
 function guidedRenderStopped_(){
   guidedStopVoice_();
   const m=appShell();
-  const t=el('header','toolbar');
-  t.append(el('h1','','研究問卷'));
-  m.append(t);
+  m.append(toolbar('研究問卷',false));
 
   const s=el('section','summary guided-success');
   s.append(

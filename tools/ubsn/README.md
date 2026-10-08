@@ -43,3 +43,7 @@ Reused: SAML page, assistant selection, payment/project/date/time selectors, vis
 Replaced: `run_monitor()` browser/login per cycle, `try_slot()` availability probing via confirmation, URL/button disappearance success inference, and HTML dumps that can contain secrets.
 
 Fragile/needs live confirmation: assistant row text, booking field IDs/options, `#confirm_reservation`, session-expiry behavior, timezone, and the exact calendar response semantics.
+
+## Pixel Android app (planned)
+
+See [PIXEL_ANDROID_SPEC.md](PIXEL_ANDROID_SPEC.md) for the approved Pixel/GrapheneOS monitoring, cancellation-alert, notification, and human-confirmation design. The spec is published; no APK or live alert service has been built yet. Official release scheduling and real `reservations.js` parsing remain unverified.

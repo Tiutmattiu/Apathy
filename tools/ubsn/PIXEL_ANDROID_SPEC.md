@@ -26,7 +26,7 @@ Read the existing `tools/ubsn/` components before coding:
 - `service.py`: local bridge on `127.0.0.1:8765`;
 - `tests/`: unit tests and front-end bridge contract.
 
-**Hard blocker:** `parse_reservations_response()` currently accepts only the synthetic `ubsn-usable-intervals-v1` fixture. A **real, safely redacted** `reservations.js` response is needed to implement and verify production slot parsing and correct distinctions between booked intervals, free intervals, resource restrictions, and public booking horizon. Do not claim that current code monitors real UBSN openings.
+**Historical evidence correction (2026-10-09):** The operator had already intercepted the authenticated `reservations.js` GET on 2026-08-23 and supplied the **actual Response body** in an earlier conversation on **2026-08-26 around 13:19**. Previous analysis confirmed a JSON array of reservation events, `AdminReservation`/admin holds, and `className: "unavailable"` time blocks, with `start` and `end` timestamps. Do **not** ask the operator to rediscover the endpoint or repeat the original capture. **Implementation blocker:** `parse_reservations_response()` still accepts only a synthetic `ubsn-usable-intervals-v1` fixture; real event parsing, interval subtraction, validation of eligibility/booking horizon, and live read-only verification have not been implemented. A sanitized regression fixture can be reconstructed from the historical schema, with an optional new capture only when necessary to confirm evolving server behavior. No actual patient or credential data may be committed. Do not claim that current code monitors real UBSN openings.
 
 The current `release_window_start: 08:45`, `release_window_end: 09:15`, and 15-second poll interval are local example settings. **They are not verified official release rules.** The next release date/time must come from official URFMS instructions, a legitimate logged-in UI observation, or an operator-confirmed policy; until then show `RELEASE_SCHEDULE_UNVERIFIED`.
 
@@ -51,13 +51,13 @@ Before selecting either variant, test network access and authentication from the
 
 ## 4. Authenticated slot ingestion
 
-- Primary evidence: the real, authenticated UBSN calendar endpoint/body actually used by the signed-in UI. Capture through the existing `run.py capture` workflow on an authorized desktop after SAML login.
+- Primary evidence: the real authenticated UBSN `reservations.js` Response body provided on 2026-08-26 (historically confirmed as a JSON calendar-event array). Consult this known event schema first; the existing `run.py capture` workflow is available for optional fresh live verification after SAML login.
 - Never parse the mere disappearance of a button or navigate through final booking actions to infer availability or reservation success.
 - Compare time ranges with their explicit timezone (UBSN/Hong Kong `Asia/Hong_Kong`), duration, instrument and relevant booking eligibility; handle overlapping or partial intervals.
 - Preserve the distinction: first-seen opening, reopened slot, disappeared inventory, parse failure, logout, rate limit, and network error.
 - First baseline after restart must not produce an unbounded storm of false "new" slots. Persist previous observations and dedupe event IDs across restarts.
 - Source refresh should use a session-aware lightweight request when verified; avoid a full SAML/browser navigation on every poll.
-- If response structure is unknown, status is `NEEDS_REAL_CAPTURE`; do not emit fabricated availability alerts.
+- If the running parser does not yet implement the historically observed response structure, status is `PARSER_NOT_IMPLEMENTED` (the existing code currently raises the legacy `NEEDS_REAL_CAPTURE` error); do not emit fabricated availability alerts.
 
 ## 5. Scheduling / monitoring / notification
 
@@ -94,9 +94,9 @@ A generic pre-opening plan: refresh session ahead of the verified release -> pre
 
 ## 8. Implementation phases / acceptance
 
-### Phase A — unblock real availability data
-- [ ] Capture a legitimate `reservations.js` example locally after SAML login.
-- [ ] Redact sensitive content and document response schema; no live capture in Git.
+### Phase A — implement historical event schema and verify live
+- [x] Historically intercepted authenticated `reservations.js` request and actual Response body; analyzed in the 2026-08-26 conversation.
+- [ ] Reconstruct a safely synthetic, schema-faithful regression fixture from the known event fields; do not commit the unredacted historical payload.
 - [ ] Verify actual release policy and public booking horizon with primary-source evidence.
 - [ ] Implement parser with schema contract tests for occupied, free, cancellations, overlap, errors, and horizon.
 - [ ] Verify against the real site in read-only mode.
@@ -125,4 +125,4 @@ A generic pre-opening plan: refresh session ahead of the verified release -> pre
 
 **SPEC PUBLISHED — APP NOT YET BUILT — REAL SLOT MONITOR NOT VERIFIED — RELEASE TIME UNKNOWN.**
 
-The next valid engineering input is the non-sensitive authenticated calendar response schema and a verified release schedule. Neither an Android APK nor a live notification service is produced by publishing this specification alone.
+The historical response schema is already known: event-array reservations / admin holds / unavailable intervals. The next engineering work is implementing the real parser and tests, plus independently verifying the official release schedule and booking horizon. Neither an Android APK nor a live notification service is produced by publishing this specification alone.

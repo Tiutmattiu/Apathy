@@ -1116,6 +1116,33 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
 
 home();
 
+function receiverPublicQuery_(action,params){
+ return new Promise((resolve,reject)=>{
+  const callback='apathyReceipt_'+uuid().replace(/-/g,'');
+  const script=document.createElement('script');
+  const cleanup=()=>{clearTimeout(timer);script.remove();delete window[callback];};
+  const timer=setTimeout(()=>{cleanup();reject(new Error('未能確認收件，答案仍保存在此裝置，請重試。'));},20000);
+  window[callback]=result=>{cleanup();resolve(result);};
+  script.onerror=()=>{cleanup();reject(new Error('收件確認連線失敗，答案仍保存在此裝置。'));};
+  const url=new URL(C.receiverUrl);url.searchParams.set('action',action);url.searchParams.set('callback',callback);
+  Object.entries(params||{}).forEach(([key,value])=>url.searchParams.set(key,String(value)));
+  script.src=url.toString();document.head.append(script);
+ });
+}
+async function receiverPostSelective_(snapshot){
+ try{return await receiverPostDirectFinal_(snapshot);}catch(error){
+  // Explicit receiver rejections must remain errors; only uncertain transport failures need recovery.
+  if(error.code)throw error;
+  for(let attempt=0;attempt<4;attempt++){
+   const status=await receiverPublicQuery_('status',{submission_id:snapshot.submission_id});
+   if(status.ok===true&&status.received===true&&status.submission_id===snapshot.submission_id&&status.result){
+    return Object.assign({},status.result,{ok:true,submission_id:snapshot.submission_id});
+   }
+   await new Promise(resolve=>setTimeout(resolve,1500));
+  }
+  throw new Error('暫未確認收到問卷。答案已保存在此裝置，請按提交重試，無需重新填寫。');
+ }
+}
 const SUBMISSION_TRANSPORT_BUILD='2026-08-21-direct-fetch-v7';
 async function receiverPostDirectFinal_(submissionPayload){
   const response=await fetch(C.receiverUrl,{
@@ -3893,9 +3920,9 @@ async function selectiveSubmit(){
   const snapshot=val('_selective_snapshot')||QL.payload(selectiveSelection,ST.answers,ST.submission,new Date().toISOString());
   set('_selective_snapshot',snapshot);ST.submitting=true;ST.error='';player();
   const url=new URL(C.receiverUrl);url.searchParams.set('action','health');
-  const health=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)}).then(r=>r.json());
+  const health=await receiverPublicQuery_('health');
   if(!health.ok||!Array.isArray(health.supported_events)||!health.supported_events.includes('questionnaire_supplement'))throw new Error('問卷收集暫時未啟用，答案已保存在此裝置。請聯絡研究人員。');
-  const receipt=await receiverPostDirectFinal_(snapshot);set('_selective_receipt',receipt);
+  const receipt=await receiverPostSelective_(snapshot);set('_selective_receipt',receipt);
  }catch(error){ST.error=String(error.message||'提交未完成，答案仍保存在此裝置，請重試。');}
  finally{ST.submitting=false;player();}
 }

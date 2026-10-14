@@ -3809,4 +3809,105 @@ if(guidedParam_('flow')==='guided'){
 
  
 document.addEventListener('keydown',handleGlobalKeydown);
+// This file is inserted inside app.js's existing form engine closure.
+const QL=window.APATHY_QUESTIONNAIRE_LINKS;
+let selectiveSelection=[],selectiveRequest='',selectiveAdvanceTimer=null;
+const selectiveActive=()=>/^questionnaires_/.test(ST.flow);
+const _selectiveSetBase=set;
+set=function(key,value){
+ if(selectiveActive()&&!key.startsWith('_selective_')&&!sameValue(val(key),value)&&val('_selective_snapshot')){delete ST.answers._selective_snapshot;ST.submission=uuid();}
+ return _selectiveSetBase(key,value);
+};
+function selectiveEdit(key,value){if(!ST.submitting)set(key,value);}
+function selectivePages(){return QL.pages(selectiveSelection,B).filter(pg=>!pg.when||Number(val(pg.when))===1);}
+function selectivePageComplete(pg){
+ if(pg.kind==='selectiveSummary')return true;
+ if(pg.kind==='pdiItem')return pageComplete(pg);
+ if(pg.options)return pg.options.some(o=>sameValue(val(pg.key),o.value));
+ const value=String(val(pg.key)??'').trim();
+ if(pg.key==='age_years')return value!==''&&Number.isInteger(Number(value))&&Number(value)>=1&&Number(value)<=120;
+ if(pg.key==='contact_phone'){try{QL.identity({participant_name:'check',age_years:1,gender:'M',contact_phone:value});return true;}catch{return false;}}
+ return value!=='';
+}
+function selectiveNext(){
+ clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;
+ const pages=selectivePages(),pg=pages[ST.step];
+ if(!selectivePageComplete(pg)){ST.error='請完成目前這一題。';return player();}
+ if(pg.kind==='selectiveSummary')return selectiveSubmit();
+ ST.step=Math.min(ST.step+1,pages.length-1);ST.error='';saveDraft();player();
+}
+function selectiveChoose(pg,value){
+ if(selectiveAdvanceTimer||ST.submitting)return;
+ selectiveEdit(pg.key,value);
+ if(Number(value)===0)QL.pages(selectiveSelection,B).filter(p=>p.when===pg.key).forEach(p=>set(p.key,null));
+ ST.error='';selectiveAdvanceTimer=setTimeout(selectiveNext,180);
+}
+function selectivePlayer(){
+ const m=appShell(),head=el('header','toolbar');head.append(el('h1','','研究問卷'),btn('重新開始',()=>{if(ST.submitting)return;if(confirm('清除這條問卷連結在此裝置的填答，重新開始？')){clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;resetFlow();saveDraft();player();}},'linkbtn'));m.append(head);if(ST.submitting)head.querySelectorAll('button').forEach(b=>b.disabled=true);
+ if(val('_selective_receipt')){m.append(el('div','result good','已收到您填寫的問卷，謝謝。'));return;}
+ const pages=selectivePages();ST.step=Math.min(ST.step,pages.length-1);const pg=pages[ST.step];
+ m.append(el('p','hint',pg.section+'　'+(ST.step+1)+'／'+pages.length));
+ const body=el('section','question');body.append(el('h2','',pg.label));m.append(body);
+ if(pg.examples)body.append(el('p','context','您填寫的例子：'+pg.examples.map(k=>val(k)||'').join('、')));
+ if(pg.kind==='selectiveSummary')body.append(el('p','','所選問卷已完成。請檢查並提交。'));
+ else if(pg.kind==='pdiItem')renderPdiItem(pg,body);
+ else if(pg.options){const choices=el('div','options');pg.options.forEach(o=>choices.append(btn(o.label,()=>selectiveChoose(pg,o.value),'choice'+(sameValue(val(pg.key),o.value)?' selected':''))));body.append(choices);}
+ else{
+  const input=el('input','text');input.type=pg.inputType||'text';input.value=val(pg.key)??'';
+  if(pg.key==='age_years'){input.min='1';input.max='120';input.step='1';input.inputMode='numeric';}
+  input.oninput=()=>selectiveEdit(pg.key,input.value);input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();selectiveNext();}};body.append(input);
+ }
+ if(ST.error)body.append(el('div','error',ST.error));
+ const actions=el('div','submitbar');if(ST.step>0)actions.append(btn('上一題',()=>{clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;ST.step--;ST.error='';saveDraft();player();},'linkbtn'));
+ actions.append(btn(pg.kind==='selectiveSummary'?'檢查並提交':'下一題',selectiveNext,'primary'));body.append(actions);
+ if(ST.submitting){actions.querySelectorAll('button').forEach(b=>b.disabled=true);body.append(el('p','hint','正在提交，請勿關閉或重新整理此頁。'));}
+}
+async function selectiveSubmit(){
+ if(ST.submitting)return;
+ const pages=selectivePages(),missing=pages.findIndex(p=>!selectivePageComplete(p));
+ if(missing>=0){ST.step=missing;ST.error='尚有必填內容未完成。';return player();}
+ try{
+  QL.identity(ST.answers);
+  // Confirmation flags belong only to the explicitly selected, fully answered scales.
+  if(selectiveSelection.includes('quip'))[0,1,2].forEach(group=>{
+   const keys=group===0?B.quip.matrixCells.map(x=>x.name):B.quip.additionalItems.filter(x=>group===1?/^quip_f/.test(x.name):/^quip_e/.test(x.name)).map(x=>x.name);
+   setDerived('quip_group_'+group+'_confirmed',keys.some(k=>Number(val(k))===1)?'selected':'none');
+  });
+  if(selectiveSelection.includes('quiprs'))setDerived('quiprs_section_confirmed','answered');
+  if(selectiveSelection.includes('rbdsq')){setDerived('rbdsq_section_confirmed',1);setDerived('rbq10_none_confirmed',B.rbdsq.diseaseItems.every(x=>Number(val(x.name))===0)?1:0);}
+  calculateAllDerived();
+  if(selectiveSelection.includes('pdi')){setDerived('pdi_page1_confirmed',1);setDerived('pdi_page2_confirmed',1);}
+  const snapshot=val('_selective_snapshot')||QL.payload(selectiveSelection,ST.answers,ST.submission,new Date().toISOString());
+  set('_selective_snapshot',snapshot);ST.submitting=true;ST.error='';player();
+  const url=new URL(C.receiverUrl);url.searchParams.set('action','health');
+  const health=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)}).then(r=>r.json());
+  if(!health.ok||!Array.isArray(health.supported_events)||!health.supported_events.includes('questionnaire_supplement'))throw new Error('問卷收集暫時未啟用，答案已保存在此裝置。請聯絡研究人員。');
+  const receipt=await receiverPostDirectFinal_(snapshot);set('_selective_receipt',receipt);
+ }catch(error){ST.error=String(error.message||'提交未完成，答案仍保存在此裝置，請重試。');}
+ finally{ST.submitting=false;player();}
+}
+function questionnaireLinkBuilder(){
+ const m=appShell(),head=el('header','toolbar');head.append(el('h1','','問卷發放'),btn('返回首頁',home,'linkbtn'));m.append(head);const selected=new Set(),section=el('section','summary');section.append(el('h2','','選擇要發放的問卷'),el('p','','可選擇一份或多份。每位參加者填答前需要提供姓名、電話、年齡及性別。'));
+ QL.catalog.forEach(item=>{const row=el('label','questionnaire-option'),input=el('input');input.type='checkbox';input.value=item.id;input.onchange=()=>{input.checked?selected.add(item.id):selected.delete(item.id);result.value='';};row.append(input,document.createTextNode(' '+item.label));section.append(row);});
+ const result=el('textarea');result.readOnly=true;result.placeholder='勾選問卷後產生連結';
+ const error=el('div','error');section.append(btn('產生連結',()=>{try{result.value=QL.link(window.location.href,[...selected],uuid());error.textContent='';}catch(e){error.textContent=e.message;}},'primary'),result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
+}
+function selectiveStart(){
+ try{
+  const params=new URLSearchParams(window.location.search);selectiveSelection=QL.selection(params.get('scales'));selectiveRequest=params.get('request')||'default';
+  ST.flow=QL.draftKey(selectiveSelection,selectiveRequest);loadDraft(ST.flow);ST.error='';player();
+ }catch(error){const m=appShell();m.append(el('h1','','問卷連結無效'),el('p','',error.message));}
+}
+const _selectivePlayerBase=player,_selectiveStartBase=start;
+player=function(){if(selectiveActive())return selectivePlayer();return _selectivePlayerBase();};
+start=function(flow){if(flow==='questionnaire_links'){ST.flow=flow;return questionnaireLinkBuilder();}if(flow==='questionnaires'||/^questionnaires_/.test(flow))return selectiveStart();return _selectiveStartBase(flow);};
+document.addEventListener('keydown',function(e){
+ if(!selectiveActive()||e.altKey||e.ctrlKey||e.metaKey||e.isComposing||e.repeat||ST.submitting||selectiveAdvanceTimer)return;
+ if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+ const pg=selectivePages()[ST.step];if(e.key==='Enter'){e.preventDefault();selectiveNext();return;}
+ if(pg.options&&/^[0-9]$/.test(e.key)){const choice=pg.options.find(o=>String(o.value)===e.key);if(choice){e.preventDefault();selectiveChoose(pg,choice.value);}}
+},true);
+if(new URLSearchParams(window.location.search).get('flow')==='questionnaires')selectiveStart();
+else if(new URLSearchParams(window.location.search).get('flow')==='questionnaire_links')staffGate('questionnaire_links','問卷發放');
+
 })();

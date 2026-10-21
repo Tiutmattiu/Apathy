@@ -10,3 +10,5 @@ test('only ordinary nonnegative decimal doses can enter LEDD calculations',()=>{
  assert.equal(c.medHVNum_('1.875'),1.875);assert.equal(c.medHVNum_('0.5'),0.5);
  for(const bad of ['0x10','-1','1..875','1e3','Infinity'])assert.equal(c.medHVNum_(bad),null,bad);
 });
+
+test('LEDD conversion retains 1.875 mg and 0.125 mg doses before applying the coefficient',()=>{const c=vm.createContext({});const catalog=source.match(/const MED_HV1=Object.freeze\(\[[\s\S]*?\]\);/);vm.runInContext(catalog[0],c);for(const name of ['medRound','medHVDrug_','medHVNum_','medHVCalcRow_']){const line=source.split('\n').find(x=>x.startsWith('function '+name+'('));vm.runInContext(line,c);}for(const [dose,expected] of [[1.875,187.5],[0.125,12.5]]){const result=c.medHVCalcRow_({drugId:'pramipexole',strength:dose,units:1,times:1});assert.equal(result.daily,dose);assert.equal(result.ledd,expected);}});

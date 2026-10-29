@@ -33,7 +33,7 @@ function appShell(){ROOT.innerHTML='';ROOT.append(el('div','topline'));const m=e
 
 function toolbar(title,homeButton=true){const b=el('header','toolbar');b.append(el('h1','',title));const a=el('div','tool-actions');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'));if(ST.flow!=='home')a.append(btn('清除此裝置資料',confirmClear,'linkbtn'));if(homeButton)a.append(btn('返回首頁',home,'linkbtn'));b.append(a);return b}
 
-function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
+function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));pop.append(btn('更正資料／掃描序列／報告',()=>{location.href='staff-portal.html'},'linkbtn'));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
 
 function start(flow){ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='ubsn')return renderUBSNAssistant();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
 
@@ -875,8 +875,15 @@ function renderMRIVisit(){
   const sb=el('div','submitbar');sb.append(btn('正式提交MRI到訪',()=>validateMRIVisit(s),'primary'));s.append(sb);m.append(s);safeSave();
 }
 
+function mriPersistSequenceAnswers_(answers,items){
+  const pending={};
+  items.forEach(item=>{const v=answers[item.field];if(v!==undefined&&v!==null&&v!==''&&![0,1,'0','1'].includes(v))throw new Error('MRI序列狀態不正確，請重新選擇');pending[item.field]=v===0||v==='0'?0:1;});
+  Object.assign(answers,pending);answers.mri_sequence_states_explicit=1;
+}
+
 function validateMRIVisit(s){
   const missing=[];if(!val('p_id')&&!val('s_id')&&!/^\d{8}$/.test(String(val('contact_phone')||'').replace(/\D/g,'')))missing.push('P_ID、S_ID或8位電話');if(val('visit_number')===null)missing.push('MRI到訪次數');if(!mriTodayPhase2_())missing.push('MRI日期');if(val('mri_safety_changed_since_initial')===null)missing.push('MRI安全變化');if(val('mri_safety_changed_since_initial')===1&&!String(val('mri_safety_change_detail')||'').trim())missing.push('MRI安全變化內容');if(String(val('pd_hc_status')||'').toUpperCase()==='PD'&&val('med_on_off')===null)missing.push('ON／OFF');if(incompleteSequences()&&!String(val('mri_sequence_general_remark')||'').trim())missing.push('Sequence未完成原因');if(missing.length){showInlineError(s,'尚未完成：'+missing.join('、'));return}
+  mriPersistSequenceAnswers_(ST.answers,B.sequences.items);
   mriSetApplicabilityPhase2_();if(present('digit_span_forward')&&present('digit_span_backward'))setDerived('digit_span_total',Number(val('digit_span_forward'))+Number(val('digit_span_backward')));else setDerived('digit_span_total',null);
   setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
 }
@@ -3949,5 +3956,7 @@ document.addEventListener('keydown',function(e){
 },true);
 if(new URLSearchParams(window.location.search).get('flow')==='questionnaires')selectiveStart();
 else if(new URLSearchParams(window.location.search).get('flow')==='questionnaire_links')staffGate('questionnaire_links','問卷發放');
+else {const staffFlow=new URLSearchParams(window.location.search).get('flow');if(['screening','clinical','backfill','mri_visit'].includes(staffFlow)){const entry=C.staffFlows.find(x=>x[0]===staffFlow);staffGate(staffFlow,entry?entry[1]:'工作人員資料錄入');}}
 
 })();
+

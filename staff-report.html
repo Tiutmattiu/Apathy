@@ -1,0 +1,104 @@
+<!doctype html><html lang="zh-Hant"><head><base target="_blank"><meta name="referrer" content="no-referrer"><meta charset="utf-8"><script src="vendor/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous" referrerpolicy="no-referrer"></script><style>
+*{box-sizing:border-box}body{margin:0;background:#e6ecec;color:#263d47;font-family:'Noto Sans CJK TC','Microsoft JhengHei',sans-serif}.page{width:210mm;height:297mm;background:white;margin:10mm auto;padding:7mm 9mm;break-after:page;overflow:hidden}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5mm solid #178184;padding-bottom:3mm;margin-bottom:4mm}.uni{font-size:21pt;color:#074c56;font-weight:900;letter-spacing:1mm}.title{font-size:16pt;font-weight:700;letter-spacing:.2mm}.polyu-logo{width:65mm;height:auto;object-fit:contain}.english{max-width:68mm;font-family:Georgia,serif;font-size:12pt}.english span{font-size:14pt;display:block}.box{background:#edf5f5;border-radius:4mm;padding:3mm 4mm;margin-bottom:4mm}.box b{display:block;color:#075260;font-size:16pt;margin-bottom:2mm}.person{display:flex;justify-content:space-between;font-size:11pt;gap:4mm}.section{margin:3mm 0}.banner{background:#e5f1f0;border-radius:5mm;display:flex;align-items:center;color:#074e58;font-size:16pt;font-weight:800;gap:4mm;height:13mm}.num{display:flex;align-items:center;justify-content:center;border-radius:50%;height:13mm;width:13mm;background:#118387;color:white;font-size:22pt}.explain{margin:1.5mm 0 2mm 15mm;font-size:10pt}.metric{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed #d4dfdf;min-height:10mm;font-size:12pt;font-weight:700}.value{min-width:63mm;padding:2mm;border:1px solid #b2bac2;background:#f5f6f8;border-radius:3mm;text-align:center;font-weight:400}.grade{display:grid;grid-template-columns:1fr 27mm 27mm 27mm;gap:3mm;font-size:11pt;align-items:center;min-height:10mm;border-bottom:1px dashed #d4dfdf}.grade.heading{border:0;min-height:10mm}.pill{text-align:center;border-radius:2mm;padding:2mm;background:#eef0f3;border:1px solid #b3b9c1}.pill:first-of-type{background:#087c82;color:white}.circ{text-align:center;font-size:20pt;font-weight:300}.small{font-size:9pt;font-weight:400}.info{background:#e8eff0;padding:3mm;border-radius:3mm;margin-top:4mm}.info strong{font-size:14pt}.info p{font-size:8.8pt;line-height:1.55;margin:2mm 0 0}.scan-date{font-size:12pt;font-weight:700;margin:4mm 0}.image-space{margin-top:4mm;height:177mm;border:1px solid #c8d9d9;border-radius:4mm;display:flex;align-items:center;justify-content:center;color:#839393;font-size:12pt}.draft{max-width:210mm;margin:auto;font-size:12px;color:#596e70}@page{size:A4;margin:0}@media print{body{background:white}.page{margin:0}.draft{display:none}}
+ .controls{position:sticky;top:0;z-index:10;background:white;padding:12px;display:flex;gap:10px;align-items:center}.controls input{width:90px;padding:7px}.controls button{padding:9px;background:#087c82;border:0;color:white;border-radius:5px}#status{white-space:pre-line;padding:10px;max-width:210mm;margin:auto}.heading .pill:nth-child(2){background:#087c82;color:white}@media print{.controls,#status{display:none}} </style></head><body><form class="controls" onsubmit="event.preventDefault();window.downloadReportImages()">
+    <label>P <input id="reportStart" type="number" min="0" step="1" required aria-label="起始編號"></label>
+    <span>到</span>
+    <label>P <input id="reportEnd" type="number" min="0" step="1" aria-label="結束編號，留空為一人"></label>
+    <button id="preflightReports" type="button" onclick="window.preflightReports()">檢查缺項</button>
+    <button id="downloadReports" type="submit">下載報告圖片</button>
+    <button type="button" onclick="window.downloadReportImages(true)">生成全部應發報告</button><span>按圖像名單排除「不給」</span>
+  </form><div id="status" role="status" aria-live="polite"></div><main id="pages"></main><template id="reportTemplate"><article class="report-page page"><header><div><div class="uni">香港理工大學</div><div class="title">認知、冷漠及決策任務結果摘要</div></div><img class="polyu-logo" alt="香港理工大學 PolyU" src="staff-report-logo.svg"></header><div class="box"><b>參與者資料</b><div class="person"><span>姓名：____________</span><span>年齡：________</span><span>參與日期：__________</span></div></div><section class="section"><div class="banner"><span class="num">一</span>認知任務表現</div><p class="explain">以下結果反映您在本研究指定任務中的表現。</p><div class="metric">順序記憶<span class="value">記到第 ____ 個數字</span></div><div class="metric">倒序記憶<span class="value">記到第 ____ 個數字</span></div><div class="metric">蒙特利爾認知評估香港版<span class="value">分數：____ / 30</span></div></section><section class="section"><div class="banner"><span class="num">二</span>動機與日常活動</div><p class="explain">以下指標為與同組其他參與者相比的相對表現。</p><div class="grade heading"><span class="small">優秀：前20%　良好：約20%–50%　一般：後50%</span><span class="pill">優秀</span><span class="pill">良好</span><span class="pill">一般</span></div><div class="grade"><span><b>思考與社交動機</b><br><span class="small">主動投入思考、計劃及社交能力的動力</span></span><span class="circ">○</span><span class="circ">○</span><span class="circ">○</span></div><div class="grade"><span><b>情緒反應與表達</b><br><span class="small">感受興趣、產生情緒反應及表達情緒的程度</span></span><span class="circ">○</span><span class="circ">○</span><span class="circ">○</span></div><div class="grade"><span><b>自發性行為活化</b><br><span class="small">不靠別人提醒，也會主動開始及持續活動的程度</span></span><span class="circ">○</span><span class="circ">○</span><span class="circ">○</span></div></section><section class="section"><div class="banner"><span class="num">三</span>決策任務表現</div><p class="explain">決策速度直接顯示實際表現；其餘指標為與同組其他參與者相比的相對表現。</p><div class="metric">決策速度<span class="value">反應時間：____ 秒</span></div><div class="grade heading"><span></span><span class="pill">優秀</span><span class="pill">良好</span><span class="pill">一般</span></div><div class="grade"><b>決策質素</b><span class="circ">○</span><span class="circ">○</span><span class="circ">○</span></div><div class="grade"><b>風險調整</b><span class="circ">○</span><span class="circ">○</span><span class="circ">○</span></div></section><div class="info"><strong>ⓘ　重要說明</strong><p>本報告僅為本研究中部分認知、冷漠及決策任務的結果摘要，供參與者參考。除順序記憶、倒序記憶、蒙特利爾認知評估香港版及決策速度以外，其他指標均以同組參與者作比較。結果並非臨床診斷，不能用於判斷是否患有認知障礙、冷漠症或其他神經／心理疾病。測試表現可能受到睡眠、疲勞、情緒、藥物及當日身體狀況等因素影響。如對自己的認知或健康狀況有疑問，建議向醫生或合資格醫療專業人士查詢。</p></div></article><article class="report-page page"><header><div><div class="uni">香港理工大學</div><div class="title">大腦影像</div></div><img class="polyu-logo" alt="香港理工大學 PolyU" src="staff-report-logo.svg"></header><div class="box"><b>參與者資料</b><div class="person"><span>姓名：____________</span><span>年齡：________</span><span>參與日期：__________</span></div></div><div class="banner"><span class="num">四</span>大腦圖片</div><div class="image-space">圖像位置</div><div class="scan-date">掃描日期：<span>____________</span></div><div class="info"><strong>ⓘ　重要說明</strong><p>此頁所附影像僅供參與者參考，並非臨床診斷報告。若您對影像或健康狀況有疑問，建議向醫生或合資格醫療專業人士查詢。</p></div></article></template><script>const sections=[
+      ['認知表現',[
+        ['digit_span_forward','順序記憶','短時間記住資料，並按原來順序說出來的能力'],
+        ['digit_span_backward','倒序記憶','記住資料後，在腦中重新整理並倒轉次序的能力'],
+        ['moca','整體認知能力','綜合注意力、記憶、語言及思考等多方面的能力']]],
+      ['動機與情緒',[
+        ['gas_cognitive_social','思考與社交動機','主動投入思考、計劃及社交活動的動力'],
+        ['gas_emotion_reaction','情緒反應與表達','感受興趣、產生情緒反應及表達情緒的程度'],
+        ['gas_autonomy','主動開始活動','不靠別人提醒，也會主動開始及持續活動的程度']]],
+      ['決策表現',[
+        ['cgt_speed','決策速度','需要作出選擇時，形成決定的速度'],
+        ['cgt_quality','決策質素','在任務中選擇較有利選項的能力'],
+        ['cgt_risk_adjustment','風險調整','按成功機會高低調整承擔風險的程度']]]
+    ];
+    const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const displayText=value=>/[PSY]\d+/i.test(String(value??''))?'':String(value??'').trim();
+    function reportHtml(report){
+      const holder=document.createElement('div');holder.innerHTML=document.getElementById('reportTemplate').innerHTML;
+      const metrics=report.metrics||{},format=value=>typeof value==='number'&&Number.isFinite(value)?String(Math.round(value*100)/100):'____';
+      holder.querySelectorAll('.person').forEach(node=>{node.innerHTML=`<span>姓名：${escapeHtml(displayText(report.display_name)||'____')}</span><span>年齡：${format(report.age)}</span><span>參與日期：${escapeHtml(report.assessment_date==='待確認'?'____':report.assessment_date||'____')}</span>`;});
+      const scan=holder.querySelector('.scan-date span');if(scan)scan.textContent=report.assessment_date||'____';const values=holder.querySelectorAll('.metric .value');
+      values[0].textContent='記到第 '+format(metrics.digit_span_forward?.raw_value)+' 個數字';
+      values[1].textContent='記到第 '+format(metrics.digit_span_backward?.raw_value)+' 個數字';
+      values[2].textContent='分數：'+format(metrics.moca?.raw_value)+' / 30';
+      const speed=metrics.cgt_speed?.raw_value;values[3].textContent='反應時間：'+format(typeof speed==='number'?speed/1000:null)+' 秒';
+      const keys=['gas_cognitive_social','gas_emotion_reaction','gas_autonomy','cgt_quality','cgt_risk_adjustment'];
+      holder.querySelectorAll('.grade:not(.heading)').forEach((node,i)=>{const metric=metrics[keys[i]]||{},available=typeof metric.score==='number'&&Number.isFinite(metric.score);node.querySelectorAll('.circ').forEach((circle,j)=>{circle.textContent=available&&['優秀','良好','一般'][j]===metric.label?'●':'○';});});
+      if(report.image?.file_id){const space=holder.querySelector('.image-space');space.textContent='';const img=document.createElement('img');img.alt='研究圖像';img.src=report.image.data_url||'https://drive.google.com/thumbnail?id='+encodeURIComponent(report.image.file_id)+'&sz=w1800';img.crossOrigin='anonymous';img.style.cssText='max-width:100%;max-height:100%;object-fit:contain';space.appendChild(img);}
+      if(report.image_pending)holder.lastElementChild.remove();return holder.innerHTML;
+    }
+    function reportRange(start,end){
+      const first=String(start).trim(),last=String(end).trim()||first;
+      if(!/^\d+$/.test(first)||!/^\d+$/.test(last))throw Error('請只輸入整數編號。');
+      const a=Number(first),b=Number(last);
+      if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<0||b<a||b-a>=50)throw Error('請輸入由小到大的範圍，每次最多 50 個編號。');
+      return Array.from({length:b-a+1},(_,i)=>'P'+String(a+i).padStart(3,'0'));
+    }
+    function reportFilename(report){
+      const clean=value=>displayText(value).replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,'').replace(/[. ]+$/g,'').slice(0,70);
+      const parts=[clean(report.phone),clean(report.display_name)].filter(Boolean);
+      return parts.length?parts.join('_')+'_報告.png':null;
+    }
+    async function preflightReports(){
+      const button=document.getElementById('preflightReports'),status=document.getElementById('status');
+      button.disabled=true;
+      try{
+        const pids=reportRange(document.getElementById('reportStart').value,document.getElementById('reportEnd').value);
+        status.textContent='正在檢查缺項……';
+        const payload=await window.parent.apathyStaffReportCall('check',pids);
+        status.textContent=payload.reports.map(r=>r.participant_id+'：'+(r.ready_without_image?'非圖像結果齊全'+(r.image_pending?'；圖像待補':'；圖像已有連結'):'禁止下載；'+r.missing_nonimage.join('；'))).join('\n');
+      }catch(error){status.textContent=error.message||String(error);}
+      finally{button.disabled=false;}
+    }
+    async function downloadReportImages(allRequired=false){
+      const button=document.getElementById('downloadReports'),status=document.getElementById('status'),pages=document.getElementById('pages');
+      if(button.disabled)return;
+      const notes=[];
+      let downloaded=0;
+      button.disabled=true;
+      try{
+        const pids=allRequired?[]:reportRange(document.getElementById('reportStart').value,document.getElementById('reportEnd').value);
+        if(typeof html2canvas!=='function')throw Error('圖片工具未能載入，請重新開啟報告視窗後再試。');
+        pages.innerHTML='';status.textContent='正在讀取報告……';
+        const payload=await window.parent.apathyStaffReportCall(allRequired?'required':'payload',pids);
+        if(payload.skipped.length)notes.push('沒有正式報告，已略過：'+payload.skipped.join('、'));
+        payload.warnings.forEach(item=>notes.push(item.pid+'：'+item.message));
+        const reports=payload.reports.filter(report=>{
+          if(!report.ready_without_image){notes.push(report.participant_id+'：已阻止下載；'+(report.missing_nonimage||[]).join('；'));return false;}
+          if(report.image_pending)notes.push(report.participant_id+'：研究圖像待補；可下載完整非圖像結果。');
+          if(reportFilename(report))return true;
+          notes.push(report.participant_id+'：姓名及電話未能確認，已略過圖片');return false;
+        });
+        pages.innerHTML=reports.map(reportHtml).join('');
+        if(document.fonts)await document.fonts.ready;
+        const permission='如瀏覽器詢問，請允許多個檔案下載；若檔案少於提示數目，允許後再下載。';
+        let pageCursor=0;for(let i=0;i<reports.length;i++){
+          status.textContent=`正在產生圖片 ${i+1}/${reports.length}。\n${permission}`;
+          for(let pageNumber=0;pageNumber<(reports[i].image_pending?1:2);pageNumber++){
+          const page=pages.children[pageCursor++];
+          const img=page.querySelector(".image-space img");if(img){if(!img.complete)await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error("Drive圖像未能載入；請檢查單張圖像連結及讀取權限。"));});if(!img.naturalWidth)throw Error("Drive圖像未能載入；已停止輸出以免遺漏圖像。");}
+          if(page.scrollHeight>page.clientHeight+1||page.scrollWidth>page.clientWidth+1)throw Error('報告內容超出版面，已停止下載以免截斷。');
+          const canvas=await html2canvas(page,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true});
+          const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+          canvas.width=0;canvas.height=0;
+          if(!blob)throw Error('圖片產生失敗，請重試。');
+          const url=URL.createObjectURL(blob),link=document.createElement('a');
+          link.href=url;link.download=reportFilename(reports[i]).replace(/\.png$/,'')+'-'+String(pageNumber+1).padStart(2,'0')+'.png';document.body.appendChild(link);link.click();link.remove();
+          setTimeout(()=>URL.revokeObjectURL(url),60000);downloaded++;
+          }
+        }
+        status.textContent=`已送出 ${downloaded} 個獨立 PNG 下載（請在瀏覽器下載清單確認）。\n${permission}\n${notes.join('\n')}`;
+      }catch(error){status.textContent=`已送出 ${downloaded} 個下載。${error.message||String(error)}\n${notes.join('\n')}`;}
+      finally{button.disabled=false;}
+    }
+  </script><script>const selected=new URLSearchParams(location.search).get('pid');if(/^P\d{3,6}$/.test(selected||'')){document.getElementById('reportStart').value=selected.slice(1);document.getElementById('reportEnd').value=selected.slice(1);}</script></body></html>

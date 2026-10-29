@@ -33,9 +33,9 @@ function appShell(){ROOT.innerHTML='';ROOT.append(el('div','topline'));const m=e
 
 function toolbar(title,homeButton=true){const b=el('header','toolbar');b.append(el('h1','',title));const a=el('div','tool-actions');a.append(btn('下載本地JSON',downloadCurrent,'linkbtn'));if(ST.flow!=='home')a.append(btn('清除此裝置資料',confirmClear,'linkbtn'));if(homeButton)a.append(btn('返回首頁',home,'linkbtn'));b.append(a);return b}
 
-function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));pop.append(btn('更正資料／掃描序列／報告',()=>{location.href='staff-portal.html'},'linkbtn'));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
+function home(){ST.flow='home';const m=appShell();const t=toolbar('Apathy研究評估',false);const sw=el('div','staff-wrap'),pop=el('div','staff-pop hidden');const sb=btn('工作人員模式 ▾',()=>pop.classList.toggle('hidden'),'linkbtn');C.staffFlows.forEach(x=>pop.append(btn(x[1],()=>staffGate(x[0],x[1]))));pop.append(btn('更改提交',()=>staffGate('edit_submissions','更改提交')));pop.append(btn('生成報告',()=>staffGate('generate_reports','生成報告')));sw.append(sb,pop);t.lastChild.append(sw);m.append(t);const h=el('section','home');h.append(el('h2','','研究問卷'),el('p','','請按下方按鈕開始或繼續填寫。正式問卷每次只顯示一個回答單位，完成答案後自動前進。'),btn('開始／繼續填寫',()=>start('stage2'),'primary'));m.append(h)}
 
-function start(flow){ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='ubsn')return renderUBSNAssistant();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
+function start(flow){if(flow==='edit_submissions'||flow==='generate_reports'){sessionStorage.setItem('apathy-staff-access',String(C.staffPassword||'080'));location.href='staff-portal.html?mode='+(flow==='generate_reports'?'reports':'edit');return;}ST.flow=flow;loadDraft(flow);ST.error='';if(flow==='stage2'||flow==='screening')return player();if(flow==='backfill')return backfill();if(flow==='ubsn')return renderUBSNAssistant();if(flow==='mri_visit')return identityGate('MRI到訪記錄');if(flow==='clinical')return identityGate('PD臨床資料')}
 
 async function ubsnFetch(path,options){const r=await fetch(String(C.ubsnHelperUrl||'http://127.0.0.1:8765')+path,options);const data=await r.json();if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);return data}
 
@@ -3956,7 +3956,7 @@ document.addEventListener('keydown',function(e){
 },true);
 if(new URLSearchParams(window.location.search).get('flow')==='questionnaires')selectiveStart();
 else if(new URLSearchParams(window.location.search).get('flow')==='questionnaire_links')staffGate('questionnaire_links','問卷發放');
-else {const staffFlow=new URLSearchParams(window.location.search).get('flow');if(['screening','clinical','backfill','mri_visit'].includes(staffFlow)){const entry=C.staffFlows.find(x=>x[0]===staffFlow);staffGate(staffFlow,entry?entry[1]:'工作人員資料錄入');}}
+else {const staffFlow=new URLSearchParams(window.location.search).get('flow');if(['screening','clinical','backfill','mri_visit','edit_submissions','generate_reports'].includes(staffFlow)){const entry=C.staffFlows.find(x=>x[0]===staffFlow);staffGate(staffFlow,entry?entry[1]:'工作人員資料錄入');}}
 
 })();
 

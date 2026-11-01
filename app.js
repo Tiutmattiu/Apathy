@@ -4037,7 +4037,45 @@ async function saveLocalCorrection(){
  }catch(e){status.textContent=e.message+'。本地修改已保留。';}
  finally{ST.submitting=false;controls.forEach(x=>{if(x.isConnected)x.disabled=false;});}
 }
-async function checkCorrectionSync(){const status=q('#correction-save-status');status.scrollIntoView({block:'nearest'});try{const r=await correctionRead('staff_status'),s=r.status||{},p=s.progress||{};const savedTime=ST.correction.receipt?.saved_at;if(s.status==='SUCCEEDED'&&!Number(p.pending_count)&&savedTime&&Date.parse(p.last_success_at)>=Date.parse(savedTime))status.textContent='本次更正後的同步已完成；Boss、臨床等表格已通過後台同步檢查。';else status.textContent='更正收件狀態：'+(ST.correction.receipt?'已收件':'尚未確認')+'；同步狀態：'+(s.status||'未確認')+'；目前步驟：'+(s.stage||'等待')+'。';}catch(e){status.textContent=e.message;}}
+async function checkCorrectionSync(event){
+ const status=q('#correction-save-status');
+ if(!status||ST.submitting||ST.checkingCorrectionSync)return;
+ const button=event?.currentTarget,label=button?.textContent,correction=ST.correction,receipt=correction?.receipt;
+ ST.checkingCorrectionSync=true;
+ if(button){button.disabled=true;button.textContent='正在查詢……';}
+ status.textContent='正在查詢同步進度，請稍候……';
+ status.setAttribute('aria-busy','true');
+ status.scrollIntoView({block:'nearest'});
+ const current=()=>ST.correction===correction&&!ST.submitting&&correction?.receipt===receipt;
+ try{
+  const r=await correctionRead('staff_status');
+  if(!current())return;
+  const s=r.status;
+  if(!s||typeof s!=='object')throw Error('後台暫未提供同步進度');
+  const p=s.progress||{},steps=Array.isArray(p.steps)?p.steps:[];
+  const states={SUCCEEDED:'最近一次同步已完成',RUNNING:'正在同步',FAILED:'同步失敗',IDLE:'等待同步'};
+  const stages={PREPARE:'準備資料',EVENT:'整理原始記錄',PARTICIPANT:'配對參加者',RESULT:'更新Boss',OUTPUT:'更新臨床資料',COMPLETE:'完成'};
+  const lines=['更正收件狀態：'+(receipt?'已收件':'尚未確認'),'同步狀態：'+(states[s.status]||'等待同步')];
+  const stage=steps.find(x=>x.key===s.stage)?.label||stages[s.stage];
+  if(stage)lines.push('目前步驟：'+stage);
+  if(p.pending_count!==null&&p.pending_count!==undefined&&Number.isFinite(Number(p.pending_count)))lines.push('待處理提交：'+Number(p.pending_count)+' 份');
+  const time=value=>{const d=new Date(value);return value&&Number.isFinite(d.getTime())?d.toLocaleString('zh-HK',{timeZone:'Asia/Shanghai',hour12:false}):'';};
+  if(time(p.last_success_at))lines.push('最近同步完成：'+time(p.last_success_at));
+  if(time(receipt?.saved_at)){
+   lines.push('本次更正收件：'+time(receipt.saved_at));
+   if(Date.parse(p.last_success_at)<Date.parse(receipt.saved_at))lines.push('本次更正仍在等待後續同步。');
+  }
+  if(s.status==='FAILED')lines.push('後台同步未完成，請在工作台查看或重新同步。');
+  if(p.warning||s.progress_warning)lines.push(String(p.warning||s.progress_warning));
+  if(time(p.next_wake_at))lines.push('預計再次處理：'+time(p.next_wake_at));
+  lines.push('查詢時間：'+time(new Date().toISOString()));
+  status.textContent=lines.join('\n');
+ }catch(e){if(current())status.textContent='查詢未完成：'+(e.message||String(e))+'。請按「查看同步進度」重試；已保存的更正不受影響。';}
+ finally{
+  ST.checkingCorrectionSync=false;status.removeAttribute('aria-busy');
+  if(button?.isConnected){button.disabled=false;button.textContent=label;}
+ }
+}
 
 if(new URLSearchParams(window.location.search).get('flow')==='questionnaires')selectiveStart();
 else if(new URLSearchParams(window.location.search).get('flow')==='questionnaire_links')staffGate('questionnaire_links','問卷發放');

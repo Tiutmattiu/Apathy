@@ -11,6 +11,7 @@ test('correction validation and save results remain visible beside the save butt
  try{
   const page=await browser.newPage({viewport:{width:1280,height:720}});
   let writes=0,request;
+  let syncReply=null,syncGate=null;
   let people=[{pid:'P123',sid:'S082',phone:'91234567',name:'Local fixture'}];
   await page.route('**/*',async route=>{
    const u=new URL(route.request().url());
@@ -21,6 +22,7 @@ test('correction validation and save results remain visible beside the save butt
     }
     if(u.searchParams.get('action')==='staff_bootstrap')return route.fulfill({contentType:'text/javascript',body:`${u.searchParams.get('callback')}(${JSON.stringify({ok:true,people})})`});
     if(u.searchParams.get('action')==='staff_result')return route.fulfill({contentType:'text/javascript',body:`${u.searchParams.get('callback')}(${JSON.stringify({ok:true,submission_id:'test-correction',saved_at:new Date().toISOString()})})`});
+    if(u.searchParams.get('action')==='staff_status'&&syncReply){await syncGate;return route.fulfill({contentType:'text/javascript',body:`${u.searchParams.get('callback')}(${JSON.stringify(syncReply)})`});}
     return route.abort();
    }
    const name=u.pathname==='/'?'index.html':u.pathname.slice(1);
@@ -94,6 +96,18 @@ test('correction validation and save results remain visible beside the save butt
   assert.equal(writes,before,'ambiguous names must not write');
   assert.equal(await page.locator('[data-field="participant_name"] input').inputValue(),'Another edit');
   assert.equal(await save.isEnabled(),true);
+  syncReply={ok:true,status:{status:'SUCCEEDED',stage:'COMPLETE',progress:{pending_count:0,last_success_at:'2026-11-01T07:34:17.590Z'}}};
+  let releaseSync;syncGate=new Promise(resolve=>releaseSync=resolve);
+  await page.getByRole('button',{name:'查看同步進度',exact:true}).click();
+  try{
+   assert.match(await status.textContent(),/正在查詢/);
+   assert.equal(await page.getByRole('button',{name:'正在查詢……',exact:true}).isDisabled(),true);
+  }finally{releaseSync();}
+  await page.waitForFunction(()=>document.querySelector('#correction-save-status').textContent.includes('最近一次同步已完成'));
+  assert.match(await status.textContent(),/待處理提交：0 份/);
+  assert.match(await status.textContent(),/查詢時間/);
+  assert.equal(writes,before,'progress queries must never write');
+  syncReply=null;
   await page.getByRole('button',{name:'查看同步進度',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('#correction-save-status').textContent.includes('暫時無法連接後台'));
   assert.equal(await status.evaluate(n=>{const r=n.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true);

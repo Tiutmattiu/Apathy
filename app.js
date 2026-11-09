@@ -333,7 +333,11 @@ function calculateAllDerived(){
   setDerived('quiprs_complete',qr.complete?1:0);setDerived('quiprs_cutoff_domains',qr.complete?qr.hit.join('|'):null);
   setDerived('quiprs_icd_exclusion_flag',qr.complete&&val('pd_hc_status')==='PD'?(qr.hit.length?1:0):null);
 
-  const rbKeys=B.rbdsq.items.map(x=>x.name),rbDisease=B.rbdsq.diseaseItems.map(x=>x.name),rbComplete=present(B.rbdsq.sourceField)&&completeKeys(rbKeys.concat(rbDisease));
+  // Q10 is a multi-select page: a selected disease completes the page;
+  // unchecked diseases remain untouched in existing drafts.
+  const rbKeys=B.rbdsq.items.map(x=>x.name),rbDisease=B.rbdsq.diseaseItems.map(x=>x.name);
+  const rbQ10Complete=completeKeys(rbDisease)||pageComplete({kind:'rbQ10'});
+  const rbComplete=present(B.rbdsq.sourceField)&&completeKeys(rbKeys)&&rbQ10Complete;
   const rbTotal=rbComplete?rbKeys.reduce((n,k)=>n+Number(val(k)),0)+(rbDisease.some(k=>Number(val(k))===1)?1:0):null;
   const rbCut=val('pd_hc_status')==='PD'?6:val('pd_hc_status')==='HC'?5:null;
   setDerived('rbdsq_total',rbTotal);setDerived('rbdsq_complete',rbComplete?1:0);setDerived('rbdsq_cutoff_value',rbCut);setDerived('rbdsq_positive_flag',rbTotal===null||rbCut===null?null:(rbTotal>=rbCut?1:0));
@@ -665,7 +669,7 @@ function player(){
   h.append(sm);m.append(h);if(ST.flow==='screening')m.append(identityStrip());
   const qbox=el('section','question');if(pg.context)qbox.append(el('div','context',pg.context));qbox.append(el('h3','',pg.label));renderPage(pg,qbox);if(ST.error)qbox.append(el('div','error',ST.error));m.append(qbox);
   const nav=el('div','nav');nav.append(btn('返回上一個',()=>{if(ST.step>0){ST.step--;ST.error='';saveDraft();player()}},'secondary'));
-  const needsExplicit=['cdarsExamples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','iorScenario','scaleIntro'];
+  const needsExplicit=['pdIdentity','cdarsExamples','positiveOne','moca','quipGroup','quipRsMatrix','pdiItem','mriSafety','rbMain','rbQ10','screenResult','stage2Summary','scaleResult','iorScenario','scaleIntro'];
   if(ST.flow==='stage2'||needsExplicit.includes(pg.kind)){const nextLabel=ST.step===pages.length-1?'檢查並提交':pg.kind==='quipGroup'?(pg.group===2?'完成QUIP':'下一組'):'下一題';nav.append(btn(nextLabel,()=>manualNext(pg,pages),'next'))}
   m.append(nav);setTimeout(()=>{const first=qbox.querySelector('input:not([disabled]),textarea:not([disabled])');if(first)first.focus({preventScroll:true})},30);
 }
@@ -1327,6 +1331,7 @@ function renderPdiItem(pg,a){
 }
 
 function pageComplete(pg){
+  if(pg.kind==='pdIdentity')return val('pd_hc_status')==='HC'||(val('pd_hc_status')==='PD'&&present('pd_duration_years_self_report'));
   if(pg.kind==='pdiItem'){const x=pg.pdi;if(val(x.yesField)===0)return true;if(val(x.yesField)!==1)return false;return ['distress','preoccupation','conviction'].every(k=>present(x.dimensions[k].name))}
   if(pg.kind==='cdarsExamples')return Boolean(String(val(pg.example1Key)||'').trim()&&String(val(pg.example2Key)||'').trim());
   if(pg.kind==='cdarsScale')return present(pg.key);
@@ -1370,7 +1375,7 @@ function handleGlobalKeydown(e){
   }
   if(!['stage2','screening'].includes(ST.flow))return;
   const pg=playerPages()[ST.step];
-  if(ST.flow==='stage2'&&e.key==='Enter'){e.preventDefault();return manualNext(pg,playerPages())}
+  if((ST.flow==='stage2'||pg.kind==='pdIdentity')&&e.key==='Enter'){e.preventDefault();return manualNext(pg,playerPages())}
   if(!/^\d$/.test(e.key))return;const n=Number(e.key);
   if(pg.kind==='scale'||pg.kind==='cdarsScale'){
     const opts=pg.options||[];let hit=null,position=null;

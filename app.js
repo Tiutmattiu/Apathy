@@ -96,11 +96,37 @@ function renderPositiveOne(pg,a){
   if(sameValue(val(pg.key),1)&&pg.conditional){const f=el('div','field conditional');f.append(el('label','',pg.conditional.label));const i=el('input','text');i.type='number';i.value=val(pg.conditional.key)??'';i.oninput=()=>set(pg.conditional.key,i.value===''?null:Number(i.value));i.onkeydown=e=>{if(e.key==='Enter'&&i.value!==''){e.preventDefault();autoNext()}};f.append(i,document.createTextNode(' '+pg.conditional.unit));a.append(f)}
 }
 
+function mocaPendingActive_(){return val('moca_data_status')==='pending';}
+function mocaSetPending_(key,pending){
+ if(pending){['moca_1_raw_total','moca_2_raw_total','moca_raw_total','moca_latest_raw_total','moca_assessment_date','moca_1_assessment_date','moca_2_assessment_date','moca_1_adjustment','moca_1_adjusted_total','moca_1_16th_cutoff','moca_1_norm_result_code','moca_2_adjustment','moca_2_adjusted_total','moca_2_16th_cutoff','moca_2_norm_result_code'].forEach(k=>set(k,null));set('moca_data_status','pending');set('moca_pending_reason','待醫院資料');set('moca_score_field',key);set('moca_status_recorded_at',new Date().toISOString());}
+ else{set('moca_data_status',null);set('moca_pending_reason',null);set('moca_score_field',null);}
+}
+function mocaRecordScore_(key,value){
+ const previousKey=val('moca_score_field');set(key,value);if(value!==null&&value!==''&&Number.isInteger(Number(value))&&Number(value)>=0&&Number(value)<=30){if(previousKey!==key)set('moca_assessment_date',val(key.replace('raw_total','assessment_date'))||null);set('moca_data_status','complete');set('moca_pending_reason',null);set('moca_score_field',key);set('moca_status_recorded_at',new Date().toISOString());}
+ else if(val('moca_data_status')==='complete'){set('moca_data_status',null);set('moca_score_field',null);}
+}
+function mocaOnlyPayload_(full){
+ const out={},keys=['schema_version','frontend_release','receiver_contract_expected','submission_id','form_type','event_type','workflow_stage','record_status','p_id','s_id','visit_number','participant_id','submitted_at','data_source','contact_phone_normalized','contact_phone','participant_name','gender','pd_hc_status','date_of_birth','age_years','education_years','moca_data_status','moca_score_field','moca_pending_reason','moca_status_recorded_at','moca_assessment_date'];
+ keys.forEach(k=>{if(full[k]!==undefined)out[k]=full[k];});const key=full.moca_score_field||'moca_1_raw_total';if(['moca_1_raw_total','moca_2_raw_total','moca_raw_total'].includes(key))out[key]=full[key]??null;out.workflow_part='clinical_moca_supplement';return out;
+}
+function submitMocaOnly_(container){
+ if(!clinicalIdentityAvailablePhase3_()){showInlineError(container,'請先核對 PID、SID 或電話。');return;}
+ const score=val('moca_1_raw_total');if(!mocaPendingActive_()&&(score===null||score===''||!Number.isInteger(Number(score))||Number(score)<0||Number(score)>30)){showInlineError(container,'請填寫0至30的實際 MoCA 分數，或選「待補」。');return;}
+ return submitPayload('clinical','clinical_supplement','submitted',true);
+}
+function renderMocaPendingControl_(container,key){
+ const label=el('label','moca-pending-control'),check=el('input');check.type='checkbox';check.checked=mocaPendingActive_();check.style.width='auto';check.onchange=()=>{mocaSetPending_(key,check.checked);if(ST.flow==='screening')player();else renderByFlow();};label.append(check,document.createTextNode(' MoCA 待補／待醫院資料'));container.append(label);if(check.checked)container.append(el('div','result warn','已標記 MoCA 待醫院資料。可提交其他資料；Boss 保留此人，臨床會持續列出待補。'));
+}
+function mocaAssessmentDate_(key){if(val('moca_score_field')&&val('moca_score_field')!==key)return val(key.replace('raw_total','assessment_date'));return Object.prototype.hasOwnProperty.call(ST.answers,'moca_assessment_date')?val('moca_assessment_date'):val(key.replace('raw_total','assessment_date'))||(key==='moca_2_raw_total'?val('mri_date'):null);}
+function renderMocaEntry_(container,key,label){
+ const box=el('div','field');box.dataset.field=key;box.append(el('label','',label));const input=el('input');input.type='number';input.min='0';input.max='30';input.step='1';input.placeholder='0–30；尚未收到請選待補';input.value=mocaPendingActive_()?'':val(key)??'';input.disabled=mocaPendingActive_();input.oninput=()=>{const raw=input.value===''?null:Number(input.value);input.setCustomValidity(raw!==null&&(!Number.isInteger(raw)||raw<0||raw>30)?'MoCA 必須為0至30的整數':'');mocaRecordScore_(key,raw);};box.append(input);renderMocaPendingControl_(box,key);const date=el('input');date.type='date';date.value=mocaAssessmentDate_(key)||'';date.disabled=mocaPendingActive_();date.oninput=()=>{set(key.replace('raw_total','assessment_date'),date.value||null);if(!val('moca_score_field')||val('moca_score_field')===key){set('moca_assessment_date',date.value||null);if(!val('moca_score_field'))set('moca_score_field',key);}};const dl=el('label','','MoCA 實際評估日期（如已知，勿以補錄日期代替）');dl.append(date);box.append(dl,el('p','hint','此欄留空表示本次不更新 MoCA；填入新分數會取代先前結果，由後端按已有年齡及教育資料重算。'));if(ST.flow==='clinical')box.append(btn('只補交 MoCA',()=>submitMocaOnly_(box),'primary'));container.append(box);
+}
+
 function renderMoca(a){
   const i=el('input','text');i.type='number';i.min=0;i.max=30;i.placeholder='0–30';i.value=val('moca_1_raw_total')??'';
   const result=el('div');
-  const update=()=>{const raw=i.value===''?null:Number(i.value);set('moca_1_raw_total',raw);result.innerHTML='';const age=calcAge(),edu=Number(val('education_years'));if(raw===null||age===null||!Number.isFinite(edu)){result.append(el('div','result','輸入總分並完成出生日期與教育資料後，系統會顯示第16百分位結果。'));return}const adj=edu<=12?1:0,adjusted=Math.min(30,raw+adj),cut=mocaCutoff(age,edu);Object.assign(ST.answers,{moca_1_adjustment:adj,moca_1_adjusted_total:adjusted,moca_1_age_years:age,moca_1_education_years:edu,moca_1_16th_cutoff:cut,moca_1_norm_result_code:cut===null?null:(raw>cut?1:0)});saveDraft();const r=el('div','result '+(cut!==null&&raw<=cut?'bad':'good'));r.innerHTML=`原始總分：${raw}/30<br>教育調整：+${adj}<br>調整後總分：${adjusted}/30<br>第16百分位Cutoff：${cut===null?'65歲以下，需覆核':cut}<br>結果：${cut===null?'待覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}${cut===null?'':`<br>相對Cutoff：${raw-cut>=0?'+':''}${raw-cut}分`}`;result.append(r)};
-  i.oninput=()=>{let n=i.value===''?null:Number(i.value);if(n!==null&&(n<0||n>30)){i.setCustomValidity('MoCA原始總分必須為0至30');return}i.setCustomValidity('');update()};i.onkeydown=e=>{if(e.key==='Enter'&&i.value!==''){e.preventDefault();update();autoNext()}};a.append(i,result);update()
+  const update=()=>{const raw=i.value===''?null:Number(i.value);if(!mocaPendingActive_())set('moca_1_raw_total',raw);result.innerHTML='';const age=calcAge(),edu=Number(val('education_years'));if(raw===null||age===null||!Number.isFinite(edu)){result.append(el('div','result','輸入總分並完成出生日期與教育資料後，系統會顯示第16百分位結果。'));return}const adj=edu<=12?1:0,adjusted=Math.min(30,raw+adj),cut=mocaCutoff(age,edu);Object.assign(ST.answers,{moca_1_adjustment:adj,moca_1_adjusted_total:adjusted,moca_1_age_years:age,moca_1_education_years:edu,moca_1_16th_cutoff:cut,moca_1_norm_result_code:cut===null?null:(raw>cut?1:0)});saveDraft();const r=el('div','result '+(cut!==null&&raw<=cut?'bad':'good'));r.innerHTML=`原始總分：${raw}/30<br>教育調整：+${adj}<br>調整後總分：${adjusted}/30<br>第16百分位Cutoff：${cut===null?'65歲以下，需覆核':cut}<br>結果：${cut===null?'待覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}${cut===null?'':`<br>相對Cutoff：${raw-cut>=0?'+':''}${raw-cut}分`}`;result.append(r)};
+  i.oninput=()=>{let n=i.value===''?null:Number(i.value);if(n!==null&&(n<0||n>30)){i.setCustomValidity('MoCA原始總分必須為0至30');return}i.setCustomValidity('');mocaRecordScore_('moca_1_raw_total',n);update()};i.onkeydown=e=>{if(e.key==='Enter'&&i.value!==''){e.preventDefault();update();autoNext()}};i.disabled=mocaPendingActive_();a.append(i,result);renderMocaPendingControl_(a,'moca_1_raw_total');update()
 }
 
 function renderQuipShared(pg,a){const g=el('div','toggle-grid');B.quip.domains.forEach(d=>{const key=`quip_${d.key}${pg.stem.index}_yes`,label=d.fullLabel;g.append(toggleButton(label,key,()=>player()))});a.append(g,el('p','hint','未選項目代表「否」。可選零項、一項或多項。'))}
@@ -189,12 +215,13 @@ function screenScores(){
   else if(blockers.includes('COGNITIVE_EXCLUDE')){suggestion='認知覆核候選';code='COGNITIVE_EXCLUDE'}
   else if(blockers.includes('MRI_SAFETY_EXCLUDE')){suggestion='MRI安全覆核候選';code='MRI_SAFETY_EXCLUDE'}
   else if(blockers.includes('IDENTITY_CONFLICT')){suggestion='身份待核實';code='PENDING'}
+  else if(mocaPendingActive_()){suggestion='MoCA待補／待醫院資料';code='PENDING';reasons.push('MoCA待補，尚未判定認知是否通過')}
   else if(identity==='HC'){suggestion='健康對照（HC）';code='HC'}
   else if(qr.complete&&qr.hit.length){suggestion='ICD排除';code='ICD_EXCLUDE';reasons.push('QUIP-RS達到Cutoff：'+qr.hit.join('、'))}
   else if(sasComplete&&sas>=14){suggestion='冷漠組（Apathy）';code='Apathy'}
   else if(sasComplete){suggestion='非冷漠PD組（Pure PD）';code='Pure_PD'}
   return{
-    moca:raw===null?'MoCA：未完成':`MoCA：${raw}/30｜${cut===null?'需覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}`,
+    moca:mocaPendingActive_()?'MoCA：待補／待醫院資料':raw===null?'MoCA：未完成':`MoCA：${raw}/30｜${cut===null?'需覆核':raw>cut?'高於第16百分位':'低於或等於第16百分位'}`,
     hadsA:hA,hadsD:hD,hadsComplete,sas,sasComplete,
     quiprs:qr.complete?(qr.hit.length?'達Cutoff：'+qr.hit.join('、'):'完整｜未達排除Cutoff'):'未完成｜暫不計分',
     rb:rbComplete?`${rb.total}/13｜${rb.note}`:'未完成｜暫不計分',
@@ -846,8 +873,8 @@ function renderMRIVisit(){
   const ms=mriMocaStatePhase2_();
   s.append(resultBox('MRI前MoCA及兩個calendar months判定',ms.lines,ms.needs?'warn':'good'));
   if(ms.needs&&ms.status!=='current_event_only'){
-    addStaffNumber(s,'MRI前／當日重做MoCA Raw','moca_2_raw_total','／30');
-    if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mriTodayPhase2_());renderSecondMocaResult(s)}
+    renderMocaEntry_(s,'moca_2_raw_total','MRI前／當日重做 MoCA 原始總分（0–30）');
+    if(present('moca_2_raw_total')){setDerived('moca_2_assessment_date',mocaAssessmentDate_('moca_2_raw_total'));renderSecondMocaResult(s)}
   }else if(ms.status==='current_event_only'){
     setDerived('moca_2_assessment_date',val('moca_2_assessment_date')||val('mri_date'));
   }
@@ -905,7 +932,7 @@ function setBackfillApplicabilityBatch1_(){
 
 function backfill(){const m=el('main','backfill');ROOT.innerHTML='';ROOT.append(el('div','topline'),m);m.append(toolbar('歷史資料補錄'));m.append(identityStrip());const nav=el('nav','backfill-nav');const sections=[];function sec(id,title){const s=el('section','bf-section');s.id='bf-'+id;s.append(el('h2','',title));m.append(s);sections.push([id,title]);return s}
  const id=sec('identity','Participant身份及基本資料');id.append(fieldIdDigits('P_ID','p_id',val('participant_series')==='Y'?'Y':'P','例：140'),fieldIdDigits('S_ID（如紙本有）','s_id','S','例：082'),fieldText('姓名','participant_name',''));addBFDate(id,'出生日期','date_of_birth');addBFChoices(id,'性別','gender',[['M','M'],['F','F']]);addBFChoices(id,'PD／HC身份','pd_hc_status',C.identities);id.append(fieldText('聯絡電話','contact_phone',''),fieldText('評估時實際年齡','age_years','歲','number'),fieldText('實際教育年數','education_years','年','number'));
- const mo=sec('moca','MoCA');addBFNumber(mo,'MoCA原始總分','moca_1_raw_total',0,30);const age=calcAge(),edu=Number(val('education_years')),raw=val('moca_1_raw_total');if(age!==null&&Number.isFinite(edu)&&raw!==null){const cut=mocaCutoff(age,edu),adj=edu<=12?1:0;mo.append(el('div','result',`教育調整：+${adj}；調整後：${Math.min(30,+raw+adj)}/30；第16百分位Cutoff：${cut===null?'需覆核':cut}；結果：${cut===null?'待覆核':raw>cut?'高於':'低於或等於'}第16百分位`))}addBFCheckbox(mo,'紙本另有第二次MoCA','has_moca_2');if(val('has_moca_2')===1)addBFNumber(mo,'第二次MoCA原始總分','moca_2_raw_total',0,30);
+ const mo=sec('moca','MoCA');renderMocaEntry_(mo,'moca_1_raw_total','MoCA 原始總分（0–30）');const age=calcAge(),edu=Number(val('education_years')),raw=val('moca_1_raw_total');if(age!==null&&Number.isFinite(edu)&&raw!==null){const cut=mocaCutoff(age,edu),adj=edu<=12?1:0;mo.append(el('div','result',`教育調整：+${adj}；調整後：${Math.min(30,+raw+adj)}/30；第16百分位Cutoff：${cut===null?'需覆核':cut}；結果：${cut===null?'待覆核':raw>cut?'高於':'低於或等於'}第16百分位`))}addBFCheckbox(mo,'紙本另有第二次MoCA','has_moca_2');if(val('has_moca_2')===1)renderMocaEntry_(mo,'moca_2_raw_total','第二次 MoCA 原始總分（0–30）');
  addBFScale(sec('hads','HADS'),B.hads.items,0,3);renderQuipBF(sec('quip','QUIP'));renderQuipRsBF(sec('quiprs','QUIP-RS'));addBFScale(sec('sas','SAS'),B.sas.items,0,3);
  renderRBBF(sec('rbdsq','RBDSQ'));renderMRIBF(sec('mris','MRI安全'));
  addBFScale(sec('gas','GAS'),B.gas.items,0,3);addBFScale(sec('ami','AMI-18'),B.ami18.items,0,4);const cd=sec('cdars','C-DARS');renderCdarsBF(cd);addBFScale(sec('rgpts','R-GPTS'),B.rgpts.items,0,4);renderPDIBF(sec('pdi','PDI-21'));renderIORBF(sec('ior','IOR'));
@@ -1117,7 +1144,7 @@ function medHVInput_(value,placeholder,onchange,type='number'){
 
 function renderMedicationBF(s){s.append(btn('＋新增一款藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',units:'',times:'',matchedLevodopa:''});medHVSave_();backfill()},'primary'));renderMedicationRows(s);renderLeddPanel(s)}
 
-function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),identityStrip());const s=el('section','summary');s.append(el('h2','section-title','PD臨床資料'));s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));addStaffNumber(s,'核實PD病程','pd_duration_verified_years','年');addStaffChoices(s,'UPDRS Part III資料路徑','updrs3_route',[['hospital_total_only','醫院只提供總分'],['hospital_items','醫院提供小分'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);
+function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),identityStrip());const s=el('section','summary');s.append(el('h2','section-title','PD臨床資料'));s.append(fieldText('聯絡電話','contact_phone','例：9123 4567'));renderMocaEntry_(s,'moca_1_raw_total','MoCA 原始總分（0–30）');addStaffNumber(s,'核實PD病程','pd_duration_verified_years','年');addStaffChoices(s,'UPDRS Part III資料路徑','updrs3_route',[['hospital_total_only','醫院只提供總分'],['hospital_items','醫院提供小分'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);
  if(val('updrs3_route')==='hospital_total_only')addStaffNumber(s,'UPDRS Part III總分','updrs3_reported_total','/132');if(['hospital_items','research_assessed'].includes(val('updrs3_route'))){s.append(el('h3','','UPDRS Part III 33項'));renderUPDRSItems(s,val('updrs3_route')==='research_assessed')}
  if(val('updrs3_route')==='research_assessed'){addStaffCheckbox(s,'正接受PD藥物治療','updrs3a_pd_treatment');if(val('updrs3a_pd_treatment')===1)addStaffChoices(s,'臨床狀態','updrs3b_clinical_state',[['ON','ON／來電'],['OFF','OFF／停電']]);addStaffCheckbox(s,'有服用Levodopa','updrs3c_levodopa');if(val('updrs3c_levodopa')===1)addStaffNumber(s,'距最後服用Levodopa','updrs3c1_last_levodopa_minutes','分鐘');addStaffCheckbox(s,'檢查期間出現異動症','updrs3_dyskinesia_present');if(val('updrs3_dyskinesia_present')===1)addStaffCheckbox(s,'異動症干擾動作功能檢查','updrs3_dyskinesia_interference')}
  addStaffChoices(s,'UPDRS 1.5資料路徑','updrs15_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('updrs15_route'))){s.append(el('h3','','UPDRS 1.5 冷漠感'));renderAnchorChoices(s,'updrs_item_1_5',B.clinical.updrs15.text.options)}
@@ -1205,11 +1232,11 @@ function autoDownloadSubmissionSnapshot_(snapshot){
   localStorage.setItem(key,JSON.stringify({downloaded_at:new Date().toISOString(),file_name:anchor.download,frontend_release:snapshot.frontend_release}));
   return{downloaded:true,file_name:anchor.download}
 }
-async function submitPayload(form,event,status){
+async function submitPayload(form,event,status,onlyMoca=false){
   if(ST.submitting)return;
 
   const submissionStartedAt=Date.now();
-  const p=payload(form,event,status);
+  const p=onlyMoca?mocaOnlyPayload_(payload(form,event,status)):payload(form,event,status);
   delete p.payload_json;
   if(!p.submission_id){
     ST.submission=ST.submission||uuid();
@@ -1342,7 +1369,7 @@ function pageComplete(pg){
   if(pg.kind==='rbQ10')return anySelectedV3(B.rbdsq.diseaseItems.map(x=>x.name))||val('rbq10_none_confirmed')===1;
   if(pg.kind==='rbMain')return present(B.rbdsq.sourceField)&&val('rbdsq_section_confirmed')===1&&B.rbdsq.items.every(x=>present(x.name));
   if(pg.kind==='screenResult')return present('final_screening_decision');
-  if(pg.kind==='dob')return present('date_of_birth');if(pg.kind==='moca')return present('moca_1_raw_total');
+  if(pg.kind==='dob')return present('date_of_birth');if(pg.kind==='moca')return present('moca_1_raw_total')||val('moca_data_status')==='pending';
   if(['stage2Summary','scaleResult','scaleIntro'].includes(pg.kind))return true;
   return pg.key?present(pg.key):true;
 }
@@ -1354,6 +1381,7 @@ function manualNext(pg,pages){
 }
 
 function validateClinical(s){
+  const moca=val('moca_1_raw_total');if(!mocaPendingActive_()&&moca!==null&&moca!==''&&(!Number.isInteger(Number(moca))||Number(moca)<0||Number(moca)>30)){showInlineError(s,'MoCA 必須為0至30的整數；未有分數請選待補。');return;}
   if(!clinicalIdentityAvailablePhase3_()){showInlineError(s,'P_ID、S_ID及聯絡電話至少需要其中一項，才可提交Clinical資料。');return}
   if(!present('pd_duration_verified_years')){showInlineError(s,'請填寫核實PD病程。');return}
   const route=String(val('updrs3_route')||'');

@@ -51,10 +51,24 @@
       const parts=[clean(report.phone),clean(report.display_name)].filter(Boolean);
       return parts.length?parts.join('_')+'_報告.png':null;
     }
+    function sendReportBrowserEvent(event){return window.parent.apathyStaffReportEvent(event);}
+    async function reportBrowserEvent(report,type){
+      const event={pid:report.participant_id,type,event_id:typeof crypto.randomUUID==='function'?crypto.randomUUID():Date.now()+'_'+Math.random().toString(36).slice(2)};
+      try{const result=await sendReportBrowserEvent(event);if(result?.ok===false||result?.status_update?.ok===false)throw Error('status');return '';}
+      catch(error){return '\n報告已顯示或已送出下載；圖像連結表狀態尚未確認更新。';}
+    }
+    async function reportPreviewRendered(){
+      if(document.fonts)await document.fonts.ready;
+      for(const image of document.querySelectorAll('#pages .image-space img')){
+        if(!image.complete)await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('圖像載入逾時，未記錄預覽成功。')),20000);image.onload=()=>{clearTimeout(timer);resolve();};image.onerror=()=>{clearTimeout(timer);reject(Error('Drive圖像未能載入，未記錄預覽成功。'));};});
+        if(!image.naturalWidth)throw Error('Drive圖像未能載入，未記錄預覽成功。');
+      }
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    }
     async function preflightReports(){
       const button=document.getElementById('preflightReports'),status=document.getElementById('status'),download=document.getElementById('downloadReports');
       button.disabled=true;download.disabled=true;
-      try{document.getElementById('pages').innerHTML='';const query=reportQuery();status.textContent='正在讀取這位參與者的報告……';const payload=await fetchOneReport(query);showReportPreview(payload);status.textContent=reportStatus(payload);}
+      try{document.getElementById('pages').innerHTML='';const query=reportQuery();status.textContent='正在讀取這位參與者的報告……';const payload=await fetchOneReport(query);const reports=showReportPreview(payload);status.textContent=reportStatus(payload);await reportPreviewRendered();const notice=reports.length===1?await reportBrowserEvent(reports[0],'preview_rendered'):'';status.textContent=reportStatus(payload)+notice;}
       catch(error){status.textContent=error.message||String(error);}finally{button.disabled=false;download.disabled=false;}
     }
     async function downloadReportImages(){
@@ -94,7 +108,8 @@
           setTimeout(()=>URL.revokeObjectURL(url),60000);downloaded++;
           }
         }
-        status.textContent=`已送出 ${downloaded} 個獨立 PNG 下載（請在瀏覽器下載清單確認）。\n${permission}\n${notes.join('\n')}`;
+        const eventNotice=await reportBrowserEvent(reports[0],'download_created');
+        status.textContent=`已送出 ${downloaded} 個獨立 PNG 下載（請在瀏覽器下載清單確認）。\n${permission}\n${notes.join('\n')}${eventNotice}`;
       }catch(error){status.textContent=`已送出 ${downloaded} 個下載。${error.message||String(error)}\n${notes.join('\n')}`;}
       finally{button.disabled=false;document.getElementById('preflightReports').disabled=false;}
     }

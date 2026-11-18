@@ -71,31 +71,19 @@ function repairAfterApproval(draft,allowedAt){
   if(!draft||!draft.answers)return false;
   const answers=draft.answers;
 
-  // A participant who was stopped at the HADS gate cannot have legitimate
-  // post-HADS answers yet. Keep identity + HADS only and discard stale local
-  // state from an earlier test/session on the same device.
-  const keep=new Set([
-    'p_id','s_id','participant_name',
-    'dob_d','dob_m','dob_y','date_of_birth','age_years',
-    'gender','contact_phone',
-    'pd_status_self_report','pd_hc_status','pd_duration_years_self_report',
-    'education_level','education_years'
-  ]);
-
-  Object.keys(answers).forEach(function(key){
-    if(keep.has(key))return;
-    if(/^hads/i.test(key))return;
-    if(/^_guided_hads_/i.test(key))return;
-    delete answers[key];
-  });
-
+  // Approval changes workflow permission only. Answers and later progress may
+  // have changed while the status request was in flight; never erase them.
   answers._guided_hads_blocked=0;
   answers._guided_hads_passed=1;
   answers._guided_hads_staff_override=1;
   answers._guided_hads_staff_override_at=String(allowedAt||answers._guided_hads_staff_override_at||new Date().toISOString());
   answers[REPAIR_MARKER]=1;
 
-  const nextStep=firstPostHadsStep(answers);
+  const nextStep=Math.max(
+    firstPostHadsStep(answers),
+    Number(draft.step)||0,
+    Number(answers._guided_latest_step)||0
+  );
   answers._guided_latest_step=nextStep;
   draft.step=nextStep;
   draft.answers=answers;
@@ -130,12 +118,13 @@ async function checkResume(){
       submission_id:submissionId
     },12000);
 
-    if(!(result&&result.ok&&result.allowed))return;
+    if(!(result&&result.ok===true&&result.allowed===true&&result.submission_id===submissionId))return;
 
-    // Always do one server-confirmed V2 repair after approval. This also
-    // recovers browsers that were approved by an older bootstrap but still
-    // contain stale final/completion flags from an earlier test run.
-    if(repairAfterApproval(draft,result.allowed_at)){
+    const current=readDraft();
+    if(!current||!current.answers||String(current.answers._guided_hads_submission_id||'').trim()!==submissionId)return;
+
+    // Apply the exact approval to the latest draft, not the request snapshot.
+    if(repairAfterApproval(current,result.allowed_at)){
       window.location.reload();
     }
   }catch(_){

@@ -1167,8 +1167,8 @@ function receiverPublicQuery_(action,params){
   script.src=url.toString();document.head.append(script);
  });
 }
-async function receiverPostSelective_(snapshot){
- try{return await receiverPostDirectFinal_(snapshot);}catch(error){
+async function receiverPostSelective_(snapshot,signal){
+ try{return await receiverPostDirectFinal_(snapshot,signal);}catch(error){
   // Explicit receiver rejections must remain errors; only uncertain transport failures need recovery.
   if(error.code)throw error;
   for(let attempt=0;attempt<4;attempt++){
@@ -1182,9 +1182,10 @@ async function receiverPostSelective_(snapshot){
  }
 }
 const SUBMISSION_TRANSPORT_BUILD='2026-08-21-direct-fetch-v7';
-async function receiverPostDirectFinal_(submissionPayload){
+async function receiverPostDirectFinal_(submissionPayload,signal){
   const response=await fetch(C.receiverUrl,{
     method:'POST',
+    signal,
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(submissionPayload)
   });
@@ -1564,10 +1565,12 @@ function guidedTransitionPending_(){
 
 function guidedScheduleForward_(delay=150){
   if(guidedTransitionPending_())return false;
+  const originStep=ST.step,originFlow=ST.flow;
   ST._guidedTransitionPending=true;
-  setTimeout(()=>{
+  ST._guidedTransitionTimer=setTimeout(()=>{
     ST._guidedTransitionPending=false;
-    guidedGoForward_();
+    ST._guidedTransitionTimer=null;
+    if(ST.step===originStep&&ST.flow===originFlow)guidedGoForward_();
   },delay);
   return true;
 }
@@ -1836,7 +1839,18 @@ async function guidedPostPhase_(phase,event,keys){
     };
   }
 
-  return receiverPostDirectFinal_(snapshot);
+  // A written row can outlive a lost/CORS-blocked POST response. Recover only
+  // through the Receiver's exact submission-ID receipt, never from the error.
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),20000);
+  try{
+    const receipt=await receiverPostSelective_(snapshot,controller.signal);
+    const sheet=event==='stage_2_questionnaires'?'stage2_raw':'screening_raw';
+    if(receipt.submission_id!==snapshot.submission_id||receipt.sheet!==sheet||!Number.isInteger(Number(receipt.row))||Number(receipt.row)<2){
+      throw new Error('尚未收到與本次提交相符的保存確認。答案仍保存在此裝置，請重試。');
+    }
+    return receipt;
+  }finally{clearTimeout(timeout);}
 }
 
 
@@ -2037,7 +2051,16 @@ function guidedQuestionCallout_(text){
 
 function guidedAnswerButton_(label,selected,onClick,extraClass=''){
   const cls=('guided-answer '+extraClass+(selected?' selected':'')).trim();
-  const b=btn(label,onClick,cls);
+  const b=btn(label,()=>{
+    // Show the saved choice immediately, including when choosing it again.
+    if(b.parentElement){
+      Array.from(b.parentElement.children).filter(x=>x.classList.contains('guided-answer')).forEach(x=>{
+        x.classList.toggle('selected',x===b);
+        x.setAttribute('aria-pressed',x===b?'true':'false');
+      });
+    }
+    onClick();
+  },cls);
   b.setAttribute('aria-pressed',selected?'true':'false');
   return b;
 }
@@ -2451,8 +2474,8 @@ function guidedRenderEducation_(a){
 }
 
 function guidedBinaryButtons_(key,onAnswer){
-  const yesSelected=Number(val(key))===1;
-  const noSelected=Number(val(key))===0;
+  const yesSelected=present(key)&&Number(val(key))===1;
+  const noSelected=present(key)&&Number(val(key))===0;
   const g=el('div','direct');
   g.append(
     guidedAnswerButton_('是',yesSelected,()=>onAnswer(1),'choice'),
@@ -3166,6 +3189,8 @@ async function guidedAutoSubmitHads_(status){
   }
 
   ST._guidedHadsSubmitting=true;
+  const back=status.parentElement?.querySelector('[data-guided-hads-back]');
+  if(back)back.disabled=true;
   status.className='result';
   status.textContent=guidedDryRun_()?'測試保存中……':'正在安全保存這部分答案……';
 
@@ -3184,9 +3209,12 @@ async function guidedAutoSubmitHads_(status){
     ST.answers._guided_hads_blocked=0;
     saveDraft();
     ST._guidedHadsSubmitting=false;
-    guidedScheduleForward_(350);
+    if(status.isConnected)guidedScheduleForward_(350);
+    else player();
   }catch(err){
     ST._guidedHadsSubmitting=false;
+    if(back)back.disabled=false;
+    if(!status.isConnected)return;
     status.className='error';
     status.textContent=
       '暫時未能保存資料。答案仍保存在這部裝置。請保持此頁開啟，稍後再試。 '+
@@ -3266,6 +3294,7 @@ function guidedRenderHadsGate_(a){
   const back=btn(
     '返回上一題檢查',
     ()=>{
+      if(ST._guidedHadsSubmitting)return;
       ST.step=Math.max(0,ST.step-1);
       ST.error='';
       saveDraft();
@@ -3275,8 +3304,9 @@ function guidedRenderHadsGate_(a){
     'secondary'
   );
 
+  back.dataset.guidedHadsBack='true';
   a.append(status,back);
-  setTimeout(()=>guidedAutoSubmitHads_(status),80);
+  setTimeout(()=>{if(status.isConnected)guidedAutoSubmitHads_(status);},80);
 }
 
 async function guidedAutoSubmitScreening_(status){
@@ -3296,9 +3326,11 @@ async function guidedAutoSubmitScreening_(status){
     ST.answers._guided_screening_submitted=1;
     saveDraft();
     ST._guidedScreeningSubmitting=false;
-    guidedScheduleForward_(350);
+    if(status.isConnected)guidedScheduleForward_(350);
+    else player();
   }catch(err){
     ST._guidedScreeningSubmitting=false;
+    if(!status.isConnected)return;
     status.className='error';
     status.textContent=
       '暫時未能保存第一部分。答案仍保存在這部裝置。 '+
@@ -3344,7 +3376,7 @@ function guidedRenderScreeningCheckpoint_(a){
 
   const status=el('div','result','第一部分完成。正在安全保存……');
   a.append(status);
-  setTimeout(()=>guidedAutoSubmitScreening_(status),80);
+  setTimeout(()=>{if(status.isConnected)guidedAutoSubmitScreening_(status);},80);
 }
 
 function guidedSubmittingBeforeUnload_(e){
@@ -3369,6 +3401,7 @@ async function guidedAutoSubmitStage2_(status){
   }catch(err){
     ST._guidedStage2Submitting=false;
     window.removeEventListener('beforeunload',guidedSubmittingBeforeUnload_);
+    if(!status.isConnected)return;
     status.className='error';
     status.textContent='暫時未能提交。答案仍保存在這部裝置。請保持此頁開啟後重試。 '+(err&&err.message?err.message:'');
     status.parentElement.append(btn('重新嘗試提交',()=>guidedAutoSubmitStage2_(status),'primary'));
@@ -3395,7 +3428,7 @@ function guidedRenderFinal_(a){
 
   const status=el('div','result warn','正在提交問卷。請勿退出、關閉或重新整理此頁面，通常約需15秒。');
   a.append(status);
-  setTimeout(()=>guidedAutoSubmitStage2_(status),80);
+  setTimeout(()=>{if(status.isConnected)guidedAutoSubmitStage2_(status);},80);
 }
 
 /* ---------- Completion / navigation ---------- */
@@ -3458,6 +3491,10 @@ function guidedOwnNavigation_(pg){
 }
 
 function guidedPlayer_(){
+  // Renders/back navigation invalidate callbacks from the previous page.
+  clearTimeout(ST._guidedTransitionTimer);
+  ST._guidedTransitionTimer=null;
+  ST._guidedTransitionPending=false;
   guidedInjectStyles_();
   document.body.classList.add('guided-mode');
 
@@ -3883,6 +3920,35 @@ start=function(flow){
 document.addEventListener('keydown',guidedHandleKeydown_,true);
 
 /* Special invited URL only. Existing homepage and old flows are untouched. */
+/* Research screening checkpoints. Answers stay intact; only server-confirmed approvals release a pause. */
+(function(){
+'use strict';
+const VERSION='HC-20261118-v1',basePost=guidedPostPhase_,baseNext=guidedGoForward_,baseBack=guidedGoBack_,basePlayer=player;
+let busy=false,serial=0,checkPending=false,migrationStarted=false;
+const isGuided=()=>typeof isGuidedFlow_==='function'&&isGuidedFlow_();
+function statusRequest(id){return new Promise((resolve,reject)=>{const cb='APATHYREVIEW_'+Date.now()+'_'+(++serial),script=document.createElement('script'),url=new URL(C.receiverUrl);let timer;const cleanup=()=>{clearTimeout(timer);delete window[cb];script.remove();};window[cb]=r=>{cleanup();if(!r?.ok||!r.found)reject(Error('尚未確認這筆已保存的篩查，請稍後重試。'));else resolve(r);};url.searchParams.set('action','guided_screening_review_status');url.searchParams.set('submission_id',id);url.searchParams.set('callback',cb);script.referrerPolicy='no-referrer';script.onerror=()=>{cleanup();reject(Error('未能連接核對服務；答案已保留，請重試。'));};timer=setTimeout(()=>{cleanup();reject(Error('核對較久；請保持本頁並重試，毋須更改答案。'));},30000);script.src=url.href;document.head.append(script);});}
+function phaseKeys(phase){if(phase==='screening_self')return [...new Set(guidedHadsKeys_().concat(guidedScreeningKeys_()))];const keys=guidedHadsKeys_().slice();if(phase!=='hads')guidedScreeningKeys_().forEach(k=>{if(/^(quip_|quiprs_|sas)/.test(k))keys.push(k);});return [...new Set(keys)];}
+function fingerprint(phase){return JSON.stringify(phaseKeys(phase).filter(k=>!/(?:total|complete|review|flag|domains)$/.test(k)&&Object.hasOwn(ST.answers,k)).sort().map(k=>[k,ST.answers[k]]));}
+function cancelTransition(){clearTimeout(ST._guidedTransitionTimer);ST._guidedTransitionTimer=null;ST._guidedTransitionPending=false;}
+function lockControls(){const controls=[...document.querySelectorAll('#app button,#app input,#app select,#app textarea')].filter(e=>!e.disabled);controls.forEach(e=>e.disabled=true);return()=>controls.forEach(e=>{if(e.isConnected)e.disabled=false;});}
+function setError(error){ST.error=(error&&error.message)||String(error);saveDraft();player();}
+function blocked(){return ST.answers._guided_screening_review_blocked;}
+function renderBlocked(){const m=appShell();m.append(toolbar('研究問卷',false));const s=el('section','summary'),b=blocked();s.append(el('h2','','等待研究人員批准'),el('div','result warn','這部分答案已保存。研究人員需要先核對資料，批准後才可繼續；毋須更改答案來嘗試前進。'));if(ST.error)s.append(el('div','error',ST.error));s.append(btn('檢查批准狀態',()=>refreshApproval(),'primary'));m.append(s);}
+async function refreshApproval(){if(checkPending||!blocked())return;checkPending=true;const saved={...blocked()};try{const r=await statusRequest(saved.submission_id);if(!blocked()||blocked().submission_id!==saved.submission_id)return;if(r.allowed){if(fingerprint(saved.phase)!==saved.fingerprint)throw Error('這部分答案已變動，需要重新保存核對；請聯絡研究人員。');delete ST.answers._guided_screening_review_blocked;ST.answers._guided_policy_checked=ST.answers._guided_policy_checked||{};ST.answers._guided_policy_checked[saved.phase]={id:saved.submission_id,fingerprint:saved.fingerprint,version:VERSION};if(saved.phase==='hads'){ST.answers._guided_hads_submitted=1;ST.answers._guided_hads_passed=1;ST.answers._guided_hads_blocked=0;}ST.step=Math.max(ST.step,Number(saved.next_step)||ST.step);ST.answers._guided_latest_step=Math.max(Number(ST.answers._guided_latest_step)||0,ST.step);ST.error='';saveDraft();player();}else{ST.error='研究人員尚未批准；目前答案仍完整保留。';saveDraft();renderBlocked();}}catch(e){setError(e);}finally{checkPending=false;}}
+async function checkPhase(phase,nextStep,status){if(busy)return false;busy=true;const unlock=lockControls(),origin=ST.step,fp=fingerprint(phase);try{cancelTransition();const old=ST.answers._guided_policy_payloads||{},slot=old[phase];if(!slot||slot.fingerprint!==fp){ST.answers['_guided_'+phase+'_submission_id']=uuid();ST.answers._guided_policy_payloads={...old,[phase]:{fingerprint:fp,id:ST.answers['_guided_'+phase+'_submission_id'],saved:false}};saveDraft();}const current=ST.answers._guided_policy_payloads[phase],id=current.id;if(!current.saved){if(status)status.textContent='正在安全保存答案……';await basePost(phase,'screening_core',phaseKeys(phase));if(fingerprint(phase)!==fp)throw Error('答案已變動，請重新確認這部分；先前提交會保留。');current.saved=true;saveDraft();}if(phase==='hads'){ST.answers._guided_hads_submitted=1;saveDraft();}if(status)status.textContent='答案已保存，正在核對……';const result=guidedDryRun_()?{allowed:true,policy_version:VERSION}:await statusRequest(id);if(fingerprint(phase)!==fp)throw Error('答案已變動，請重新確認這部分。');if(!result.allowed){if(!result.requires_approval)throw Error('這部分仍未核對完整，請檢查答案或稍後重試。');ST.answers._guided_screening_review_blocked={phase,submission_id:id,fingerprint:fp,next_step:nextStep,policy_version:result.policy_version||VERSION};ST.error='';saveDraft();renderBlocked();return false;}ST.answers._guided_policy_checked={...(ST.answers._guided_policy_checked||{}),[phase]:{id,fingerprint:fp,version:VERSION}};if(phase==='hads'){ST.answers._guided_hads_passed=1;ST.answers._guided_hads_blocked=0;}ST.error='';saveDraft();return true;}catch(e){ST.error=e.message||String(e);saveDraft();if(status){status.className='error';status.textContent=ST.error;status.parentElement.append(btn('重新核對並繼續',()=>checkPhase(phase,nextStep,status).then(ok=>{if(ok&&ST.step===origin){ST.step=nextStep;saveDraft();player();}}),'primary'));}else player();return false;}finally{unlock();busy=false;}}
+// Keep the existing page list and draft indices; guard only questionnaire boundaries.
+guidedGoForward_=function(){if(!isGuided())return baseNext();if(busy||blocked())return false;const pages=guidedPages_(),pg=pages[ST.step],next=pages[ST.step+1];let phase='';if(pg?.kind==='guidedHadsGate')phase='hads';else if(pg?.kind==='guidedScreeningCheckpoint')phase='screening_self';else if(next?.kind==='guidedQuipRsMatrix')phase='review_quip';else if(pg?.kind==='guidedQuipRsMatrix')phase='review_quiprs';else if(pg?.kind==='scale'&&/^sas\d+_score$/.test(pg.key||'')&&next?.section!==pg.section)phase='review_sas';if(!phase)return baseNext();if(!pageComplete(pg))return baseNext();const check=ST.answers._guided_policy_checked?.[phase];if(check&&check.version===VERSION&&check.fingerprint===fingerprint(phase))return baseNext();const from=ST.step;checkPhase(phase,from+1).then(ok=>{if(ok&&ST.step===from)baseNext();});return false;};
+guidedGoBack_=function(){if(busy)return false;cancelTransition();return baseBack();};
+player=function(){if(isGuided()&&blocked())return renderBlocked();if(isGuided()&&val('_guided_hads_submission_id')&&Number(val('_guided_stage2_submitted'))!==1&&!ST.answers._guided_policy_checked?.hads){const gate=guidedPages_().findIndex(p=>p.kind==='guidedHadsGate');if(ST.step>gate){const m=appShell(),status=el('div','result','正在核對已保存的篩查；答案完整保留。');m.append(status);if(!migrationStarted){migrationStarted=true;setTimeout(()=>checkPhase('hads',ST.step,status).then(ok=>{if(ok)player();}),0);}else if(!busy){status.textContent=ST.error||'請重新核對已保存的篩查。';m.append(btn('重新核對並繼續',()=>checkPhase('hads',ST.step,status).then(ok=>{if(ok)player();}),'primary'));}return;}}return basePlayer();};
+guidedAutoSubmitHads_=async function(status){if(busy||ST._guidedHadsSubmitting)return;guidedRefreshDerivedFor_(guidedHadsKeys_());if(Number(val('hads_complete'))!==1){status.textContent='情緒問卷尚未完整，請先完成所有題目。';status.className='error';return;}ST._guidedHadsSubmitting=true;const from=ST.step;try{const ok=await checkPhase('hads',from+1,status);if(ok&&ST.step===from)guidedScheduleForward_(150);}finally{ST._guidedHadsSubmitting=false;}};
+// Final screening receipt must also be reviewed before Stage2 release.
+const baseScreening=guidedAutoSubmitScreening_;guidedAutoSubmitScreening_=async function(status){if(busy||ST._guidedScreeningSubmitting)return;const from=ST.step;ST._guidedScreeningSubmitting=true;try{guidedPrepareScreeningDefaults_();const ok=await checkPhase('screening_self',from+1,status);if(ok&&ST.step===from){ST.answers._guided_screening_submitted=1;saveDraft();guidedScheduleForward_(150);}}finally{ST._guidedScreeningSubmitting=false;}};
+window.addEventListener('keydown',e=>{if(busy&&(/^[0-9]$/.test(e.key)||e.key==='Enter')){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.APATHY_SCREENING_POLICY={version:VERSION,checkPhase,refreshApproval};
+// Existing active drafts keep all answers and numeric page positions.
+if(isGuided()){if(blocked())renderBlocked();else if(val('_guided_hads_submission_id')&&Number(val('_guided_stage2_submitted'))!==1&&!ST.answers._guided_policy_checked?.hads){setTimeout(()=>{const gate=guidedPages_().findIndex(p=>p.kind==='guidedHadsGate');if(ST.step<=gate||busy)return;const here=ST.step;checkPhase('hads',here).then(ok=>{if(ok)player();});},0);}}
+})();
+
 if(guidedParam_('flow')==='guided'){
   start(guidedParam_('dry')==='1'?'guided_test_v4':'guided');
 }

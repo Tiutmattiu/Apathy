@@ -129,7 +129,7 @@ function mocaRecordScore_(key,value){
 }
 function mocaOnlyPayload_(full){
  const out={},keys=['schema_version','frontend_release','receiver_contract_expected','submission_id','form_type','event_type','workflow_stage','record_status','p_id','s_id','visit_number','participant_id','submitted_at','data_source','contact_phone_normalized','contact_phone','participant_name','gender','pd_hc_status','date_of_birth','age_years','education_years','moca_data_status','moca_score_field','moca_pending_reason','moca_status_recorded_at','moca_assessment_date'];
- keys.forEach(k=>{if(full[k]!==undefined)out[k]=full[k];});const key=full.moca_score_field||'moca_1_raw_total';if(['moca_1_raw_total','moca_2_raw_total','moca_raw_total'].includes(key))out[key]=full[key]??null;out.workflow_part='clinical_moca_supplement';return out;
+ keys.forEach(k=>{if(full[k]!==undefined)out[k]=full[k];});const key=full.moca_score_field||'moca_1_raw_total';if(['moca_1_raw_total','moca_2_raw_total','moca_raw_total'].includes(key))out[key]=full[key]??null;out.workflow_part=full.form_type==='backfill'?'backfill_moca_supplement':'clinical_moca_supplement';return out;
 }
 function submitMocaOnly_(container){
  if(!clinicalIdentityAvailablePhase3_()){showInlineError(container,'請先核對 PID、SID 或電話。');return;}
@@ -281,7 +281,8 @@ function renderMRIBF(s){s.append(el('p','hint','未選項目代表沒有／否�
 
 function renderSequenceBF(s){s.append(el('p','hint','預設完成；只點選沒有完成的序列。'));const g=el('div','chips');B.sequences.items.forEach(x=>g.append(btn(x.label,()=>{set(x.field,val(x.field)===0?1:0);backfill()},'toggle danger'+(val(x.field)===0?' selected':''))));s.append(g);if(B.sequences.items.some(x=>val(x.field)===0)){const t=el('textarea');t.placeholder='未完成原因／整體備註';t.value=val('mri_sequence_general_remark')||'';t.oninput=()=>set('mri_sequence_general_remark',t.value);s.append(t)}}
 
-function renderClinicalBF(s){addBFNumber(s,'核實PD病程','pd_duration_verified_years',0,80,'年');const items=B.clinical.updrs3.items||[];addBFScale(s,items,0,4);addBFNumber(s,'UPDRS 1.5','updrs_item_1_5',0,4);addBFNumber(s,'Hoehn & Yahr','hy_stage',0,5)}
+const HY_STAGES=[0,1,1.5,2,2.5,3,4,5];
+function renderClinicalBF(s){addBFNumber(s,'核實PD病程','pd_duration_verified_years',0,80,'年');const items=B.clinical.updrs3.items||[];addBFScale(s,items,0,4);addBFNumber(s,'UPDRS 1.5','updrs_item_1_5',0,4);addBFChoices(s,'Hoehn & Yahr（HY）','hy_stage',HY_STAGES.map(n=>[n,String(n)]))}
 
 function renderMedicationRows(s){const meds=ST.meds||[];if(!meds.length){s.append(el('div','result','尚未加入藥物。每次按「＋新增一款藥物」只會增加一款。'));return}meds.forEach((m,i)=>{const c=el('div','plain-block'),r=medHVCalcRow_(m);c.append(el('h3','',`藥物 ${i+1}`));const sel=el('select');sel.append(new Option('搜尋／選擇藥物',''));MED_HV1.forEach(d=>sel.append(new Option(`${d.label}｜${d.cls}`,d.id)));sel.value=m.drugId||'';sel.onchange=()=>{m.drugId=sel.value;const d=medHVDrug_(m.drugId);m.name=d?.label||m.name||'';medHVSave_();renderByFlow()};c.append(sel);if(m.drugId==='other_pd'||m.drugId==='other_non_pd')c.append(medHVInput_(m.name,'輸入藥物名稱',v=>{m.name=v;medHVSave_()},'text'));const d=medHVDrug_(m.drugId);if(d)c.append(el('div','hint',`藥物種類：${d.cls}｜係數來源：${d.source}`));const preset=medHVFormulationSelect_(m);if(preset)c.append(preset,el('div','hint','複方規格會自動抽取Levodopa成分計算。例：Sinemet 25/100取100 mg；若藥單寫100/25，仍選25/100。'));const grid=el('div','form-grid');grid.append(medHVInput_(m.strength,preset?'Levodopa成分 mg':'單位劑量 mg',v=>{m.strength=v;m.formulation='__custom__';medHVSave_()}),medHVInput_(m.units,'每次數量',v=>{m.units=v;medHVSave_()}),medHVInput_(m.times,'每日次數',v=>{m.times=v;medHVSave_()}));c.append(grid,el('p','hint','小數請用小數點，例如 1.875 mg；每次半片填 0.5。'));if(d?.kind==='matched')c.append(medHVInput_(m.matchedLevodopa,'共同服用的每日Levodopa LEDD (mg)',v=>{m.matchedLevodopa=v;medHVSave_()}));const lines=r.status==='calculated'?[`每日劑量：${r.daily} mg`,`轉換係數：${r.factor}`,`計算：${r.formula}`,`此藥LEDD：${r.ledd} mg`]:[r.reason];c.append(resultBox(r.status==='calculated'?'計算詳情':r.status==='not_applicable'?'不計LEDD':'需要核驗',lines,r.status==='calculated'||r.status==='not_applicable'?'good':'warn'));c.append(btn('刪除這款藥物',()=>{ST.meds.splice(i,1);medHVSave_();renderByFlow()},'secondary'));s.append(c)});}
 
@@ -511,8 +512,8 @@ function confirmClear(){
     '此操作只會清除「'+label+'」入口在此瀏覽器的草稿、目前位置及暫存Submission ID；不會清除其他入口，也不會影響後端已提交資料或已下載JSON。'));
   const a=el('div','submitbar');
   a.append(btn('取消',()=>m.remove(),'linkbtn'),btn('確定清除此入口',()=>{
-    currentFlowDraftKeys_(flow).forEach(k=>localStorage.removeItem(k));
-    resetFlow();ST.submission=uuid();m.remove();home();
+    try{currentFlowDraftKeys_(flow).forEach(k=>localStorage.removeItem(k));}catch(error){draftStorageWarning(true);}
+    resetFlow();ST.submission=uuid();m.remove();if(flow==='backfill')backfill();else home();
   },'primary'));
   b.append(a);m.append(b);document.body.append(m)
 }
@@ -1022,9 +1023,42 @@ function renderBackfillCgt(section){
   });
 }
 
+function backfillIdentityLookup(parent){
+  const status=el('p','hint','輸入 PID、SID 或電話，核對後會帶入已有的出生日期及基本資料。出生日期缺失時仍可補錄 MoCA。');
+  status.setAttribute('role','status');
+  const lookup=btn('核對並帶入基本資料',async()=>{
+    const identity={pid:val('p_id')||'',sid:val('s_id')||'',phone:val('contact_phone')||'',name:val('participant_name')||''};
+    if(!identity.pid&&!identity.sid&&!identity.phone){status.textContent='請先輸入 PID、SID 或電話。';return;}
+    lookup.disabled=true;status.textContent='正在核對……';
+    try{
+      const result=await correctionRead('staff_backfill_identity',{data:JSON.stringify(identity)});
+      if(!parent.isConnected||ST.flow!=='backfill'||ST.correction||
+         identity.pid!==(val('p_id')||'')||identity.sid!==(val('s_id')||'')||identity.phone!==(val('contact_phone')||''))return;
+      for(const [key,value] of Object.entries(result.person||{})){
+        if((val(key)===null||val(key)===undefined||val(key)==='')&&value!==''&&value!==null)ST.answers[key]=value;
+      }
+      saveDraft();backfill();
+    }catch(error){status.textContent=error.message||'無法核對身份。';}
+    finally{lookup.disabled=false;}
+  },'secondary');
+  parent.append(lookup,status);
+}
+function submitBackfillMocaOnly(container){
+  if(!val('p_id')&&!val('s_id')&&!val('contact_phone')){
+    showInlineError(container,'請先輸入 PID、SID 或電話。');return;
+  }
+  const score=val('moca_1_raw_total');
+  if(!mocaPendingActive_()&&(score===null||score===undefined||score===''||!Number.isInteger(Number(score))||Number(score)<0||Number(score)>30)){
+    showInlineError(container,'請填寫 0–30 的 MoCA 原始分數，或選「待補」。');return;
+  }
+  submitPayload('backfill','historical_paper_reentry','partial',true);
+}
+
 function backfill(){const m=el('main','backfill');ROOT.innerHTML='';ROOT.append(el('div','topline'),m);m.append(toolbar('歷史資料補錄'));m.append(identityStrip());const nav=el('nav','backfill-nav');const sections=[];function sec(id,title){const s=el('section','bf-section');s.id='bf-'+id;s.append(el('h2','',title));m.append(s);sections.push([id,title]);return s}
  const id=sec('identity','Participant身份及基本資料');id.append(fieldIdDigits('P_ID','p_id',val('participant_series')==='Y'?'Y':'P','例：140'),fieldIdDigits('S_ID（如紙本有）','s_id','S','例：082'),fieldText('姓名','participant_name',''));addBFDate(id,'出生日期','date_of_birth');addBFChoices(id,'性別','gender',[['M','M'],['F','F']]);addBFChoices(id,'PD／HC身份','pd_hc_status',C.identities);id.append(fieldText('聯絡電話','contact_phone',''),fieldText('評估時實際年齡','age_years','歲','number'),fieldText('實際教育年數','education_years','年','number'));
+ if(!ST.correction)backfillIdentityLookup(id);
  const mo=sec('moca','MoCA');renderMocaEntry_(mo,'moca_1_raw_total','MoCA 原始總分（0–30）');const age=calcAge(),edu=Number(val('education_years')),raw=val('moca_1_raw_total');if(age!==null&&Number.isFinite(edu)&&raw!==null){const cut=mocaCutoff(age,edu),adj=edu<=12?1:0;mo.append(el('div','result',`教育調整：+${adj}；調整後：${Math.min(30,+raw+adj)}/30；第16百分位Cutoff：${cut===null?'需覆核':cut}；結果：${cut===null?'待覆核':raw>cut?'高於':'低於或等於'}第16百分位`))}addBFCheckbox(mo,'紙本另有第二次MoCA','has_moca_2');if(val('has_moca_2')===1)renderMocaEntry_(mo,'moca_2_raw_total','第二次 MoCA 原始總分（0–30）');
+ if(!ST.correction)mo.append(btn('只保存 MoCA',()=>submitBackfillMocaOnly(mo),'primary'));
  addBFScale(sec('hads','HADS'),B.hads.items,0,3);renderQuipBF(sec('quip','QUIP'));renderQuipRsBF(sec('quiprs','QUIP-RS'));addBFScale(sec('sas','SAS'),B.sas.items,0,3);
  renderRBBF(sec('rbdsq','RBDSQ'));renderMRIBF(sec('mris','MRI安全'));
  addBFScale(sec('gas','GAS'),B.gas.items,0,3);addBFScale(sec('ami','AMI-18'),B.ami18.items,0,4);const cd=sec('cdars','C-DARS');renderCdarsBF(cd);addBFScale(sec('rgpts','R-GPTS'),B.rgpts.items,0,4);renderPDIBF(sec('pdi','PDI-21'));renderIORBF(sec('ior','IOR'));
@@ -1033,7 +1067,7 @@ function backfill(){const m=el('main','backfill');ROOT.innerHTML='';ROOT.append(
  const cgtInputs=renderBackfillCgt(cgtSection);
  renderSequenceBF(sec('sequence','MRI Sequence'));renderClinicalBF(sec('clinical','UPDRS／HY'));renderMedicationBF(sec('meds','Medication／LEDD'));
  const pay=sec('payment','Payment／Receipt');addBFCheckbox(pay,'已付款','payment_status');addBFCheckbox(pay,'Receipt已處理','receipt_status');const rem=sec('remark','紙本補錄備註');const ta=el('textarea');ta.placeholder='缺頁、字跡不清、多個答案、未提供資料或其他資料品質問題';ta.value=val('historical_reentry_remark')||'';ta.oninput=()=>set('historical_reentry_remark',ta.value);rem.append(ta);
- sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>{if(cgtInputs.every(input=>input.reportValidity()))submitPayload('backfill','historical_paper_reentry','partial');},'primary'));m.append(sb)}
+ sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>{if(cgtInputs.every(input=>input.reportValidity()))submitPayload('backfill','historical_paper_reentry','partial');},'primary'));sb.append(btn('清除此裝置資料',confirmClear,'secondary'));m.append(sb)}
 
 function clinicalApplyParticipantMatchBatch1_(x){
   set('p_id',x.p_id||null);set('s_id',x.s_id||null);set('participant_name',x.participant_name||null);
@@ -1242,7 +1276,7 @@ function renderClinical(){const m=appShell();m.append(toolbar('PD臨床資料'),
  if(val('updrs3_route')==='hospital_total_only')addStaffNumber(s,'UPDRS Part III總分','updrs3_reported_total','/132');if(['hospital_items','research_assessed'].includes(val('updrs3_route'))){s.append(el('h3','','UPDRS Part III 33項'));renderUPDRSItems(s,val('updrs3_route')==='research_assessed')}
  if(val('updrs3_route')==='research_assessed'){addStaffCheckbox(s,'正接受PD藥物治療','updrs3a_pd_treatment');if(val('updrs3a_pd_treatment')===1)addStaffChoices(s,'臨床狀態','updrs3b_clinical_state',[['ON','ON／來電'],['OFF','OFF／停電']]);addStaffCheckbox(s,'有服用Levodopa','updrs3c_levodopa');if(val('updrs3c_levodopa')===1)addStaffNumber(s,'距最後服用Levodopa','updrs3c1_last_levodopa_minutes','分鐘');addStaffCheckbox(s,'檢查期間出現異動症','updrs3_dyskinesia_present');if(val('updrs3_dyskinesia_present')===1)addStaffCheckbox(s,'異動症干擾動作功能檢查','updrs3_dyskinesia_interference')}
  addStaffChoices(s,'UPDRS 1.5資料路徑','updrs15_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊施測'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('updrs15_route'))){s.append(el('h3','','UPDRS 1.5 冷漠感'));renderAnchorChoices(s,'updrs_item_1_5',B.clinical.updrs15.text.options)}
- addStaffChoices(s,'Hoehn & Yahr資料路徑','hy_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊評估'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('hy_route'))){s.append(el('h3','','Hoehn & Yahr'));renderAnchorChoices(s,'hy_stage',B.clinical.hy.text.options)}
+ addStaffChoices(s,'Hoehn & Yahr資料路徑','hy_route',[['hospital_total_only','醫院提供'],['research_assessed','研究團隊評估'],['pending_hospital','待醫院提供'],['not_applicable','不適用']]);if(['hospital_total_only','research_assessed'].includes(val('hy_route'))){s.append(el('h3','','Hoehn & Yahr'));renderAnchorChoices(s,'hy_stage',HY_STAGES.map(value=>B.clinical.hy.text.options.find(option=>Number(option.value)===value)||{value,label:''}))}
  s.append(el('h3','','Medication'),btn('＋新增藥物',()=>{ST.meds.push({drugId:'',name:'',strength:'',times:'',units:''});saveDraft();renderClinical()},'primary'));renderMedicationRows(s);renderLeddPanel(s);if(!ST.meds.length)s.append(el('div','result','尚未加入藥物；LEDD暫不可計算。'));
  const total=updrsTotal();s.append(el('div','result',`UPDRS完成：${total.count}/33${total.count===33?'；總分：'+total.total:'/132'}`));const sb=el('div','submitbar');sb.append(btn('正式提交Clinical資料',()=>validateClinical(s),'primary'));s.append(sb);m.append(s)}
 
@@ -1382,6 +1416,7 @@ async function submitPayload(form,event,status,onlyMoca=false){
         if(form==='screening'&&event==='screening_core'&&['HC','Apathy','Pure_PD'].includes(val('final_screening_decision')))player();
       },'primary')
     );
+    if(form==='backfill')box.append(btn('清除本機資料並補錄下一位',()=>{modal.remove();confirmClear();},'secondary'));
   }catch(error){
     window.clearInterval(tick);
     box.innerHTML='';
@@ -4180,8 +4215,8 @@ function correctionExtraInputs(){const c=ST.correction,section=el('section','bf-
 const originalCorrectionDate=addBFDate;
 addBFDate=function(parent,label,key){if(!ST.correction)return originalCorrectionDate(parent,label,key);const row=correctionTag(el('div','field'),key),l=el('label','',label),i=el('input');i.type='date';i.value=val(key)||'';i.oninput=()=>set(key,i.value||null);l.append(i);row.append(l);parent.append(row);};
 const originalBackfillRecord=backfill;
-backfill=function(){correctionRendering=true;try{originalBackfillRecord();}finally{correctionRendering=false;}const main=q('main.backfill');main.prepend(correctionImportPanel());if(!ST.correction)return;const c=ST.correction;main.querySelector('h1').textContent='更正已提交資料';const idNode=main.querySelector('[data-field="p_id"] input');if(idNode)idNode.disabled=true;
- const info=el('section','bf-section correction-summary');info.append(el('h2','','更正預覽'),el('p','',c.filename+' ｜ 原提交：'+c.original.submission_id));const reason=el('label','','修改原因'),r=el('input');r.value=c.reason;r.oninput=()=>{c.reason=r.value;saveCorrectionDraft();};reason.append(r);info.append(reason);const pid=el('label','','電話、PID、SID 或姓名（任一項，須唯一配對）'),p=el('input');p.value=correctionIdentity(c);p.oninput=()=>{c.identity=p.value.trim();saveCorrectionDraft();};pid.append(p);info.append(pid);const shared=el('label'),check=el('input');check.type='checkbox';check.checked=!!c.allowSharedPhone;check.onchange=()=>{c.allowSharedPhone=check.checked;saveCorrectionDraft();};shared.append(check,document.createTextNode(' 已核對這是共用電話（僅有需要時勾選）'));info.append(shared,el('strong','',''));info.lastChild.id='correction-count';const table=el('table','correction-table'),head=el('thead'),hr=el('tr');['欄位','原值','更正後'].forEach(t=>hr.append(el('th','',t)));head.append(hr);const body=el('tbody');body.id='correction-changes';table.append(head,body);const wrap=el('div','correction-table-wrap');wrap.append(table);info.append(wrap);const status=el('p','notice',c.receipt?'更正已收件；請查看同步進度確認表格已更新。':'尚未保存；高亮部分是本次修改。');status.id='correction-save-status';status.setAttribute('role','status');main.insertBefore(info,main.children[1]);main.append(correctionExtraInputs());const submit=q('.submitbar',main);const feedback=el('div','correction-summary correction-feedback');feedback.append(status);submit.before(feedback);submit.replaceChildren(btn('下載更正JSON（包含修改清單）',downloadCurrent,'linkbtn'),btn('保存更正並更新Sheet',saveLocalCorrection,'primary'),btn('查看同步進度',checkCorrectionSync,'linkbtn'));refreshCorrectionHighlights();};
+backfill=function(){correctionRendering=true;try{originalBackfillRecord();}finally{correctionRendering=false;}const main=q('main.backfill');main.querySelector('.toolbar').after(correctionImportPanel());if(!ST.correction)return;const c=ST.correction;main.querySelector('h1').textContent='更正已提交資料';const idNode=main.querySelector('[data-field="p_id"] input');if(idNode)idNode.disabled=true;
+ const info=el('section','bf-section correction-summary');info.append(el('h2','','更正預覽'),el('p','',c.filename+' ｜ 原提交：'+c.original.submission_id));const reason=el('label','','修改原因'),r=el('input');r.value=c.reason;r.oninput=()=>{c.reason=r.value;saveCorrectionDraft();};reason.append(r);info.append(reason);const pid=el('label','','電話、PID、SID 或姓名（任一項，須唯一配對）'),p=el('input');p.value=correctionIdentity(c);p.oninput=()=>{c.identity=p.value.trim();saveCorrectionDraft();};pid.append(p);info.append(pid);const shared=el('label'),check=el('input');check.type='checkbox';check.checked=!!c.allowSharedPhone;check.onchange=()=>{c.allowSharedPhone=check.checked;saveCorrectionDraft();};shared.append(check,document.createTextNode(' 已核對這是共用電話（僅有需要時勾選）'));info.append(shared,el('strong','',''));info.lastChild.id='correction-count';const table=el('table','correction-table'),head=el('thead'),hr=el('tr');['欄位','原值','更正後'].forEach(t=>hr.append(el('th','',t)));head.append(hr);const body=el('tbody');body.id='correction-changes';table.append(head,body);const wrap=el('div','correction-table-wrap');wrap.append(table);info.append(wrap);const status=el('p','notice',c.receipt?'更正已收件；請查看同步進度確認表格已更新。':'尚未保存；高亮部分是本次修改。');status.id='correction-save-status';status.setAttribute('role','status');main.insertBefore(info,main.children[1]);main.append(correctionExtraInputs());const submit=q('.submitbar',main);const feedback=el('div','correction-summary correction-feedback');feedback.append(status);submit.before(feedback);submit.replaceChildren(btn('下載更正JSON（包含修改清單）',downloadCurrent,'linkbtn'),btn('保存更正並更新Sheet',saveLocalCorrection,'primary'),btn('查看同步進度',checkCorrectionSync,'linkbtn'),btn('清除此裝置資料',confirmClear,'secondary'));refreshCorrectionHighlights();};
 const originalSequenceRecord=renderSequenceBF;
 renderSequenceBF=function(s){if(!ST.correction)return originalSequenceRecord(s);s.append(el('p','hint','完成、未完成、未記錄分開保存；空白不自動補成完成。'));const source=ST.correction.original;const legacy=source.schema_version==='apathy-event-payload-v1'&&source.frontend_release==='FE-CLEAN-2026-08-21-R8.12-DIRECT-FETCH-COMPLETE'&&source.workflow_part==='mri_visit'&&source.record_status==='submitted';B.sequences.items.forEach(x=>{const row=correctionTag(el('div','field'),x.field),label=el('label','',x.label),select=el('select');[['','未記錄'],['1','完成'],['0','未完成']].forEach(([v,t])=>select.append(new Option(t,v)));const v=val(x.field);select.value=v===0||v==='0'?'0':v===1||v==='1'?'1':'';if(v===null&&legacy&&!ST.correction.dirty[x.field])label.append(el('small','hint','（舊表單預設完成，原JSON未明確寫入）'));select.onchange=()=>{set(x.field,select.value===''?null:Number(select.value));};label.append(select);row.append(label);s.append(row);});s.append(fieldText('MRI Sequence備註','mri_sequence_general_remark','可清空備註'));};
 const originalDownloadRecord=downloadCurrent;

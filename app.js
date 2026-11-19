@@ -21,9 +21,31 @@ function set(k,v){ST.answers[k]=v;saveDraft()}
 
 function uuid(){return crypto.randomUUID?crypto.randomUUID():'sub-'+Date.now()+'-'+Math.random().toString(36).slice(2)}
 
-function saveDraft(){localStorage.setItem('apathy-fe-clean-v2-'+ST.flow,JSON.stringify({answers:ST.answers,step:ST.step,meds:ST.meds,submission:ST.submission}))}
-
-function loadDraft(flow){try{const current='apathy-fe-clean-v2-'+flow,legacy=['apathy-fe-clean-v1-'+flow,'apathy-v7-'+flow],raw=localStorage.getItem(current)||legacy.map(k=>localStorage.getItem(k)).find(Boolean)||'null',d=JSON.parse(raw);if(d){ST.answers=d.answers||{};ST.step=d.step||0;ST.meds=d.meds||[];ST.submission=d.submission||uuid();localStorage.setItem(current,JSON.stringify({answers:ST.answers,step:ST.step,meds:ST.meds,submission:ST.submission}))}else resetFlow()}catch(e){resetFlow()}}
+function draftStorageWarning(visible){
+  let warning=document.getElementById('draft-storage-warning');
+  if(!visible){warning?.remove();return;}
+  if(warning)return;
+  warning=el('div','result warn','這個瀏覽器目前無法保存草稿。離開前請下載備份；續填時請用同一裝置、同一瀏覽器及原連結。');
+  warning.id='draft-storage-warning';
+  warning.setAttribute('role','alert');
+  document.body.prepend(warning);
+}
+function saveDraft(){
+  try{
+    localStorage.setItem('apathy-fe-clean-v2-'+ST.flow,JSON.stringify({answers:ST.answers,step:ST.step,meds:ST.meds,submission:ST.submission}));
+    draftStorageWarning(false);
+  }catch(error){draftStorageWarning(true);}
+}
+function loadDraft(flow){
+  const key='apathy-fe-clean-v2-'+flow,legacy=['apathy-fe-clean-v1-'+flow,'apathy-v7-'+flow];
+  try{
+    const raw=localStorage.getItem(key)||legacy.map(k=>localStorage.getItem(k)).find(Boolean);
+    const draft=raw?JSON.parse(raw):null;
+    if(!draft){resetFlow();saveDraft();return;}
+    ST.answers=draft.answers||{};ST.step=draft.step||0;ST.meds=draft.meds||[];ST.submission=draft.submission||uuid();
+    saveDraft();
+  }catch(error){resetFlow();draftStorageWarning(true);}
+}
 
 function resetFlow(){ST.answers={};ST.step=0;ST.meds=[];ST.submission=uuid()}
 
@@ -652,7 +674,53 @@ function renderLeddPanel(s){const m=calculateManualLeddHV_();setDerived('medicat
 
 function screeningPages(){const p=[];p.push(choicePage('身分及基本資料','Participant類型','participant_series',C.participantTypes));p.push(inputPage('身分及基本資料','姓名','participant_name','例：CHAN TAI MAN 陳大文'));p.push({section:'身分及基本資料',kind:'dob',label:'出生日期'});p.push(choicePage('身分及基本資料','性別','gender',[['M','M'],['F','F']]));p.push({section:'身分及基本資料',kind:'pdIdentity',label:'已確認研究身份'});p.push(inputPage('身分及基本資料','聯絡電話','contact_phone','例：9123 4567'));p.push(choicePage('身分及基本資料','招募來源','recruitment_source_code',C.recruitment));p.push({section:'身分及基本資料',kind:'educationVerified',label:'教育程度及實際受教育年數'});p.push({section:'MoCA',kind:'moca',label:'MoCA原始總分'});p.push({section:'HADS',kind:'scaleIntro',label:'HADS作答說明',introTitle:'HADS情緒問卷',introText:'請回想過去一星期的感受。每題只選擇一個最符合實際情況的答案；沒有正確或錯誤答案。'});addScalePages(p,'HADS',B.hads.items);p.push({section:'HADS',kind:'scaleResult',scale:'HADS',label:'HADS結果'});p.push({section:'QUIP',kind:'quipGroup',group:0,label:'QUIP第1／3組：相關行為'});p.push({section:'QUIP',kind:'quipGroup',group:1,label:'QUIP第2／3組：柏金遜症藥物使用'});p.push({section:'QUIP',kind:'quipGroup',group:2,label:'QUIP第3／3組：其他重複或過度行為'});p.push({section:'QUIP',kind:'scaleResult',scale:'QUIP',label:'QUIP結果'});p.push({section:'QUIP-RS',kind:'quipRsMatrix',label:'QUIP-RS'});p.push({section:'QUIP-RS',kind:'scaleResult',scale:'QUIP-RS',label:'QUIP-RS結果'});addScalePages(p,'SAS',B.sas.items.map((x,n)=>({name:x.name,fullLabel:x.fullLabel,options:x.responseOptions.map((o,j)=>({label:o.label,value:B.sas.scoring.displayOrderByItem[n+1][j]}))})));p.push({section:'SAS',kind:'scaleResult',scale:'SAS',label:'SAS結果'});p.push({section:'RBDSQ',kind:'rbMain',label:'RBDSQ主問卷'});p.push({section:'RBDSQ',kind:'rbQ10',label:B.rbdsq.diseaseQuestion});p.push({section:'RBDSQ',kind:'scaleResult',scale:'RBDSQ',label:'RBDSQ結果'});p.push({section:'MRI安全',kind:'mriSafety',label:'MRI安全'});p.push({section:'篩查結果',kind:'screenResult',label:'首次篩查結果及最終決定'});return p}
 
-function renderDOB(a){const row=el('div','date-row'),names=[['dob_d','DD',2],['dob_m','MM',2],['dob_y','YYYY',4]],ageBox=el('div');function commit(go){const d=+val('dob_d'),m=+val('dob_m'),y=+val('dob_y'),dt=new Date(y,m-1,d);if(!d||!m||!y||dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d||dt>new Date())return false;set('date_of_birth',`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);const age=calcAge();set('age_years',age);ageBox.className='result good';ageBox.textContent=`年齡：${age}歲（自動計算）`;if(go)autoNext();return true}names.forEach((x,n)=>{const i=el('input','digits');i.inputMode='numeric';i.maxLength=x[2];i.placeholder=x[1];i.value=val(x[0])||'';i.oninput=()=>{i.value=i.value.replace(/\D/g,'').slice(0,x[2]);set(x[0],i.value);if(i.value.length===x[2]&&n<2)qa('input',row)[n+1].focus();if(n===2&&i.value.length===4)commit(false)};i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commit(true)}else if(e.key==='Backspace'&&!i.value&&n>0)qa('input',row)[n-1].focus()};row.append(i)});a.append(row,ageBox);if(calcAge()!==null){ageBox.className='result good';ageBox.textContent=`年齡：${calcAge()}歲（自動計算）`}}
+function renderDOB(a){
+  const row=el('div','date-row'),ageBox=el('div');
+  const fields=[['dob_d','日 DD',2],['dob_m','月 MM',2],['dob_y','年 YYYY',4]];
+  function updateAge(){
+    const day=Number(val('dob_d')),month=Number(val('dob_m')),yearText=String(val('dob_y')||'');
+    const year=Number(yearText),date=new Date(year,month-1,day);
+    const valid=yearText.length===4&&day&&month&&date.getFullYear()===year&&date.getMonth()===month-1&&date.getDate()===day&&date<=new Date();
+    if(!valid){
+      delete ST.answers.date_of_birth;
+      delete ST.answers.age_years;
+      ageBox.className='hint';
+      ageBox.textContent='請輸入有效的出生日期（日、月、四位數年份），再按「下一題」。';
+      saveDraft();
+      return false;
+    }
+    ST.answers.date_of_birth=String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    ST.answers.age_years=calcAgeFromDobFinal();
+    ageBox.className='result good';
+    ageBox.textContent='年齡：'+ST.answers.age_years+' 歲';
+    saveDraft();
+    return true;
+  }
+  fields.forEach(([key,label,length],index)=>{
+    const input=el('input','digits');
+    input.inputMode='numeric';input.placeholder=label;input.setAttribute('aria-label',label);
+    input.value=val(key)||'';
+    input.oninput=()=>{
+      input.value=input.value.normalize('NFKC').replace(/[^0-9]/g,'').slice(0,length);
+      ST.answers[key]=input.value;
+      updateAge();
+      if(input.value.length===length&&index<2)row.querySelectorAll('input')[index+1].focus();
+    };
+    input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();if(updateAge())autoNext();}};
+    row.append(input);
+  });
+  ageBox.setAttribute('aria-live','polite');
+  a.append(row,ageBox);
+  if(!fields.some(([key])=>val(key))&&val('date_of_birth')){
+    const parts=String(val('date_of_birth')).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(parts){
+      [ST.answers.dob_y,ST.answers.dob_m,ST.answers.dob_d]=parts.slice(1);
+      row.querySelectorAll('input').forEach((input,i)=>input.value=ST.answers[fields[i][0]]);
+    }
+  }
+  updateAge();
+}
+
 
 function renderPdIdentity(a){const g=el('div','direct');[['PD','PD'],['HC','HC']].forEach(x=>g.append(btn(x[1],()=>{set('pd_hc_status',x[0]);set('pd_status_self_report',x[0]==='PD'?1:0);if(x[0]==='HC')set('pd_duration_years_self_report',null);player()},'choice'+(val('pd_hc_status')===x[0]?' selected':''))));a.append(g);if(val('pd_hc_status')==='PD'){const f=el('div','field');f.append(el('label','','自述患PD多少年？'));const i=el('input','text');i.type='number';i.min='0';i.step='0.1';i.value=val('pd_duration_years_self_report')??'';i.oninput=()=>set('pd_duration_years_self_report',i.value===''?null:Number(i.value));i.onkeydown=e=>{if(e.key==='Enter'&&i.value!==''){e.preventDefault();autoNext()}};f.append(i);a.append(f)}}
 
@@ -3573,14 +3641,7 @@ function guidedPlayer_(){
       nav.append(btn('回到最新進度',guidedGoLatest_,'secondary'));
     }
 
-    if(!['scale','guidedQuipStem','guidedQuipBinary','guidedRbBinary',
-          'guidedMriSafetyBinary','guidedIorDimension','guidedPdiItem'].includes(pg.kind)){
-      nav.append(btn(
-        '下一題',
-        ()=>manualNext(pg,pages),
-        'next'
-      ));
-    }
+    nav.append(btn('下一題',()=>manualNext(pg,pages),'next'));
 
     m.append(nav);
   }

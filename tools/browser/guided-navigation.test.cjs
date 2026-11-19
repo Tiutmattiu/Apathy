@@ -150,3 +150,21 @@ test('an ok response without this exact durable receipt cannot advance',async()=
  const app=await open(20,hads,route=>route.request().method()==='POST'?route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,submission_id:'another-fixture',sheet:'screening_raw',row:999})}):route.abort());
  try{await app.page.waitForTimeout(700);assert.equal((await app.draft()).step,20);assert.equal((await app.draft()).answers._guided_hads_submitted,undefined);}finally{await app.close();}
 });
+test('mobile DOB accepts a day correction after year entry and restores on reload without Enter',async()=>{
+ const app=await open(1,{participant_name:'Fixture'});
+ try{
+  const {page}=app;
+  await page.getByLabel('日 DD').fill('３１');
+  await page.getByLabel('月 MM').fill('04');
+  await page.getByLabel('年 YYYY').fill('1960');
+  assert.equal((await app.draft()).answers.date_of_birth,undefined);
+  await page.getByLabel('日 DD').fill('30');
+  assert.equal((await app.draft()).answers.date_of_birth,'1960-04-30');
+  await page.reload();
+  await page.getByRole('button',{name:'下一題',exact:true}).click();
+  await at(page,2);
+  await page.getByRole('button',{name:'返回上一題',exact:true}).click();
+  await at(page,1);
+  assert.equal(await page.getByLabel('日 DD').inputValue(),'30');
+ }finally{await app.close();}
+});

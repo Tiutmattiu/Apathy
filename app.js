@@ -998,16 +998,42 @@ function setBackfillApplicabilityBatch1_(){
   }
 }
 
+function renderBackfillCgt(section){
+  section.append(el('p','hint','按 CGT 結果表原值填寫。缺失可留空，0 是有效數值。'));
+  const fields=[
+    {label:'最佳選擇比例（0–1）',key:'cgt_prop_best_choices',min:0,max:1},
+    {label:'平均考慮時間（毫秒）',key:'cgt_mean_deliberation_rt',min:0,positive:true},
+    {label:'風險調整（可為負數）',key:'cgt_risk_adjust'}
+  ];
+  return fields.map(field=>{
+    const label=el('label','bf-row'),input=el('input');
+    label.append(el('span','',field.label),input);
+    input.type='number';input.step='any';input.inputMode='decimal';
+    input.name=field.key;input.value=val(field.key)??'';
+    if(field.min!==undefined)input.min=String(field.min);
+    if(field.max!==undefined)input.max=String(field.max);
+    input.oninput=()=>{
+      const value=input.valueAsNumber;
+      input.setCustomValidity(field.positive&&value===0?'平均考慮時間須大於 0 毫秒。':'');
+      if(input.validity.valid)set(field.key,input.value===''?null:value);
+    };
+    section.append(label);
+    return input;
+  });
+}
+
 function backfill(){const m=el('main','backfill');ROOT.innerHTML='';ROOT.append(el('div','topline'),m);m.append(toolbar('歷史資料補錄'));m.append(identityStrip());const nav=el('nav','backfill-nav');const sections=[];function sec(id,title){const s=el('section','bf-section');s.id='bf-'+id;s.append(el('h2','',title));m.append(s);sections.push([id,title]);return s}
  const id=sec('identity','Participant身份及基本資料');id.append(fieldIdDigits('P_ID','p_id',val('participant_series')==='Y'?'Y':'P','例：140'),fieldIdDigits('S_ID（如紙本有）','s_id','S','例：082'),fieldText('姓名','participant_name',''));addBFDate(id,'出生日期','date_of_birth');addBFChoices(id,'性別','gender',[['M','M'],['F','F']]);addBFChoices(id,'PD／HC身份','pd_hc_status',C.identities);id.append(fieldText('聯絡電話','contact_phone',''),fieldText('評估時實際年齡','age_years','歲','number'),fieldText('實際教育年數','education_years','年','number'));
  const mo=sec('moca','MoCA');renderMocaEntry_(mo,'moca_1_raw_total','MoCA 原始總分（0–30）');const age=calcAge(),edu=Number(val('education_years')),raw=val('moca_1_raw_total');if(age!==null&&Number.isFinite(edu)&&raw!==null){const cut=mocaCutoff(age,edu),adj=edu<=12?1:0;mo.append(el('div','result',`教育調整：+${adj}；調整後：${Math.min(30,+raw+adj)}/30；第16百分位Cutoff：${cut===null?'需覆核':cut}；結果：${cut===null?'待覆核':raw>cut?'高於':'低於或等於'}第16百分位`))}addBFCheckbox(mo,'紙本另有第二次MoCA','has_moca_2');if(val('has_moca_2')===1)renderMocaEntry_(mo,'moca_2_raw_total','第二次 MoCA 原始總分（0–30）');
  addBFScale(sec('hads','HADS'),B.hads.items,0,3);renderQuipBF(sec('quip','QUIP'));renderQuipRsBF(sec('quiprs','QUIP-RS'));addBFScale(sec('sas','SAS'),B.sas.items,0,3);
  renderRBBF(sec('rbdsq','RBDSQ'));renderMRIBF(sec('mris','MRI安全'));
  addBFScale(sec('gas','GAS'),B.gas.items,0,3);addBFScale(sec('ami','AMI-18'),B.ami18.items,0,4);const cd=sec('cdars','C-DARS');renderCdarsBF(cd);addBFScale(sec('rgpts','R-GPTS'),B.rgpts.items,0,4);renderPDIBF(sec('pdi','PDI-21'));renderIORBF(sec('ior','IOR'));
- const mv=sec('mri','MRI到訪資料');addBFDate(mv,'第一次MRI日期','mri_date');addBFCheckbox(mv,'紙本另有第二次MRI','has_mri_visit_2');if(val('has_mri_visit_2')===1)addBFDate(mv,'第二次MRI日期','mri_date_2');addBFChoices(mv,'MRI當日狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addBFNumber(mv,'距上次服用PD藥物','last_pd_med_minutes',0,9999,'分鐘');addBFNumber(mv,'MID反應時間','mid_res_time_ms',0,999999,'毫秒');addBFCheckbox(mv,'CGT已完成','cgt_done');addBFNumber(mv,'Digit Span Forward','digit_span_forward',0,99);addBFNumber(mv,'Digit Span Backward','digit_span_backward',0,99);mv.append(el('div','result',`Digit Span Total：${(Number(val('digit_span_forward'))||0)+(Number(val('digit_span_backward'))||0)}`));
+ const mv=sec('mri','MRI到訪資料');addBFDate(mv,'第一次MRI日期','mri_date');addBFCheckbox(mv,'紙本另有第二次MRI','has_mri_visit_2');if(val('has_mri_visit_2')===1)addBFDate(mv,'第二次MRI日期','mri_date_2');addBFChoices(mv,'MRI當日狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addBFNumber(mv,'距上次服用PD藥物','last_pd_med_minutes',0,9999,'分鐘');addBFNumber(mv,'MID反應時間','mid_res_time_ms',0,999999,'毫秒');addBFNumber(mv,'Digit Span Forward','digit_span_forward',0,99);addBFNumber(mv,'Digit Span Backward','digit_span_backward',0,99);mv.append(el('div','result',`Digit Span Total：${(Number(val('digit_span_forward'))||0)+(Number(val('digit_span_backward'))||0)}`));
+ const cgtSection=sec('cgt','CGT');addBFCheckbox(cgtSection,'CGT已完成','cgt_done');
+ const cgtInputs=renderBackfillCgt(cgtSection);
  renderSequenceBF(sec('sequence','MRI Sequence'));renderClinicalBF(sec('clinical','UPDRS／HY'));renderMedicationBF(sec('meds','Medication／LEDD'));
  const pay=sec('payment','Payment／Receipt');addBFCheckbox(pay,'已付款','payment_status');addBFCheckbox(pay,'Receipt已處理','receipt_status');const rem=sec('remark','紙本補錄備註');const ta=el('textarea');ta.placeholder='缺頁、字跡不清、多個答案、未提供資料或其他資料品質問題';ta.value=val('historical_reentry_remark')||'';ta.oninput=()=>set('historical_reentry_remark',ta.value);rem.append(ta);
- sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>submitPayload('backfill','historical_paper_reentry','partial'),'primary'));m.append(sb)}
+ sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>{if(cgtInputs.every(input=>input.reportValidity()))submitPayload('backfill','historical_paper_reentry','partial');},'primary'));m.append(sb)}
 
 function clinicalApplyParticipantMatchBatch1_(x){
   set('p_id',x.p_id||null);set('s_id',x.s_id||null);set('participant_name',x.participant_name||null);

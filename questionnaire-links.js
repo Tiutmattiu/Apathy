@@ -18,6 +18,8 @@
   return day;
  }
  function link(base,chosen,id,date){const selected=selection(chosen),url=new URL(base);url.search='';url.hash='';url.searchParams.set('flow','questionnaires');url.searchParams.set('scales',selected.join(','));url.searchParams.set('request',invitation(id));if(selected.includes('mri_sas')&&scanDate(date))url.searchParams.set('scan_date',scanDate(date));return url.toString();}
+ function boundLink(base,token){const url=new URL(base);url.search='';url.hash='';url.searchParams.set('flow','questionnaires');url.searchParams.set('invite',invitation(token));return url.toString();}
+ function boundOrder(chosen){const selected=selection(chosen),first=['hads','quip','quiprs','sas'];return first.filter(id=>selected.includes(id)).concat(selected.filter(id=>!first.includes(id)));}
  function mriSasItems(bank){return bank.sas.items.map((x,index)=>({...x,name:'mri_'+x.name,options:x.responseOptions.map((option,j)=>({label:option.label,value:bank.sas.scoring.displayOrderByItem[index+1][j]}))}));}
  function mriSasScores(answers){
   return Array.from({length:14},(_,i)=>{const v=answers['mri_sas'+String(i+1).padStart(2,'0')+'_score'];return /^[0-3]$/.test(String(v??''))?Number(v):null;});
@@ -83,5 +85,5 @@
   }
   return out;
  }
- window.APATHY_QUESTIONNAIRE_LINKS=Object.freeze({catalog,selection,link,draftKey,identity,pages,payload,submissions,scanDate,mriSasItems,mriSasScores});
+ window.APATHY_QUESTIONNAIRE_LINKS=Object.freeze({catalog,selection,link,boundLink,boundOrder,draftKey,identity,pages,payload,submissions,scanDate,mriSasItems,mriSasScores});
 })();

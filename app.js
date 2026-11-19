@@ -4126,6 +4126,7 @@ document.addEventListener('keydown',handleGlobalKeydown);
 // This file is inserted inside app.js's existing form engine closure.
 const QL=window.APATHY_QUESTIONNAIRE_LINKS;
 let selectiveSelection=[],selectiveRequest='',selectiveMriDate='',selectiveAdvanceTimer=null;
+let selectiveInvite=null;
 const selectiveActive=()=>/^questionnaires_/.test(ST.flow);
 const _selectiveSetBase=set;
 set=function(key,value){
@@ -4133,7 +4134,15 @@ set=function(key,value){
  return _selectiveSetBase(key,value);
 };
 function selectiveEdit(key,value){if(!ST.submitting)set(key,value);}
-function selectivePages(){return QL.pages(selectiveSelection,B).filter(pg=>!pg.when||Number(val(pg.when))===1);}
+function selectivePages(){
+ const all=QL.pages(selectiveSelection,B).filter(pg=>!pg.when||Number(val(pg.when))===1);
+ if(!selectiveInvite)return all;
+ const order=QL.boundOrder(selectiveSelection);
+ return all.filter(pg=>pg.key!=='contact_phone').sort((a,b)=>{
+  const rank=p=>p.kind==='selectiveSummary'?order.length+1:p.questionnaire?order.indexOf(p.questionnaire): -1;
+  return rank(a)-rank(b);
+ });
+}
 function selectivePageComplete(pg){
  if(pg.kind==='selectiveSummary')return true;
  if(pg.kind==='pdiItem')return pageComplete(pg);
@@ -4144,20 +4153,24 @@ function selectivePageComplete(pg){
  return value!=='';
 }
 function selectiveNext(){
+ if(ST.submitting||selectiveInvite?.blocked||selectiveInvite&&!selectiveInvite.verified)return;
  clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;
  const pages=selectivePages(),pg=pages[ST.step];
  if(!selectivePageComplete(pg)){ST.error='請完成目前這一題。';return player();}
  if(pg.kind==='selectiveSummary')return selectiveSubmit();
+ const next=pages[ST.step+1];
+ if(selectiveInvite&&['hads','sas','quiprs'].includes(pg.questionnaire)&&next?.questionnaire!==pg.questionnaire)return selectiveInviteCheckpoint(pg.questionnaire,ST.step+1);
  ST.step=Math.min(ST.step+1,pages.length-1);ST.error='';saveDraft();player();
 }
 function selectiveChoose(pg,value){
- if(selectiveAdvanceTimer||ST.submitting)return;
+ if(selectiveAdvanceTimer||ST.submitting||selectiveInvite?.blocked)return;
  selectiveEdit(pg.key,value);
  if(Number(value)===0)QL.pages(selectiveSelection,B).filter(p=>p.when===pg.key).forEach(p=>set(p.key,null));
  ST.error='';selectiveAdvanceTimer=setTimeout(selectiveNext,180);
 }
 function selectivePlayer(){
- const m=appShell(),head=el('header','toolbar');head.append(el('h1','','研究問卷'),btn('重新開始',()=>{if(ST.submitting)return;if(confirm('清除這條問卷連結在此裝置的填答，重新開始？')){clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;resetFlow();saveDraft();player();}},'linkbtn'));m.append(head);if(ST.submitting)head.querySelectorAll('button').forEach(b=>b.disabled=true);
+ if(selectiveInvite&&(!selectiveInvite.verified||selectiveInvite.blocked))return selectiveInviteScreen();
+ const m=appShell(),head=el('header','toolbar');head.append(el('h1','','研究問卷'),btn(selectiveInvite?'重新讀取保存進度':'重新開始',()=>{if(ST.submitting)return;if(selectiveInvite)return selectiveInviteRefresh();if(confirm('清除這條問卷連結在此裝置的填答，重新開始？')){clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;resetFlow();saveDraft();player();}},'linkbtn'));m.append(head);if(ST.submitting)head.querySelectorAll('button').forEach(b=>b.disabled=true);
  if(val('_selective_receipt')){m.append(el('div','result good','已收到您填寫的問卷，謝謝。'));return;}
  const pages=selectivePages();ST.step=Math.min(ST.step,pages.length-1);const pg=pages[ST.step];
  m.append(el('p','hint',pg.section+'　'+(ST.step+1)+'／'+pages.length));
@@ -4173,7 +4186,7 @@ function selectivePlayer(){
   input.oninput=()=>selectiveEdit(pg.key,input.value);input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();selectiveNext();}};body.append(input);
  }
  if(ST.error)body.append(el('div','error',ST.error));
- const actions=el('div','submitbar');if(ST.step>0)actions.append(btn('上一題',()=>{clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;ST.step--;ST.error='';saveDraft();player();},'linkbtn'));
+ const actions=el('div','submitbar');if(ST.step>(selectiveInvite?.minStep||0))actions.append(btn('上一題',()=>{clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;ST.step--;ST.error='';saveDraft();player();},'linkbtn'));
  actions.append(btn(pg.kind==='selectiveSummary'?'檢查並提交':'下一題',selectiveNext,'primary'));body.append(actions);
  if(ST.submitting){actions.querySelectorAll('button').forEach(b=>b.disabled=true);body.append(el('p','hint','正在提交，請勿關閉或重新整理此頁。'));}
 }
@@ -4194,6 +4207,7 @@ async function selectiveSubmit(){
   if(selectiveSelection.includes('pdi')){setDerived('pdi_page1_confirmed',1);setDerived('pdi_page2_confirmed',1);}
   const saved=val('_selective_snapshot');
   const submissions=saved?(Array.isArray(saved)?saved:[saved]):QL.submissions(selectiveSelection,ST.answers,ST.submission,new Date().toISOString(),selectiveMriDate);
+  if(selectiveInvite)submissions.forEach(snapshot=>{snapshot.invite_token=selectiveInvite.token;});
   set('_selective_snapshot',submissions);ST.submitting=true;ST.error='';player();
   const health=await receiverPublicQuery_('health');
   if(!health.ok||!Array.isArray(health.supported_events)||submissions.some(snapshot=>!health.supported_events.includes(snapshot.event_type)))throw new Error('問卷收集暫時未啟用，答案已保存在此裝置。請聯絡研究人員。');
@@ -4203,17 +4217,133 @@ async function selectiveSubmit(){
  }catch(error){ST.error=String(error.message||'提交未完成，答案仍保存在此裝置，請重試。');}
  finally{ST.submitting=false;player();}
 }
+async function selectiveInvitePost(action,data){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+ try{
+  const response=await fetch(C.receiverUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),signal:controller.signal});
+  const result=await response.json();
+  if(!response.ok||result.ok!==true)throw Error(result.message||result.error||'未能確認資料，請稍後重試。');
+  return result;
+ }finally{clearTimeout(timer);}
+}
+function selectiveInviteScreen(message=''){
+ const m=appShell();m.append(el('h1','','研究問卷'));const section=el('section','summary');m.append(section);
+ if(selectiveInvite.blocked){
+  section.append(el('h2','','等待研究人員批准'),el('p','','答案已保存，請等待研究人員核對。毋須更改答案。'),btn('檢查批准狀態',()=>selectiveInviteRefresh(),'primary'));
+ }else{
+  section.append(el('h2','','確認聯絡電話'),el('p','',`這份問卷發給 ${selectiveInvite.maskedPhone||'指定參加者'}。請輸入完整電話以確認。`));
+  const label=el('label','','完整聯絡電話'),input=el('input');input.type='tel';input.autocomplete='tel';label.append(input);section.append(label);
+  const verify=async()=>{
+   if(ST.submitting)return;const phone=input.value.replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');
+   if(!/^\d{8}$/.test(phone)){feedback.textContent='請輸入八位香港聯絡電話。';return;}
+   ST.submitting=true;button.disabled=true;
+   try{const result=await selectiveInvitePost('invite_open',{token:selectiveInvite.token,phone});if(result.verified!==true)throw Error('電話未能確認，請檢查後重試。');selectiveInvite.phone=phone;selectiveInviteApply(result);}
+   catch(error){feedback.textContent=error.message||'電話未能確認，請重試。';}
+   finally{ST.submitting=false;if(button.isConnected)button.disabled=false;else player();}
+  };
+  const button=btn('確認電話',verify,'primary');input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();verify();}};section.append(button);
+ }
+ const feedback=el('div','error',message||ST.error||'');section.append(feedback);
+}
+function selectiveInviteApply(result){
+ clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;
+ if(result.verified!==true)throw Error('電話尚未確認。');
+ selectiveSelection=QL.selection(result.scales);selectiveMriDate=selectiveSelection.includes('mri_sas')?QL.scanDate(result.scan_date):'';
+ selectiveInvite.verified=true;selectiveInvite.blocked=!!result.blocked;selectiveInvite.maskedPhone=String(result.masked_phone||selectiveInvite.maskedPhone||'');
+ const checkpoint=result.checkpoint||{},savedAnswers=checkpoint.answers&&typeof checkpoint.answers==='object'?checkpoint.answers:{};
+ const serverAnswers=Object.fromEntries(Object.entries(savedAnswers).filter(([key])=>!key.startsWith('_')));
+ selectiveInvite.revision=Number(result.revision??checkpoint.revision)||0;
+ ST.flow=QL.draftKey(selectiveSelection,selectiveInvite.token);
+ let local=null;try{local=JSON.parse(localStorage.getItem('apathy-fe-clean-v2-'+ST.flow)||'null');}catch(_){}
+ const samePhone=local?.answers?.contact_phone===selectiveInvite.phone;
+ const useLocal=samePhone&&local.answers._selective_invite_revision===selectiveInvite.revision;
+ ST.answers=useLocal?local.answers:{...serverAnswers};ST.answers.contact_phone=selectiveInvite.phone;ST.answers._selective_invite_revision=selectiveInvite.revision;
+ if(result.completed===true)ST.answers._selective_receipt=ST.answers._selective_receipt||[{invite_token:selectiveInvite.token}];
+ ST.submission=useLocal&&local.submission?local.submission:uuid();ST.meds=[];
+ ST.error=samePhone&&!useLocal?'保存進度已由另一個版本更新，已載入伺服器確認的進度；這部裝置未同步的填答未合併。':'';
+ const serverStep=Math.max(0,Number(checkpoint.step)||0),step=useLocal?Math.max(serverStep,Number(local.step)||0):serverStep;
+ ST.step=Math.min(step,selectivePages().length-1);selectiveInvite.minStep=Math.min(serverStep,selectivePages().length-1);
+ saveDraft();player();
+}
+async function selectiveInviteStart(token){
+ clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;
+ selectiveInvite={token:String(token||''),verified:false,blocked:false,revision:0,minStep:0};ST.flow='questionnaires_invite';ST.answers={};ST.step=0;ST.error='';
+ const m=appShell();m.append(el('p','','正在讀取問卷連結……'));
+ try{QL.boundLink(location.href,selectiveInvite.token);const result=await selectiveInvitePost('invite_open',{token:selectiveInvite.token});selectiveInvite.maskedPhone=String(result.masked_phone||'');selectiveInviteScreen();}
+ catch(error){selectiveInviteScreen(error.message||'連結未能開啟，請重試。');}
+}
+async function selectiveInviteRefresh(){
+ if(ST.submitting)return;clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;ST.submitting=true;
+ try{const result=await selectiveInvitePost('invite_open',{token:selectiveInvite.token,phone:selectiveInvite.phone});selectiveInviteApply(result);}
+ catch(error){ST.error=error.message||'未能確認批准，請重試。';}
+ finally{ST.submitting=false;player();}
+}
+async function selectiveInviteCheckpoint(scale,nextStep){
+ if(ST.submitting)return;
+ const missing=selectivePages().findIndex(pg=>pg.questionnaire===scale&&!selectivePageComplete(pg));
+ if(missing>=0){ST.step=missing;ST.error='請完成這份問卷的所有題目。';return player();}
+ ST.submitting=true;ST.error='';player();
+ try{
+  const allowed=new Set(QL.pages(selectiveSelection,B).map(pg=>pg.key).filter(Boolean));
+  const answers=Object.fromEntries(Object.entries(ST.answers).filter(([key])=>allowed.has(key)));
+  const result=await selectiveInvitePost('invite_checkpoint',{token:selectiveInvite.token,phone:selectiveInvite.phone,answers,step:nextStep,revision:selectiveInvite.revision,scale});
+  if(!Number.isInteger(result.revision)||result.revision<=selectiveInvite.revision||!Object.hasOwn(result,'blocked'))throw Error('未收到有效保存確認，請重試。');
+  selectiveInvite.revision=result.revision;ST.answers._selective_invite_revision=result.revision;selectiveInvite.blocked=!!result.blocked;selectiveInvite.minStep=nextStep;ST.step=nextStep;saveDraft();
+ }catch(error){ST.error=error.message||'保存未完成，答案仍在此頁。請重試。';}
+ finally{ST.submitting=false;player();}
+}
 function questionnaireLinkBuilder(){
- const m=appShell(),head=el('header','toolbar');head.append(el('h1','','問卷發放'),btn('返回首頁',home,'linkbtn'));m.append(head);const selected=new Set(),section=el('section','summary');section.append(el('h2','','選擇要發放的問卷'),el('p','','可選擇一份或多份。每位參加者填答前需要提供姓名、電話、年齡及性別。'));
+ const m=appShell(),head=el('header','toolbar');head.append(el('h1','','問卷發放'),btn('返回首頁',home,'linkbtn'));m.append(head);
+ const selected=new Set(),section=el('section','summary');section.append(el('h2','','發放指定參加者問卷'),el('p','','請填寫收件電話及選擇問卷。連結不含電話，參加者開啟後需要確認完整電話。'));
+ const phone=el('input');phone.type='tel';phone.autocomplete='off';const phoneLabel=el('label','','收件聯絡電話');phoneLabel.append(phone);section.append(phoneLabel);
+ const cohort=el('select');cohort.append(new Option('由已登記資料確認',''),new Option('健康對照（HC）','HC'),new Option('帕金遜病（PD）','PD'));
+ const cohortLabel=el('label','','參加者組別（未登記或無法唯一確認時須選擇）');cohortLabel.append(cohort);section.append(cohortLabel);
  QL.catalog.forEach(item=>{const row=el('label','questionnaire-option'),input=el('input');input.type='checkbox';input.value=item.id;input.onchange=()=>{input.checked?selected.add(item.id):selected.delete(item.id);scanLabel.hidden=!selected.has('mri_sas');result.value='';};row.append(input,document.createTextNode(' '+item.label));section.append(row);});
  const scanDate=el('input');scanDate.type='date';scanDate.onchange=()=>{result.value='';};
  const scanLabel=el('label');scanLabel.hidden=true;scanLabel.append(document.createTextNode('MRI-SAS 掃描日期（可選） '),scanDate);section.append(scanLabel);
- const result=el('textarea');result.readOnly=true;result.placeholder='勾選問卷後產生連結';
- const error=el('div','error');section.append(btn('產生連結',()=>{try{result.value=QL.link(window.location.href,[...selected],uuid(),scanDate.value);error.textContent='';}catch(e){error.textContent=e.message;}},'primary'),result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
+ const result=el('textarea');result.readOnly=true;result.placeholder='選擇問卷後產生指定參加者連結';
+ const error=el('div','error');let createRequest=uuid(),creating=false,creationFingerprint='';
+ const access=()=>sessionStorage.getItem('apathy-staff-access')||String(C.staffPassword);
+ const create=btn('產生連結',async()=>{
+  if(creating)return;
+  try{
+   const normalized=phone.value.replace(/\D/g,'').replace(/^852(?=\d{8}$)/,'');if(!/^\d{8}$/.test(normalized))throw Error('請填寫八位香港聯絡電話。');
+   const data={phone:normalized,scales:QL.selection([...selected])};if(cohort.value)data.cohort=cohort.value;if(scanDate.value)data.scan_date=QL.scanDate(scanDate.value);
+   const fingerprint=JSON.stringify(data);if(creationFingerprint&&fingerprint!==creationFingerprint)createRequest=uuid();creationFingerprint=fingerprint;
+   creating=true;create.disabled=true;error.textContent='正在產生連結……';
+   const response=await selectiveInvitePost('staff_invite_create',{access:access(),request_id:createRequest,data});
+   result.value=QL.boundLink(window.location.href,response.token);error.textContent='連結已產生。';createRequest=uuid();
+  }catch(e){error.textContent=e.message||'連結未能產生，請重試。';}finally{creating=false;create.disabled=false;}
+ },'primary');
+ phone.oninput=cohort.onchange=()=>{result.value='';};
+ section.append(create,result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
+ const approval=el('section','summary');approval.append(el('h2','','核對並批准繼續'));
+ const link=el('input');link.type='url';const linkLabel=el('label','','參加者問卷連結');linkLabel.append(link);approval.append(linkLabel);
+ const status=el('div','result');let reviewed=null,working=false;
+ const token=()=>{const url=new URL(link.value);const value=url.searchParams.get('invite');if(!value)throw Error('請貼上指定參加者問卷連結。');return value;};
+ const inspect=btn('查看待批資料',async()=>{
+  if(working)return;working=true;inspect.disabled=true;allow.disabled=true;reviewed=null;
+  try{
+   const selectedToken=token(),response=await selectiveInvitePost('staff_invite_status',{access:access(),request_id:uuid(),data:{token:selectedToken}});
+   if(!Number.isInteger(response.revision))throw Error('未收到有效版本，請重新核對。');
+   reviewed={token:selectedToken,revision:response.revision};
+   const reasons=response.blocked?.reasons||[];
+   status.textContent=(response.masked_phone||'指定參加者')+'：'+(response.blocked?'等待批准':'目前沒有待批准項目')+reasons.map(r=>'；'+r.domain+'：'+r.score+'（'+r.rule+'）').join('');
+   allow.disabled=!response.blocked;
+  }catch(e){status.textContent=e.message||'未能讀取資料。';}finally{working=false;inspect.disabled=false;}
+ },'secondary');
+ const allow=btn('批准繼續',async()=>{
+  if(working||!reviewed)return;working=true;allow.disabled=true;inspect.disabled=true;
+  try{if(token()!==reviewed.token)throw Error('連結已改變，請重新核對。');await selectiveInvitePost('staff_invite_allow',{access:access(),request_id:uuid(),data:reviewed});status.textContent='已批准。請參加者在原連結檢查批准狀態後繼續。';reviewed=null;}
+  catch(e){status.textContent=e.message||'批准未完成，請重新核對。';reviewed=null;}
+  finally{working=false;inspect.disabled=false;}
+ },'primary');allow.disabled=true;link.oninput=()=>{reviewed=null;allow.disabled=true;status.textContent='';};approval.append(inspect,status,allow);m.append(approval);
 }
 function selectiveStart(){
  try{
-  const params=new URLSearchParams(window.location.search);selectiveSelection=QL.selection(params.get('scales'));selectiveRequest=params.get('request')||'default';selectiveMriDate=selectiveSelection.includes('mri_sas')?QL.scanDate(params.get('scan_date')):'';
+  const params=new URLSearchParams(window.location.search);
+  if(params.has('invite'))return selectiveInviteStart(params.get('invite'));
+  selectiveInvite=null;selectiveSelection=QL.selection(params.get('scales'));selectiveRequest=params.get('request')||'default';selectiveMriDate=selectiveSelection.includes('mri_sas')?QL.scanDate(params.get('scan_date')):'';
   ST.flow=QL.draftKey(selectiveSelection,selectiveRequest);loadDraft(ST.flow);ST.error='';player();
  }catch(error){const m=appShell();m.append(el('h1','','問卷連結無效'),el('p','',error.message));}
 }
@@ -4221,7 +4351,7 @@ const _selectivePlayerBase=player,_selectiveStartBase=start;
 player=function(){if(selectiveActive())return selectivePlayer();return _selectivePlayerBase();};
 start=function(flow){if(flow==='questionnaire_links'){ST.flow=flow;return questionnaireLinkBuilder();}if(flow==='questionnaires'||/^questionnaires_/.test(flow))return selectiveStart();return _selectiveStartBase(flow);};
 document.addEventListener('keydown',function(e){
- if(!selectiveActive()||e.altKey||e.ctrlKey||e.metaKey||e.isComposing||e.repeat||ST.submitting||selectiveAdvanceTimer)return;
+ if(!selectiveActive()||selectiveInvite&&!selectiveInvite.verified||selectiveInvite?.blocked||e.altKey||e.ctrlKey||e.metaKey||e.isComposing||e.repeat||ST.submitting||selectiveAdvanceTimer)return;
  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
  const pg=selectivePages()[ST.step];if(e.key==='Enter'){e.preventDefault();selectiveNext();return;}
  if(pg.options&&/^[0-9]$/.test(e.key)){const choice=pg.options.find(o=>String(o.value)===e.key);if(choice){e.preventDefault();selectiveChoose(pg,choice.value);}}

@@ -1,0 +1,4 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const ctx=vm.createContext({window:{},URL,URLSearchParams});for(const file of ['question-bank.js','questionnaire-links.js'])vm.runInContext(fs.readFileSync(file,'utf8'),ctx);const q=ctx.window.APATHY_QUESTIONNAIRE_LINKS;
+test('person-bound links contain an opaque token only',()=>{const url=new URL(q.boundLink('https://example.test/?phone=91234567&scales=hads#old','fixture-token'));assert.deepEqual([...url.searchParams], [['flow','questionnaires'],['invite','fixture-token']]);assert.equal(url.hash,'');});
+test('bound questionnaire order puts selected gates before ordinary scales',()=>assert.deepEqual(Array.from(q.boundOrder(['gas','sas','quiprs','hads','quip','rbdsq'])),['hads','quip','quiprs','sas','rbdsq','gas']));

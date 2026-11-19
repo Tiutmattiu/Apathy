@@ -4253,7 +4253,7 @@ function selectiveInviteApply(result){
  const checkpoint=result.checkpoint||{},savedAnswers=checkpoint.answers&&typeof checkpoint.answers==='object'?checkpoint.answers:{};
  const serverAnswers=Object.fromEntries(Object.entries(savedAnswers).filter(([key])=>!key.startsWith('_')));
  selectiveInvite.revision=Number(result.revision??checkpoint.revision)||0;
- ST.flow=QL.draftKey(selectiveSelection,selectiveInvite.token);
+ ST.flow='questionnaires_bound_'+QL.draftKey(selectiveSelection,selectiveInvite.token);
  let local=null;try{local=JSON.parse(localStorage.getItem('apathy-fe-clean-v2-'+ST.flow)||'null');}catch(_){}
  const samePhone=local?.answers?.contact_phone===selectiveInvite.phone;
  const useLocal=samePhone&&local.answers._selective_invite_revision===selectiveInvite.revision;

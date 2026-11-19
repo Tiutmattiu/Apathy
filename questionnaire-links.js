@@ -1,7 +1,7 @@
 'use strict';
 (function(){
  const catalog=Object.freeze([
-  ['hads','HADS'],['sas','SAS'],['quip','QUIP'],['quiprs','QUIP-RS'],['rbdsq','RBDSQ'],
+  ['hads','HADS'],['sas','SAS'],['mri_sas','MRI-SAS'],['quip','QUIP'],['quiprs','QUIP-RS'],['rbdsq','RBDSQ'],
   ['gas','GAS'],['ami','AMI-18'],['cdars','C-DARS'],['rgpts','R-GPTS'],['pdi','PDI-21'],['ior','IOR']
  ].map(([id,label])=>Object.freeze({id,label})));
  function selection(input){
@@ -11,7 +11,17 @@
   return catalog.filter(q=>chosen.has(q.id)).map(q=>q.id);
  }
  function invitation(value){const id=String(value||'default');if(!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new Error('問卷連結無效。');return id;}
- function link(base,chosen,id){const url=new URL(base);url.search='';url.hash='';url.searchParams.set('flow','questionnaires');url.searchParams.set('scales',selection(chosen).join(','));url.searchParams.set('request',invitation(id));return url.toString();}
+ function scanDate(value){
+  const day=String(value||'').trim();if(!day)return '';
+  const parsed=new Date(day+'T00:00:00Z');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==day)throw new Error('請輸入有效 MRI 日期。');
+  return day;
+ }
+ function link(base,chosen,id,date){const selected=selection(chosen),url=new URL(base);url.search='';url.hash='';url.searchParams.set('flow','questionnaires');url.searchParams.set('scales',selected.join(','));url.searchParams.set('request',invitation(id));if(selected.includes('mri_sas')&&scanDate(date))url.searchParams.set('scan_date',scanDate(date));return url.toString();}
+ function mriSasItems(bank){return bank.sas.items.map((x,index)=>({...x,name:'mri_'+x.name,options:x.responseOptions.map((option,j)=>({label:option.label,value:bank.sas.scoring.displayOrderByItem[index+1][j]}))}));}
+ function mriSasScores(answers){
+  return Array.from({length:14},(_,i)=>{const v=answers['mri_sas'+String(i+1).padStart(2,'0')+'_score'];return /^[0-3]$/.test(String(v??''))?Number(v):null;});
+ }
  function draftKey(chosen,id){return 'questionnaires_'+selection(chosen).join('_')+'_'+invitation(id);}
  function identity(answers){
   const name=String(answers.participant_name||'').trim(),raw=String(answers.contact_phone||'').trim();
@@ -32,6 +42,7 @@
   ];
   function add(id,item,label){out.push({questionnaire:id,section:catalog.find(q=>q.id===id).label,kind:'scale',key:item.name||item.responseName,label:label||item.fullLabel||item.combinedFormalLabel,options:item.options||item.responseOptions});}
   selection(chosen).forEach(id=>{
+   if(id==='mri_sas'){mriSasItems(bank).forEach(x=>add(id,x));return;}
    if(['hads','sas','gas','ami','rgpts'].includes(id)){const key=id==='ami'?'ami18':id;bank[key].items.forEach((x,index)=>add(id,id==='sas'?{...x,options:x.responseOptions.map((option,j)=>({label:option.label,value:bank.sas.scoring.displayOrderByItem[index+1][j]}))}:x));return;}
    if(id==='quip'){
     bank.quip.matrixCells.forEach(x=>add(id,{name:x.name,options:[{value:0,label:'否'},{value:1,label:'是'}]},x.fullStem+'（'+(x.domain==='B'?'B':x.fullDomainLabel)+'）'));
@@ -58,5 +69,19 @@
    Object.keys(answers).filter(k=>pattern.test(k)||id==='rbdsq'&&k==='rbq10_none_confirmed').forEach(k=>{if(answers[k]!==undefined)output[k]=answers[k];});
   });return output;
  }
- window.APATHY_QUESTIONNAIRE_LINKS=Object.freeze({catalog,selection,link,draftKey,identity,pages,payload});
+ function submissions(chosen,answers,submissionId,submittedAt,date){
+  const selected=selection(chosen),ordinary=selected.filter(id=>id!=='mri_sas'),out=[];
+  if(ordinary.length)out.push(payload(ordinary,answers,submissionId,submittedAt));
+  if(selected.includes('mri_sas')){
+   const person=identity(answers),scores=mriSasScores(answers),day=scanDate(date);
+   if(scores.some(score=>score===null))throw new Error('請完成 MRI-SAS 的 14 題。');
+   const mri={schema_version:'apathy-event-payload-v1',frontend_release:'FE-MRI-SAS-2026-11-19',receiver_contract_expected:'APATHY-RECEIVER-C2-2026-08-19',submission_id:ordinary.length?submissionId+'-mri-sas':submissionId,event_type:'mri_sas_supplement',form_type:'mri',workflow_stage:'mri_sas',workflow_part:'mri_sas',record_status:'submitted',data_source:'participant_remote',participant_id:'PHONE-'+person.contact_phone_normalized,submitted_at:submittedAt,...person};
+   if(day)mri.mri_sas_date=day;
+   scores.forEach((score,i)=>{mri['mri_sas'+String(i+1).padStart(2,'0')+'_score']=score;});
+   mri.mri_sas_total=scores.reduce((sum,x)=>sum+x,0);
+   out.push(mri);
+  }
+  return out;
+ }
+ window.APATHY_QUESTIONNAIRE_LINKS=Object.freeze({catalog,selection,link,draftKey,identity,pages,payload,submissions,scanDate,mriSasItems,mriSasScores});
 })();

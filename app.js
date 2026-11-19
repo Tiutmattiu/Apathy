@@ -930,6 +930,44 @@ function mriSetApplicabilityPhase2_(){
 
 function mriTodayPhase2_(){const d=new Date(),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return String(val('mri_date')||`${y}-${m}-${day}`)}
 
+function mriSasProgress(){
+ const scores=QL.mriSasScores(ST.answers),answered=scores.filter(score=>score!==null).length;
+ return {answered,total:answered===14?scores.reduce((sum,score)=>sum+score,0):null};
+}
+function renderMriSasVisit(parent){
+ const section=el('section','question'),items=QL.mriSasItems(B);
+ let step=QL.mriSasScores(ST.answers).findIndex(score=>score===null);
+ if(step<0)step=items.length;
+ function render(){
+  section.replaceChildren(el('h3','','MRI-SAS'),el('p','hint','掃描日冷漠量表 · '+mriTodayPhase2_()));
+  const progress=mriSasProgress();
+  if(step===items.length){
+   section.append(el('div','result good','MRI-SAS 已填完 · 總分 '+progress.total+'／42'),btn('檢查答案',()=>{step=0;render()},'secondary'));return;
+  }
+  const item=items[step],selected=val(item.name),choices=el('div','options');
+  section.append(el('p','hint',(step+1)+'／'+items.length),el('h4','',item.fullLabel));
+  item.options.forEach(option=>choices.append(btn(option.label,()=>{set(item.name,option.value);step++;render();},'choice'+(sameValue(selected,option.value)?' selected':''))));
+  section.append(choices);
+  if(step>0)section.append(btn('上一題',()=>{step--;render();},'secondary'));
+  if(selected!==null)section.append(btn('下一題',()=>{step++;render();},'secondary'));
+ }
+ render();parent.append(section);
+}
+function prepareMriSas(date){
+ const progress=mriSasProgress();
+ if(!progress.answered)return;
+ if(progress.answered!==14)throw Error('請完成 MRI-SAS 的 14 題。');
+ const day=QL.scanDate(date);if(!day)throw Error('請填寫 MRI-SAS 的掃描日期。');
+ setDerived('mri_sas_date',day);setDerived('mri_sas_total',progress.total);
+}
+function renderBackfillMriSas(parent){
+ parent.append(el('p','hint','只補填掃描當日的紙本 SAS。請輸入各題已計分的 0–3 分。'));
+ addBFDate(parent,'MRI-SAS 掃描日期','mri_sas_date');
+ QL.mriSasItems(B).forEach(item=>addBFNumber106(parent,item.fullLabel,item.name,0,3,'0–3'));
+ const status=el('div','error');parent.append(status);
+ return status;
+}
+
 function renderMRIVisit(){
   normalizeMriHistoricalFieldsBatchB_();mriSetApplicabilityPhase2_();
   const m=appShell();m.append(toolbar('MRI到訪記錄'),identityStrip());
@@ -939,6 +977,7 @@ function renderMRIVisit(){
   addStaffChoices(s,'MRI到訪次數','visit_number',[[1,'第一次MRI'],[2,'第二次MRI']]);
   if(!present('mri_date'))setDerived('mri_date',mriTodayPhase2_());
   s.append(resultBox('MRI日期',[mriTodayPhase2_(),'MRI日期保留實際到訪日期；頁首本機記錄時間只表示目前開啟或修改時間。'],'good'));
+  renderMriSasVisit(s);
   const ms=mriMocaStatePhase2_();
   s.append(resultBox('MRI前MoCA及兩個calendar months判定',ms.lines,ms.needs?'warn':'good'));
   if(ms.needs&&ms.status!=='current_event_only'){
@@ -983,6 +1022,7 @@ function mriPersistSequenceAnswers_(answers,items){
 
 function validateMRIVisit(s){
   const missing=[];if(!val('p_id')&&!val('s_id')&&!/^\d{8}$/.test(String(val('contact_phone')||'').replace(/\D/g,'')))missing.push('P_ID、S_ID或8位電話');if(val('visit_number')===null)missing.push('MRI到訪次數');if(!mriTodayPhase2_())missing.push('MRI日期');if(val('mri_safety_changed_since_initial')===null)missing.push('MRI安全變化');if(val('mri_safety_changed_since_initial')===1&&!String(val('mri_safety_change_detail')||'').trim())missing.push('MRI安全變化內容');if(String(val('pd_hc_status')||'').toUpperCase()==='PD'&&val('med_on_off')===null)missing.push('ON／OFF');if(incompleteSequences()&&!String(val('mri_sequence_general_remark')||'').trim())missing.push('Sequence未完成原因');if(missing.length){showInlineError(s,'尚未完成：'+missing.join('、'));return}
+  try{prepareMriSas(mriTodayPhase2_());}catch(error){showInlineError(s,error.message);return;}
   mriPersistSequenceAnswers_(ST.answers,B.sequences.items);
   mriSetApplicabilityPhase2_();if(present('digit_span_forward')&&present('digit_span_backward'))setDerived('digit_span_total',Number(val('digit_span_forward'))+Number(val('digit_span_backward')));else setDerived('digit_span_total',null);
   setDerived('mri_identity_status',val('p_id')?'matched_with_pid':'sid_only_pending_pid');return submitPayload('mri','mri_scan','submitted')
@@ -1063,11 +1103,17 @@ function backfill(){const m=el('main','backfill');ROOT.innerHTML='';ROOT.append(
  renderRBBF(sec('rbdsq','RBDSQ'));renderMRIBF(sec('mris','MRI安全'));
  addBFScale(sec('gas','GAS'),B.gas.items,0,3);addBFScale(sec('ami','AMI-18'),B.ami18.items,0,4);const cd=sec('cdars','C-DARS');renderCdarsBF(cd);addBFScale(sec('rgpts','R-GPTS'),B.rgpts.items,0,4);renderPDIBF(sec('pdi','PDI-21'));renderIORBF(sec('ior','IOR'));
  const mv=sec('mri','MRI到訪資料');addBFDate(mv,'第一次MRI日期','mri_date');addBFCheckbox(mv,'紙本另有第二次MRI','has_mri_visit_2');if(val('has_mri_visit_2')===1)addBFDate(mv,'第二次MRI日期','mri_date_2');addBFChoices(mv,'MRI當日狀態','med_on_off',[['ON','ON'],['OFF','OFF']]);addBFNumber(mv,'距上次服用PD藥物','last_pd_med_minutes',0,9999,'分鐘');addBFNumber(mv,'MID反應時間','mid_res_time_ms',0,999999,'毫秒');addBFNumber(mv,'Digit Span Forward','digit_span_forward',0,99);addBFNumber(mv,'Digit Span Backward','digit_span_backward',0,99);mv.append(el('div','result',`Digit Span Total：${(Number(val('digit_span_forward'))||0)+(Number(val('digit_span_backward'))||0)}`));
+ const mriSasStatus=renderBackfillMriSas(sec('mri-sas','MRI-SAS'));
  const cgtSection=sec('cgt','CGT');addBFCheckbox(cgtSection,'CGT已完成','cgt_done');
  const cgtInputs=renderBackfillCgt(cgtSection);
  renderSequenceBF(sec('sequence','MRI Sequence'));renderClinicalBF(sec('clinical','UPDRS／HY'));renderMedicationBF(sec('meds','Medication／LEDD'));
  const pay=sec('payment','Payment／Receipt');addBFCheckbox(pay,'已付款','payment_status');addBFCheckbox(pay,'Receipt已處理','receipt_status');const rem=sec('remark','紙本補錄備註');const ta=el('textarea');ta.placeholder='缺頁、字跡不清、多個答案、未提供資料或其他資料品質問題';ta.value=val('historical_reentry_remark')||'';ta.oninput=()=>set('historical_reentry_remark',ta.value);rem.append(ta);
- sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>{if(cgtInputs.every(input=>input.reportValidity()))submitPayload('backfill','historical_paper_reentry','partial');},'primary'));sb.append(btn('清除此裝置資料',confirmClear,'secondary'));m.append(sb)}
+ sections.forEach(x=>nav.append(btn(x[1],()=>document.getElementById('bf-'+x[0]).scrollIntoView({behavior:'smooth'}))));m.insertBefore(nav,m.children[2]);const sb=el('div','submitbar');sb.append(btn('下載本地JSON',downloadCurrent,'linkbtn'),btn('保存歷史資料補錄',()=>{
+  if(!cgtInputs.every(input=>input.reportValidity()))return;
+  try{prepareMriSas(val('mri_sas_date')||val('mri_date'));mriSasStatus.textContent='';}
+  catch(error){mriSasStatus.textContent=error.message;mriSasStatus.scrollIntoView({block:'nearest'});return;}
+  submitPayload('backfill','historical_paper_reentry','partial');
+ },'primary'));sb.append(btn('清除此裝置資料',confirmClear,'secondary'));m.append(sb)}
 
 function clinicalApplyParticipantMatchBatch1_(x){
   set('p_id',x.p_id||null);set('s_id',x.s_id||null);set('participant_name',x.participant_name||null);
@@ -4079,7 +4125,7 @@ if(guidedParam_('flow')==='guided'){
 document.addEventListener('keydown',handleGlobalKeydown);
 // This file is inserted inside app.js's existing form engine closure.
 const QL=window.APATHY_QUESTIONNAIRE_LINKS;
-let selectiveSelection=[],selectiveRequest='',selectiveAdvanceTimer=null;
+let selectiveSelection=[],selectiveRequest='',selectiveMriDate='',selectiveAdvanceTimer=null;
 const selectiveActive=()=>/^questionnaires_/.test(ST.flow);
 const _selectiveSetBase=set;
 set=function(key,value){
@@ -4115,6 +4161,7 @@ function selectivePlayer(){
  if(val('_selective_receipt')){m.append(el('div','result good','已收到您填寫的問卷，謝謝。'));return;}
  const pages=selectivePages();ST.step=Math.min(ST.step,pages.length-1);const pg=pages[ST.step];
  m.append(el('p','hint',pg.section+'　'+(ST.step+1)+'／'+pages.length));
+ if(pg.questionnaire==='mri_sas'&&selectiveMriDate)m.append(el('p','hint','掃描日期 '+selectiveMriDate));
  const body=el('section','question');body.append(el('h2','',pg.label));m.append(body);
  if(pg.examples)body.append(el('p','context','您填寫的例子：'+pg.examples.map(k=>val(k)||'').join('、')));
  if(pg.kind==='selectiveSummary')body.append(el('p','','所選問卷已完成。請檢查並提交。'));
@@ -4145,24 +4192,28 @@ async function selectiveSubmit(){
   if(selectiveSelection.includes('rbdsq')){setDerived('rbdsq_section_confirmed',1);setDerived('rbq10_none_confirmed',B.rbdsq.diseaseItems.every(x=>Number(val(x.name))===0)?1:0);}
   calculateAllDerived();
   if(selectiveSelection.includes('pdi')){setDerived('pdi_page1_confirmed',1);setDerived('pdi_page2_confirmed',1);}
-  const snapshot=val('_selective_snapshot')||QL.payload(selectiveSelection,ST.answers,ST.submission,new Date().toISOString());
-  set('_selective_snapshot',snapshot);ST.submitting=true;ST.error='';player();
-  const url=new URL(C.receiverUrl);url.searchParams.set('action','health');
+  const saved=val('_selective_snapshot');
+  const submissions=saved?(Array.isArray(saved)?saved:[saved]):QL.submissions(selectiveSelection,ST.answers,ST.submission,new Date().toISOString(),selectiveMriDate);
+  set('_selective_snapshot',submissions);ST.submitting=true;ST.error='';player();
   const health=await receiverPublicQuery_('health');
-  if(!health.ok||!Array.isArray(health.supported_events)||!health.supported_events.includes('questionnaire_supplement'))throw new Error('問卷收集暫時未啟用，答案已保存在此裝置。請聯絡研究人員。');
-  const receipt=await receiverPostSelective_(snapshot);set('_selective_receipt',receipt);
+  if(!health.ok||!Array.isArray(health.supported_events)||submissions.some(snapshot=>!health.supported_events.includes(snapshot.event_type)))throw new Error('問卷收集暫時未啟用，答案已保存在此裝置。請聯絡研究人員。');
+  const receipts=[];
+  for(const snapshot of submissions)receipts.push(await receiverPostSelective_(snapshot));
+  set('_selective_receipt',receipts);
  }catch(error){ST.error=String(error.message||'提交未完成，答案仍保存在此裝置，請重試。');}
  finally{ST.submitting=false;player();}
 }
 function questionnaireLinkBuilder(){
  const m=appShell(),head=el('header','toolbar');head.append(el('h1','','問卷發放'),btn('返回首頁',home,'linkbtn'));m.append(head);const selected=new Set(),section=el('section','summary');section.append(el('h2','','選擇要發放的問卷'),el('p','','可選擇一份或多份。每位參加者填答前需要提供姓名、電話、年齡及性別。'));
- QL.catalog.forEach(item=>{const row=el('label','questionnaire-option'),input=el('input');input.type='checkbox';input.value=item.id;input.onchange=()=>{input.checked?selected.add(item.id):selected.delete(item.id);result.value='';};row.append(input,document.createTextNode(' '+item.label));section.append(row);});
+ QL.catalog.forEach(item=>{const row=el('label','questionnaire-option'),input=el('input');input.type='checkbox';input.value=item.id;input.onchange=()=>{input.checked?selected.add(item.id):selected.delete(item.id);scanLabel.hidden=!selected.has('mri_sas');result.value='';};row.append(input,document.createTextNode(' '+item.label));section.append(row);});
+ const scanDate=el('input');scanDate.type='date';scanDate.onchange=()=>{result.value='';};
+ const scanLabel=el('label');scanLabel.hidden=true;scanLabel.append(document.createTextNode('MRI-SAS 掃描日期（可選） '),scanDate);section.append(scanLabel);
  const result=el('textarea');result.readOnly=true;result.placeholder='勾選問卷後產生連結';
- const error=el('div','error');section.append(btn('產生連結',()=>{try{result.value=QL.link(window.location.href,[...selected],uuid());error.textContent='';}catch(e){error.textContent=e.message;}},'primary'),result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
+ const error=el('div','error');section.append(btn('產生連結',()=>{try{result.value=QL.link(window.location.href,[...selected],uuid(),scanDate.value);error.textContent='';}catch(e){error.textContent=e.message;}},'primary'),result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
 }
 function selectiveStart(){
  try{
-  const params=new URLSearchParams(window.location.search);selectiveSelection=QL.selection(params.get('scales'));selectiveRequest=params.get('request')||'default';
+  const params=new URLSearchParams(window.location.search);selectiveSelection=QL.selection(params.get('scales'));selectiveRequest=params.get('request')||'default';selectiveMriDate=selectiveSelection.includes('mri_sas')?QL.scanDate(params.get('scan_date')):'';
   ST.flow=QL.draftKey(selectiveSelection,selectiveRequest);loadDraft(ST.flow);ST.error='';player();
  }catch(error){const m=appShell();m.append(el('h1','','問卷連結無效'),el('p','',error.message));}
 }

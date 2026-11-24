@@ -168,3 +168,28 @@ test('mobile DOB accepts a day correction after year entry and restores on reloa
   assert.equal(await page.getByLabel('日 DD').inputValue(),'30');
  }finally{await app.close();}
 });
+
+test('an HC draft parked on a medication item resumes at the next applicable QUIP question',async()=>{
+ const app=await open(26,{...hads,pd_status_self_report:0,_guided_hads_passed:1,_guided_hads_submitted:1});
+ try{
+  await at(app.page,30);
+  assert.match(await app.page.locator('.flow-head h2').textContent(),/重複行為/);
+  assert.doesNotMatch(await app.page.locator('.question').textContent(),/服用了過多的抗柏金遜症藥物/);
+  await app.page.getByRole('button',{name:'返回上一題',exact:true}).click();
+  await at(app.page,25);
+ }finally{await app.close();}
+});
+
+test('HC completes the 24 applicable QUIP-RS cells and posts a marked medication domain',async()=>{
+ const app=await open(33,{...hads,pd_status_self_report:0,_guided_hads_passed:1,_guided_hads_submitted:1},(route,posts)=>route.request().method()==='POST'?receipt(route,posts):route.abort());
+ try{
+  await app.page.getByRole('button',{name:'24格全部都是「從不」',exact:true}).click();
+  assert.equal(await app.page.locator('.guided-rs-input').count(),24);
+  await app.page.getByRole('button',{name:'下一題',exact:true}).click();
+  await at(app.page,34);
+  assert.equal(app.posts.length,1);
+  assert.equal(app.posts[0].workflow_part,'guided_review_quiprs');
+  assert.equal(app.posts[0].quiprs_f_not_applicable,1);
+  assert.equal(app.posts[0].quiprs_f_1_score,0);
+ }finally{await app.close();}
+});

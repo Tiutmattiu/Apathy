@@ -102,14 +102,9 @@ async function checkResume(){
   const submissionId=String(answers._guided_hads_submission_id||'').trim();
   if(!submissionId)return;
 
-  // Once V2 repair has run and the participant is no longer blocked,
-  // do not touch later legitimate progress or completion.
-  if(
-    Number(answers[REPAIR_MARKER])===1 &&
-    Number(answers._guided_hads_blocked)!==1
-  ){
-    return;
-  }
+  // Only pre-policy drafts are owned by this compatibility script.
+  // The form engine checks current checkpoints without reloading the tab.
+  if(Number(answers._guided_hads_blocked)!==1||answers._guided_screening_review_blocked)return;
 
   checking=true;
   try{

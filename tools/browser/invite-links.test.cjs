@@ -31,6 +31,58 @@ test('completed server invitation reuses existing success UI',async()=>{const ap
 test('normal scales never checkpoint; both final split payloads bind the token',async()=>{const answers={participant_name:'Fixture',contact_phone:'91234567',age_years:60,gender:'F'};for(let n=1;n<=16;n++)answers['gas'+String(n).padStart(2,'0')+'_score']=0;for(let n=1;n<=14;n++)answers['mri_sas'+String(n).padStart(2,'0')+'_score']=0;const app=await setup(['gas','mri_sas'],{checkpoint:{answers,step:33,revision:0}});try{await verify(app);await app.page.getByRole('button',{name:'檢查並提交',exact:true}).click();await app.page.getByText('已收到您填寫的問卷，謝謝。',{exact:true}).waitFor();const finals=app.calls.filter(p=>p.event_type);assert.equal(finals.length,2);assert.ok(finals.every(p=>p.invite_token==='fixture-token'));assert.equal(app.calls.filter(p=>p.action==='invite_checkpoint').length,0);}finally{await app.close();}});
 test('same-device normal-scale progress survives reload only after phone verification',async()=>{const app=await setup(['gas']);try{await verify(app);await app.page.locator('.question input').fill('Local fixture');await app.page.getByRole('button',{name:'下一題',exact:true}).click();await app.page.locator('.question input').fill('61');await app.page.reload();await app.page.getByLabel('完整聯絡電話').waitFor();assert.equal(await app.page.locator('.question').count(),0);await verify(app);assert.equal(await app.page.locator('.question input').inputValue(),'61');await app.page.getByRole('button',{name:'上一題',exact:true}).click();assert.equal(await app.page.locator('.question input').inputValue(),'Local fixture');}finally{await app.close();}});
 test('staff creates token-only links and must preview revision before approval',async()=>{const app=await setup();try{await app.page.goto('http://apathy.test/?flow=questionnaire_links');await app.page.locator('input[type=password]').fill('080');await app.page.getByRole('button',{name:'進入',exact:true}).click();await app.page.getByLabel('收件聯絡電話').fill('91234567');await app.page.locator('input[type=checkbox][value=hads]').check();await app.page.getByLabel(/參加者組別/).selectOption('HC');await app.page.getByRole('button',{name:'產生連結',exact:true}).click();await app.page.waitForFunction(()=>document.querySelector('textarea').value.includes('invite='));const link=await app.page.locator('textarea').inputValue();assert.equal(new URL(link).searchParams.has('phone'),false);const creation=app.calls.find(p=>p.action==='staff_invite_create');assert.equal(creation.data.phone,'91234567');assert.equal(creation.data.cohort,'HC');assert.ok(creation.access);await app.page.getByLabel('參加者問卷連結',{exact:true}).fill(link);assert.equal(await app.page.getByRole('button',{name:'批准繼續',exact:true}).isDisabled(),true);await app.page.getByRole('button',{name:'查看待批資料'}).click();await app.page.getByText(/HADS A：7/).waitFor();await app.page.getByRole('button',{name:'批准繼續',exact:true}).click();await app.page.getByText(/已批准。請參加者/).waitFor();const allow=app.calls.find(p=>p.action==='staff_invite_allow');assert.deepEqual(allow.data,{token:'fixture-token',revision:8});}finally{await app.close();}});
-for(const scale of ['sas','quiprs'])test(scale+' normal boundary saves only its completed gate and continues',async()=>{const bank={};require('node:vm').runInNewContext(require('node:fs').readFileSync(path.join(root,'question-bank.js'),'utf8'),{window:bank});const items=scale==='sas'?bank.APATHY_QUESTION_BANK.sas.items:bank.APATHY_QUESTION_BANK.quiprs.matrixCells;const answers={participant_name:'Fixture',contact_phone:'91234567',age_years:60,gender:'F'};for(const item of items.slice(0,-1))answers[item.name]=0;const app=await setup([scale],{checkpoint:{answers,step:3+items.length-1,revision:0}});try{await verify(app);await app.page.locator('.options button').first().click();await app.page.getByRole('heading',{name:'檢查並提交',exact:true}).waitFor();assert.deepEqual(app.calls.filter(p=>p.action==='invite_checkpoint').map(p=>p.scale),[scale]);}finally{await app.close();}});
+for(const scale of ['sas','quiprs'])test(scale+' normal boundary saves only its completed gate and continues',async()=>{const bank={};require('node:vm').runInNewContext(require('node:fs').readFileSync(path.join(root,'question-bank.js'),'utf8'),{window:bank});const items=scale==='sas'?bank.APATHY_QUESTION_BANK.sas.items:bank.APATHY_QUESTION_BANK.quiprs.matrixCells;const answers={participant_name:'Fixture',contact_phone:'91234567',age_years:60,gender:'F'};for(const item of items.slice(0,-1))answers[item.name]=0;const app=await setup([scale],{checkpoint:{answers,step:3+items.length-1,revision:0}});try{await verify(app);if(scale==='quiprs')await app.page.getByRole('button',{name:'有',exact:true}).click();await app.page.locator('.options button').first().click();await app.page.getByRole('heading',{name:'檢查並提交',exact:true}).waitFor();assert.deepEqual(app.calls.filter(p=>p.action==='invite_checkpoint').map(p=>p.scale),[scale]);}finally{await app.close();}});
 test('legacy anonymous questionnaire URL still opens its original identity flow',async()=>{const app=await setup();try{await app.page.goto('http://apathy.test/?flow=questionnaires&scales=gas&request=legacy-fixture');await app.page.getByRole('heading',{name:'姓名',exact:true}).waitFor();assert.equal(await app.page.getByLabel('完整聯絡電話').count(),0);}finally{await app.close();}});
 test('legacy request parameter cannot open a bound invitation draft',async()=>{const app=await setup(['gas']);try{await verify(app);await app.page.locator('.question input').fill('Private bound fixture');await app.page.goto('http://apathy.test/?flow=questionnaires&scales=gas&request=fixture-token');await app.page.getByRole('heading',{name:'姓名',exact:true}).waitFor();assert.equal(await app.page.locator('.question input').inputValue(),'');}finally{await app.close();}});
+
+test('HC resumes an existing QUIP medication page and completes applicable QUIP-RS items',async()=>{
+ const bank={};require('node:vm').runInNewContext(require('node:fs').readFileSync(path.join(root,'question-bank.js'),'utf8'),{window:bank});
+ const quip=bank.APATHY_QUESTION_BANK.quip,rs=bank.APATHY_QUESTION_BANK.quiprs;
+ const answers={participant_name:'Fixture',contact_phone:'91234567',age_years:60,gender:'F'};
+ for(const item of quip.matrixCells)answers[item.name]=0;
+ for(const item of rs.matrixCells.filter(x=>x.domain!=='F'))answers[item.name]=0;
+ const app=await setup(['quip','quiprs','gas'],{checkpoint:{answers,step:23,revision:1}});
+ try{
+  await verify(app);
+  await app.page.getByRole('button',{name:'沒有',exact:true}).click();
+  await app.page.getByText(/QUIP　/).waitFor();
+  assert.doesNotMatch(await app.page.locator('.question h2').textContent(),/柏金遜症藥物/);
+  for(let i=0;i<3;i++){
+   const label=await app.page.locator('.question h2').textContent();
+   await app.page.locator('.options button').first().click();
+   await app.page.waitForFunction(previous=>document.querySelector('.question h2')?.textContent!==previous,label);
+  }
+  await app.page.getByText(/QUIP-RS　/).waitFor();
+  for(let i=0;i<24;i++){
+   assert.doesNotMatch(await app.page.locator('.question h2').textContent(),/柏金遜症藥物/);
+   const label=await app.page.locator('.question h2').textContent();
+   await app.page.locator('.options button').first().click();
+   await app.page.waitForFunction(previous=>document.querySelector('.question h2')?.textContent!==previous,label);
+  }
+  await app.page.getByText(/GAS　/).waitFor();
+  const gate=app.calls.find(p=>p.action==='invite_checkpoint');
+  assert.equal(gate.scale,'quiprs');
+  assert.equal(gate.answers.quiprs_f_1_score,0);
+  assert.equal(gate.answers.quiprs_f_not_applicable,1);
+  await app.page.reload();
+  await verify(app);
+  await app.page.getByText(/GAS　/).waitFor();
+  assert.equal(gate.answers.quip_f1_yes,0);
+ }finally{await app.close();}
+});
+
+
+test('new participant HC preset issues one link for screening and all Stage 2 questionnaires',async()=>{
+ const app=await setup();
+ try{
+  await app.page.goto('http://apathy.test/?flow=questionnaire_links');
+  await app.page.locator('input[type=password]').fill('080');
+  await app.page.getByRole('button',{name:'進入',exact:true}).click();
+  await app.page.getByRole('button',{name:'選取完整 HC 問卷',exact:true}).click();
+  await app.page.getByLabel('收件聯絡電話').fill('92345678');
+  await app.page.getByRole('button',{name:'產生連結',exact:true}).click();
+  await app.page.waitForFunction(()=>document.querySelector('textarea').value.includes('invite='));
+  const creation=app.calls.find(p=>p.action==='staff_invite_create');
+  assert.deepEqual(creation.data,{phone:'92345678',cohort:'HC',scales:['hads','sas','quip','quiprs','rbdsq','gas','ami','cdars','rgpts','pdi','ior']});
+ }finally{await app.close();}
+});

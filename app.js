@@ -1755,6 +1755,22 @@ function guidedConsumeKey_(e){
   e.stopImmediatePropagation();
 }
 
+function pdMedicationQuestion_(key){
+  return /^(?:quip_f[1-4]_yes|quiprs_f_[1-4]_score)$/.test(key||'');
+}
+
+function markPdMedicationNotApplicable_(answers,keys){
+  keys.filter(pdMedicationQuestion_).forEach(key=>answers[key]=0);
+  if(keys.some(key=>/^quip_f[1-4]_yes$/.test(key)))answers.quip_f_not_applicable=1;
+  if(keys.some(key=>/^quiprs_f_[1-4]_score$/.test(key)))answers.quiprs_f_not_applicable=1;
+}
+
+function guidedNoPd_(){return val('pd_status_self_report')===0||val('pd_status_self_report')==='0';}
+function guidedApplicableStep_(pages,step,direction){
+  while(guidedNoPd_()&&pdMedicationQuestion_(pages[step]?.item?.name))step+=direction;
+  return step;
+}
+
 function guidedLatestStep_(){
   const n=Number(val('_guided_latest_step'));
   return Number.isFinite(n)&&n>=0?n:0;
@@ -1780,7 +1796,7 @@ function guidedGoForward_(){
   }
 
   if(ST.step<pages.length-1){
-    ST.step++;
+    ST.step=guidedApplicableStep_(pages,ST.step+1,1);
     guidedRememberReached_(ST.step);
     ST.error='';
     saveDraft();
@@ -1792,9 +1808,9 @@ function guidedGoForward_(){
 }
 
 function guidedGoBack_(){
-  const min=guidedMinStep_(guidedPages_());
+  const pages=guidedPages_(),min=guidedMinStep_(pages);
   if(ST.step>min){
-    ST.step--;
+    ST.step=guidedApplicableStep_(pages,ST.step-1,-1);
     ST.error='';
     saveDraft();
     guidedScrollTop_();
@@ -1848,6 +1864,7 @@ function guidedScreeningKeys_(){
   keys.push(
     'quiprs_section_confirmed',
     'quiprs_a_total','quiprs_b_total','quiprs_c_total','quiprs_d_total',
+    'quip_f_not_applicable','quiprs_f_not_applicable',
     'quiprs_e1_total','quiprs_e2_total','quiprs_f_total',
     'quiprs_e_total','quiprs_ad_total','quiprs_af_total',
     'quiprs_complete','quiprs_cutoff_domains','quiprs_icd_exclusion_flag'
@@ -1945,6 +1962,10 @@ function guidedDerivedSnapshot_(allowedKeys){
   let snapshot={};
   ST.answers=work;
   try{
+    if(guidedNoPd_()){
+      markPdMedicationNotApplicable_(work,allowedKeys);
+      if(B.quiprs.matrixCells.every(x=>present(x.name)))work.quiprs_section_confirmed='answered';
+    }
     calculateAllDerived();
     (allowedKeys||[]).forEach(k=>{
       if(Object.prototype.hasOwnProperty.call(ST.answers,k))snapshot[k]=ST.answers[k];
@@ -2770,7 +2791,7 @@ function guidedRenderQuipBinary_(pg,a){
 }
 
 function guidedRsSetAllZero_(){
-  B.quiprs.matrixCells.forEach(x=>ST.answers[x.name]=0);
+  guidedRsVisibleCells_().forEach(x=>ST.answers[x.name]=0);
   ST.answers.quiprs_section_confirmed='none';
   saveDraft();
   player();
@@ -2778,7 +2799,7 @@ function guidedRsSetAllZero_(){
 
 function guidedRsCommitCell_(input,cell,value){
   ST.answers[cell.name]=value;
-  const complete=B.quiprs.matrixCells.every(x=>present(x.name));
+  const complete=guidedRsVisibleCells_().every(x=>present(x.name));
   ST.answers.quiprs_section_confirmed=complete?'answered':'grid_pending';
   saveDraft();
   input.value=String(value);
@@ -2791,7 +2812,13 @@ function guidedRsCommitCell_(input,cell,value){
   }
 }
 
+function guidedRsVisibleCells_(){
+  return B.quiprs.matrixCells.filter(cell=>!guidedNoPd_()||!pdMedicationQuestion_(cell.name));
+}
+
 function guidedRenderQuipRs_(a){
+  const domains=B.quiprs.domains.filter(domain=>!guidedNoPd_()||domain.key!=='f');
+  const visibleCells=guidedRsVisibleCells_();
   const legend=el(
     'div',
     'guided-score-legend',
@@ -2812,6 +2839,8 @@ function guidedRenderQuipRs_(a){
 
   const wrap=el('div','guided-rs-wrap');
   const grid=el('div','guided-rs-table');
+  grid.style.gridTemplateColumns='minmax(185px,1.45fr) repeat('+domains.length+',minmax(105px,1fr))';
+  grid.style.minWidth=(185+domains.length*105)+'px';
 
   const corner=el(
     'div',
@@ -2821,7 +2850,7 @@ function guidedRenderQuipRs_(a){
   corner.append(el('small','','向右滑可以看其他行為'));
   grid.append(corner);
 
-  B.quiprs.domains.forEach(d=>{
+  domains.forEach(d=>{
     const h=el('div','guided-rs-cell guided-rs-head guided-rs-domain');
     h.append(el('strong','',d.fullLabel));
 
@@ -2844,7 +2873,7 @@ function guidedRenderQuipRs_(a){
     );
     grid.append(stem);
 
-    B.quiprs.domains.forEach(d=>{
+    domains.forEach(d=>{
       const cell=B.quiprs.matrixCells.find(
         x=>x.stemIndex===st.index&&x.domain===d.key.toUpperCase()
       );
@@ -2861,6 +2890,7 @@ function guidedRenderQuipRs_(a){
       if(i.value!=='')i.classList.add('selected');
 
       i.onkeydown=e=>{
+        if(e.isComposing||e.key==='Unidentified'||e.key==='Process')return;
         const n=guidedNumericKey_(e);
 
         if(n!==null&&n>=0&&n<=4){
@@ -2911,21 +2941,21 @@ function guidedRenderQuipRs_(a){
   wrap.append(grid);
   a.append(wrap);
 
-  const count=B.quiprs.matrixCells.filter(x=>present(x.name)).length;
+  const count=visibleCells.filter(x=>present(x.name)).length;
 
   a.append(
-    el('div','result',`已填寫 ${count}/28。空白表示還未回答；0表示從不。`)
+    el('div','result',`已填寫 ${count}/${visibleCells.length}。空白表示還未回答；0表示從不。`)
   );
 
   a.append(
     btn(
-      '28格全部都是「從不」',
+      visibleCells.length+'格全部都是「從不」',
       guidedRsSetAllZero_,
       'secondary'
     )
   );
 
-  if(count===28&&val('quiprs_section_confirmed')!=='answered'){
+  if(count===visibleCells.length&&val('quiprs_section_confirmed')!=='answered'){
     ST.answers.quiprs_section_confirmed='answered';
     saveDraft();
   }
@@ -3312,14 +3342,7 @@ function guidedPrepareScreeningDefaults_(){
 
   guidedUpdateMriNoneFlag_();
 
-  if(quipKeys().every(present)){
-    ST.answers.quip_complete=1;
-  }
-
-  if(
-    (B.quip.additionalItems||[]).every(x=>present(x.name)) &&
-    quipKeys().every(present)
-  ){
+  if(quipKeys().every(key=>present(key)||guidedNoPd_()&&pdMedicationQuestion_(key))){
     ST.answers.quip_complete=1;
   }
 
@@ -3707,6 +3730,7 @@ function guidedPlayer_(){
   if(ST.step<minStep)ST.step=minStep;
   if(ST.step<0)ST.step=0;
   if(ST.step>=pages.length)ST.step=pages.length-1;
+  ST.step=guidedApplicableStep_(pages,ST.step,1);
 
   guidedRememberReached_(ST.step);
 
@@ -4009,9 +4033,9 @@ pageComplete=function(pg){
       return present('education_level')&&present('education_years');
     }
     if(pg.kind==='guidedQuipStem')return guidedQuipStemComplete_(pg);
-    if(pg.kind==='guidedQuipBinary')return guidedQuipBinaryComplete_(pg);
+    if(pg.kind==='guidedQuipBinary')return guidedNoPd_()&&pdMedicationQuestion_(pg.item.name)||guidedQuipBinaryComplete_(pg);
     if(pg.kind==='guidedQuipRsMatrix'){
-      return B.quiprs.matrixCells.every(x=>present(x.name)) &&
+      return guidedRsVisibleCells_().every(x=>present(x.name)) &&
         ['answered','none'].includes(String(val('quiprs_section_confirmed')||''));
     }
     if(pg.kind==='guidedRbBinary')return guidedRbComplete_(pg);
@@ -4096,18 +4120,20 @@ let busy=false,serial=0,checkPending=false,migrationStarted=false;
 const isGuided=()=>typeof isGuidedFlow_==='function'&&isGuidedFlow_();
 function statusViaScript(id){return new Promise((resolve,reject)=>{const cb='APATHYREVIEW_'+Date.now()+'_'+(++serial),script=document.createElement('script'),url=new URL(C.receiverUrl);let timer;const cleanup=()=>{clearTimeout(timer);delete window[cb];script.remove();};window[cb]=r=>{cleanup();if(!r?.ok||!r.found)reject(Error('尚未確認這筆已保存的篩查，請稍後重試。'));else resolve(r);};url.searchParams.set('action','guided_screening_review_status');url.searchParams.set('submission_id',id);url.searchParams.set('callback',cb);script.referrerPolicy='no-referrer';script.onerror=()=>{cleanup();reject(Error('未能連接核對服務；答案已保留，請重試。'));};timer=setTimeout(()=>{cleanup();reject(Error('核對較久；請保持本頁並重試，毋須更改答案。'));},30000);script.src=url.href;document.head.append(script);});}
 async function statusRequest(id){
-  try{return await statusViaScript(id);}catch(scriptError){
-    const url=new URL(C.receiverUrl),controller=new AbortController();
-    url.searchParams.set('action','guided_screening_review_status');
-    url.searchParams.set('submission_id',id);
-    const timer=setTimeout(()=>controller.abort(),15000);
-    try{
-      const response=await fetch(url.href,{cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal});
-      const result=await response.json();
-      if(!response.ok||!result?.ok||!result.found)throw scriptError;
-      return result;
-    }catch(error){throw scriptError;}finally{clearTimeout(timer);}
-  }
+  const url=new URL(C.receiverUrl),controller=new AbortController();
+  url.searchParams.set('action','guided_screening_review_status');
+  url.searchParams.set('submission_id',id);
+  const timer=setTimeout(()=>controller.abort(),10000);
+  let result;
+  try{
+    const response=await fetch(url.href,{cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal});
+    if(!response.ok)throw Error('核對服務暫時無法使用。');
+    result=await response.json();
+  }catch(error){
+    return statusViaScript(id);
+  }finally{clearTimeout(timer);}
+  if(!result?.ok||!result.found)throw Error('尚未確認這筆已保存的篩查，請稍後重試。');
+  return result;
 }
 function guidedReviewRetry(parent,callback){
   if(!parent?.isConnected)return;
@@ -4126,7 +4152,7 @@ function renderBlocked(){const m=appShell();m.append(toolbar('研究問卷',fals
 async function refreshApproval(){if(checkPending||!blocked())return;checkPending=true;const saved={...blocked()};try{const r=await statusRequest(saved.submission_id);if(!blocked()||blocked().submission_id!==saved.submission_id)return;if(r.allowed){if(fingerprint(saved.phase)!==saved.fingerprint)throw Error('這部分答案已變動，需要重新保存核對；請聯絡研究人員。');delete ST.answers._guided_screening_review_blocked;ST.answers._guided_policy_checked=ST.answers._guided_policy_checked||{};ST.answers._guided_policy_checked[saved.phase]={id:saved.submission_id,fingerprint:saved.fingerprint,version:VERSION};if(saved.phase==='hads'){ST.answers._guided_hads_submitted=1;ST.answers._guided_hads_passed=1;ST.answers._guided_hads_blocked=0;}ST.step=Math.max(ST.step,Number(saved.next_step)||ST.step);ST.answers._guided_latest_step=Math.max(Number(ST.answers._guided_latest_step)||0,ST.step);ST.error='';saveDraft();player();}else{ST.error='研究人員尚未批准；目前答案仍完整保留。';saveDraft();renderBlocked();}}catch(e){setError(e);}finally{checkPending=false;}}
 async function checkPhase(phase,nextStep,status){if(busy)return false;busy=true;const unlock=lockControls(),origin=ST.step,fp=fingerprint(phase);try{cancelTransition();const old=ST.answers._guided_policy_payloads||{},slot=old[phase];if(!slot||slot.fingerprint!==fp){ST.answers['_guided_'+phase+'_submission_id']=uuid();ST.answers._guided_policy_payloads={...old,[phase]:{fingerprint:fp,id:ST.answers['_guided_'+phase+'_submission_id'],saved:false}};saveDraft();}const current=ST.answers._guided_policy_payloads[phase],id=current.id;if(!current.saved){if(status)status.textContent='正在安全保存答案……';await basePost(phase,'screening_core',phaseKeys(phase));if(fingerprint(phase)!==fp)throw Error('答案已變動，請重新確認這部分；先前提交會保留。');current.saved=true;saveDraft();}if(phase==='hads'){ST.answers._guided_hads_submitted=1;saveDraft();}if(status)status.textContent='答案已保存，正在核對……';const result=guidedDryRun_()?{allowed:true,policy_version:VERSION}:await statusRequest(id);if(fingerprint(phase)!==fp)throw Error('答案已變動，請重新確認這部分。');if(!result.allowed){if(!result.requires_approval)throw Error('這部分仍未核對完整，請檢查答案或稍後重試。');ST.answers._guided_screening_review_blocked={phase,submission_id:id,fingerprint:fp,next_step:nextStep,policy_version:result.policy_version||VERSION};ST.error='';saveDraft();renderBlocked();return false;}ST.answers._guided_policy_checked={...(ST.answers._guided_policy_checked||{}),[phase]:{id,fingerprint:fp,version:VERSION}};if(phase==='hads'){ST.answers._guided_hads_passed=1;ST.answers._guided_hads_blocked=0;}ST.error='';saveDraft();return true;}catch(e){ST.error=e.message||String(e);saveDraft();if(status){status.className='error';status.textContent=ST.error;guidedReviewRetry(status.parentElement,()=>checkPhase(phase,nextStep,status).then(ok=>{if(ok&&ST.step===origin){ST.step=nextStep;saveDraft();player();}}));}else player();return false;}finally{unlock();busy=false;}}
 // Keep the existing page list and draft indices; guard only questionnaire boundaries.
-guidedGoForward_=function(){if(!isGuided())return baseNext();if(busy||blocked())return false;const pages=guidedPages_(),pg=pages[ST.step],next=pages[ST.step+1];let phase='';if(pg?.kind==='guidedHadsGate')phase='hads';else if(pg?.kind==='guidedScreeningCheckpoint')phase='screening_self';else if(next?.kind==='guidedQuipRsMatrix')phase='review_quip';else if(pg?.kind==='guidedQuipRsMatrix')phase='review_quiprs';else if(pg?.kind==='scale'&&/^sas\d+_score$/.test(pg.key||'')&&next?.section!==pg.section)phase='review_sas';if(!phase)return baseNext();if(!pageComplete(pg))return baseNext();const check=ST.answers._guided_policy_checked?.[phase];if(check&&check.version===VERSION&&check.fingerprint===fingerprint(phase))return baseNext();const from=ST.step;checkPhase(phase,from+1).then(ok=>{if(ok&&ST.step===from)baseNext();});return false;};
+guidedGoForward_=function(){if(!isGuided())return baseNext();if(busy||blocked())return false;const pages=guidedPages_(),pg=pages[ST.step],next=pages[guidedApplicableStep_(pages,ST.step+1,1)];let phase='';if(pg?.kind==='guidedHadsGate')phase='hads';else if(pg?.kind==='guidedScreeningCheckpoint')phase='screening_self';else if(pg?.kind==='guidedQuipRsMatrix')phase='review_quiprs';else if(pg?.kind==='scale'&&/^sas\d+_score$/.test(pg.key||'')&&next?.section!==pg.section)phase='review_sas';if(!phase)return baseNext();if(!pageComplete(pg))return baseNext();const check=ST.answers._guided_policy_checked?.[phase];if(check&&check.version===VERSION&&check.fingerprint===fingerprint(phase))return baseNext();const from=ST.step;checkPhase(phase,from+1).then(ok=>{if(ok&&ST.step===from)baseNext();});return false;};
 guidedGoBack_=function(){if(busy)return false;cancelTransition();return baseBack();};
 player=function(){if(isGuided()&&blocked())return renderBlocked();if(isGuided()&&val('_guided_hads_submission_id')&&Number(val('_guided_stage2_submitted'))!==1&&!ST.answers._guided_policy_checked?.hads){const gate=guidedPages_().findIndex(p=>p.kind==='guidedHadsGate');if(ST.step>gate){const m=appShell(),status=el('div','result','正在核對已保存的篩查；答案完整保留。');m.append(status);if(!migrationStarted){migrationStarted=true;setTimeout(()=>checkPhase('hads',ST.step,status).then(ok=>{if(ok)player();}),0);}else if(!busy){status.textContent=ST.error||'請重新核對已保存的篩查。';guidedReviewRetry(m,()=>checkPhase('hads',ST.step,status).then(ok=>{if(ok)player();}));}return;}}return basePlayer();};
 guidedAutoSubmitHads_=async function(status){if(busy||ST._guidedHadsSubmitting)return;guidedRefreshDerivedFor_(guidedHadsKeys_());if(Number(val('hads_complete'))!==1){status.textContent='情緒問卷尚未完整，請先完成所有題目。';status.className='error';return;}ST._guidedHadsSubmitting=true;const from=ST.step;try{const ok=await checkPhase('hads',from+1,status);if(ok&&ST.step===from)guidedScheduleForward_(150);}finally{ST._guidedHadsSubmitting=false;}};
@@ -4134,8 +4160,6 @@ guidedAutoSubmitHads_=async function(status){if(busy||ST._guidedHadsSubmitting)r
 const baseScreening=guidedAutoSubmitScreening_;guidedAutoSubmitScreening_=async function(status){if(busy||ST._guidedScreeningSubmitting)return;const from=ST.step;ST._guidedScreeningSubmitting=true;try{guidedPrepareScreeningDefaults_();const ok=await checkPhase('screening_self',from+1,status);if(ok&&ST.step===from){ST.answers._guided_screening_submitted=1;saveDraft();guidedScheduleForward_(150);}}finally{ST._guidedScreeningSubmitting=false;}};
 window.addEventListener('keydown',e=>{if(busy&&(/^[0-9]$/.test(e.key)||e.key==='Enter')){e.preventDefault();e.stopImmediatePropagation();}},true);
 window.APATHY_SCREENING_POLICY={version:VERSION,checkPhase,refreshApproval};
-// Existing active drafts keep all answers and numeric page positions.
-if(isGuided()){if(blocked())renderBlocked();else if(val('_guided_hads_submission_id')&&Number(val('_guided_stage2_submitted'))!==1&&!ST.answers._guided_policy_checked?.hads){setTimeout(()=>{const gate=guidedPages_().findIndex(p=>p.kind==='guidedHadsGate');if(ST.step<=gate||busy)return;const here=ST.step;checkPhase('hads',here).then(ok=>{if(ok)player();});},0);}}
 })();
 
 if(guidedParam_('flow')==='guided'){
@@ -4164,7 +4188,19 @@ function selectivePages(){
   return rank(a)-rank(b);
  });
 }
+function selectiveNeedsPdStatus(){
+ return selectiveInvite&&selectiveSelection.some(id=>id==='quip'||id==='quiprs')&&val('_selective_pd_diagnosis')===null;
+}
+function selectiveSkipMedication(pg){return val('_selective_pd_diagnosis')===0&&pdMedicationQuestion_(pg?.key);}
+function selectiveApplicableStep(pages,step,direction){
+ while(selectiveSkipMedication(pages[step]))step+=direction;
+ return step;
+}
+function selectiveMarkMedication(){
+ if(val('_selective_pd_diagnosis')===0)markPdMedicationNotApplicable_(ST.answers,selectivePages().map(pg=>pg.key).filter(Boolean));
+}
 function selectivePageComplete(pg){
+ if(selectiveSkipMedication(pg))return true;
  if(pg.kind==='selectiveSummary')return true;
  if(pg.kind==='pdiItem')return pageComplete(pg);
  if(pg.options)return pg.options.some(o=>sameValue(val(pg.key),o.value));
@@ -4179,9 +4215,9 @@ function selectiveNext(){
  const pages=selectivePages(),pg=pages[ST.step];
  if(!selectivePageComplete(pg)){ST.error='請完成目前這一題。';return player();}
  if(pg.kind==='selectiveSummary')return selectiveSubmit();
- const next=pages[ST.step+1];
- if(selectiveInvite&&['hads','sas','quiprs'].includes(pg.questionnaire)&&next?.questionnaire!==pg.questionnaire)return selectiveInviteCheckpoint(pg.questionnaire,ST.step+1);
- ST.step=Math.min(ST.step+1,pages.length-1);ST.error='';saveDraft();player();
+ const nextStep=selectiveApplicableStep(pages,ST.step+1,1),next=pages[nextStep];
+ if(selectiveInvite&&['hads','sas','quiprs'].includes(pg.questionnaire)&&next?.questionnaire!==pg.questionnaire)return selectiveInviteCheckpoint(pg.questionnaire,nextStep);
+ ST.step=Math.min(nextStep,pages.length-1);ST.error='';saveDraft();player();
 }
 function selectiveChoose(pg,value){
  if(selectiveAdvanceTimer||ST.submitting||selectiveInvite?.blocked)return;
@@ -4191,9 +4227,19 @@ function selectiveChoose(pg,value){
 }
 function selectivePlayer(){
  if(selectiveInvite&&(!selectiveInvite.verified||selectiveInvite.blocked))return selectiveInviteScreen();
+ if(selectiveNeedsPdStatus()&&!val('_selective_receipt')){
+  const m=appShell(),section=el('section','question');
+  section.append(el('h2','','您是否曾被醫生診斷為柏金遜症？'));
+  const choose=value=>{set('_selective_pd_diagnosis',value);player();};
+  section.append(btn('有',()=>choose(1),'choice'),btn('沒有',()=>choose(0),'choice'));
+  m.append(section);
+  return;
+ }
  const m=appShell(),head=el('header','toolbar');head.append(el('h1','','研究問卷'),btn(selectiveInvite?'重新讀取保存進度':'重新開始',()=>{if(ST.submitting)return;if(selectiveInvite)return selectiveInviteRefresh();if(confirm('清除這條問卷連結在此裝置的填答，重新開始？')){clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;resetFlow();saveDraft();player();}},'linkbtn'));m.append(head);if(ST.submitting)head.querySelectorAll('button').forEach(b=>b.disabled=true);
  if(val('_selective_receipt')){m.append(el('div','result good','已收到您填寫的問卷，謝謝。'));return;}
- const pages=selectivePages();ST.step=Math.min(ST.step,pages.length-1);const pg=pages[ST.step];
+ const pages=selectivePages(),step=selectiveApplicableStep(pages,Math.min(ST.step,pages.length-1),1);
+ if(step!==ST.step){ST.step=step;saveDraft();}
+ const pg=pages[ST.step];
  m.append(el('p','hint',pg.section+'　'+(ST.step+1)+'／'+pages.length));
  if(pg.questionnaire==='mri_sas'&&selectiveMriDate)m.append(el('p','hint','掃描日期 '+selectiveMriDate));
  const body=el('section','question');body.append(el('h2','',pg.label));m.append(body);
@@ -4207,7 +4253,11 @@ function selectivePlayer(){
   input.oninput=()=>selectiveEdit(pg.key,input.value);input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();selectiveNext();}};body.append(input);
  }
  if(ST.error)body.append(el('div','error',ST.error));
- const actions=el('div','submitbar');if(ST.step>(selectiveInvite?.minStep||0))actions.append(btn('上一題',()=>{clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;ST.step--;ST.error='';saveDraft();player();},'linkbtn'));
+ const actions=el('div','submitbar'),previous=selectiveApplicableStep(pages,ST.step-1,-1);
+ if(previous>=(selectiveInvite?.minStep||0))actions.append(btn('上一題',()=>{
+  clearTimeout(selectiveAdvanceTimer);selectiveAdvanceTimer=null;
+  ST.step=previous;ST.error='';saveDraft();player();
+ },'linkbtn'));
  actions.append(btn(pg.kind==='selectiveSummary'?'檢查並提交':'下一題',selectiveNext,'primary'));body.append(actions);
  if(ST.submitting){actions.querySelectorAll('button').forEach(b=>b.disabled=true);body.append(el('p','hint','正在提交，請勿關閉或重新整理此頁。'));}
 }
@@ -4217,6 +4267,7 @@ async function selectiveSubmit(){
  if(missing>=0){ST.step=missing;ST.error='尚有必填內容未完成。';return player();}
  try{
   QL.identity(ST.answers);
+  selectiveMarkMedication();
   // Confirmation flags belong only to the explicitly selected, fully answered scales.
   if(selectiveSelection.includes('quip'))[0,1,2].forEach(group=>{
    const keys=group===0?B.quip.matrixCells.map(x=>x.name):B.quip.additionalItems.filter(x=>group===1?/^quip_f/.test(x.name):/^quip_e/.test(x.name)).map(x=>x.name);
@@ -4279,6 +4330,7 @@ function selectiveInviteApply(result){
  const samePhone=local?.answers?.contact_phone===selectiveInvite.phone;
  const useLocal=samePhone&&local.answers._selective_invite_revision===selectiveInvite.revision;
  ST.answers=useLocal?local.answers:{...serverAnswers};ST.answers.contact_phone=selectiveInvite.phone;ST.answers._selective_invite_revision=selectiveInvite.revision;
+ if(!useLocal&&(serverAnswers.quip_f_not_applicable===1||serverAnswers.quiprs_f_not_applicable===1))ST.answers._selective_pd_diagnosis=0;
  if(result.completed===true)ST.answers._selective_receipt=ST.answers._selective_receipt||[{invite_token:selectiveInvite.token}];
  ST.submission=useLocal&&local.submission?local.submission:uuid();ST.meds=[];
  ST.error=samePhone&&!useLocal?'保存進度已由另一個版本更新，已載入伺服器確認的進度；這部裝置未同步的填答未合併。':'';
@@ -4305,7 +4357,10 @@ async function selectiveInviteCheckpoint(scale,nextStep){
  if(missing>=0){ST.step=missing;ST.error='請完成這份問卷的所有題目。';return player();}
  ST.submitting=true;ST.error='';player();
  try{
+  selectiveMarkMedication();
   const allowed=new Set(QL.pages(selectiveSelection,B).map(pg=>pg.key).filter(Boolean));
+  if(selectiveSelection.includes('quip'))allowed.add('quip_f_not_applicable');
+  if(selectiveSelection.includes('quiprs'))allowed.add('quiprs_f_not_applicable');
   const answers=Object.fromEntries(Object.entries(ST.answers).filter(([key])=>allowed.has(key)));
   const result=await selectiveInvitePost('invite_checkpoint',{token:selectiveInvite.token,phone:selectiveInvite.phone,answers,step:nextStep,revision:selectiveInvite.revision,scale});
   if(!Number.isInteger(result.revision)||result.revision<=selectiveInvite.revision||!Object.hasOwn(result,'blocked'))throw Error('未收到有效保存確認，請重試。');
@@ -4315,7 +4370,7 @@ async function selectiveInviteCheckpoint(scale,nextStep){
 }
 function questionnaireLinkBuilder(){
  const m=appShell(),head=el('header','toolbar');head.append(el('h1','','問卷發放'),btn('返回首頁',home,'linkbtn'));m.append(head);
- const selected=new Set(),section=el('section','summary');section.append(el('h2','','發放指定參加者問卷'),el('p','','請填寫收件電話及選擇問卷。連結不含電話，參加者開啟後需要確認完整電話。'));
+ const selected=new Set(),section=el('section','summary');section.append(el('h2','','發放指定參加者問卷'),el('p','','輸入電話即可發放，初次招募可先選 HC 或 PD。參加者開啟後需要確認電話。'));
  const phone=el('input');phone.type='tel';phone.autocomplete='off';const phoneLabel=el('label','','收件聯絡電話');phoneLabel.append(phone);section.append(phoneLabel);
  const cohort=el('select');cohort.append(new Option('由已登記資料確認',''),new Option('健康對照（HC）','HC'),new Option('帕金遜病（PD）','PD'));
  const cohortLabel=el('label','','參加者組別（未登記或無法唯一確認時須選擇）');cohortLabel.append(cohort);section.append(cohortLabel);
@@ -4337,6 +4392,15 @@ function questionnaireLinkBuilder(){
   }catch(e){error.textContent=e.message||'連結未能產生，請重試。';}finally{creating=false;create.disabled=false;}
  },'primary');
  phone.oninput=cohort.onchange=()=>{result.value='';};
+ const fullHc=btn('選取完整 HC 問卷',()=>{
+  cohort.value='HC';
+  section.querySelectorAll('input[type=checkbox]').forEach(input=>{
+   input.checked=input.value!=='mri_sas';
+   input.onchange();
+  });
+  phone.focus();
+ },'secondary');
+ section.insertBefore(fullHc,cohortLabel.nextSibling);
  section.append(create,result,btn('複製連結',async()=>{if(!result.value)return;try{await navigator.clipboard.writeText(result.value);error.textContent='連結已複製。';}catch{result.focus();result.select();error.textContent='請複製上方連結。';}},'linkbtn'),error);m.append(section);
  const approval=el('section','summary');approval.append(el('h2','','核對並批准繼續'));
  const link=el('input');link.type='url';const linkLabel=el('label','','參加者問卷連結');linkLabel.append(link);approval.append(linkLabel);
